@@ -61,6 +61,11 @@ export default function AddCamperScreen() {
       return;
     }
 
+    if (email.trim() && !isValidEmail(email.trim())) {
+      Alert.alert("Invalid Email", "Please enter a valid email address, or leave it blank.");
+      return;
+    }
+
     try {
       setSubmitting(true);
 

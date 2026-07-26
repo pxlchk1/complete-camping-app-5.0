@@ -936,9 +936,7 @@ export default function FirstAidScreen() {
           </View>
         </View>
 
-        {/* Note: Eye Injuries, Dehydration, Smoke, and Plants categories would continue in the same pattern */}
-        {/* For brevity, I'm marking where additional categories would go */}
-
+        {/* Category: Eye Injuries and Irritation */}
         <View
           onLayout={(event) => {
             categoryRefs.current["eye"] = event.nativeEvent.layout.y;
@@ -949,11 +947,75 @@ export default function FirstAidScreen() {
             Eye Injuries and Irritation
           </Text>
           <View className="h-1 w-16 bg-amber-600 rounded-full mb-6" />
-          <Text className="text-stone-600" style={{ fontFamily: "SourceSans3_400Regular" }}>
-            Content for eye injuries coming soon...
-          </Text>
+
+          {/* Foreign Object in Eye */}
+          <View className="bg-parchment rounded-xl p-5 border border-cream-200 mb-4">
+            <Text className="text-xl text-forest-800 mb-3" style={{ fontFamily: "SourceSans3_700Bold" }}>
+              22. Foreign Object or Debris in the Eye
+            </Text>
+
+            <Text className="text-forest-800 text-base mb-2" style={{ fontFamily: "SourceSans3_600SemiBold" }}>
+              Symptoms:
+            </Text>
+            <Text className="text-stone-700 mb-4" style={{ fontFamily: "SourceSans3_400Regular" }}>
+              • Pain or stinging{"\n"}• Redness{"\n"}• Watering eye{"\n"}• Feeling like something is stuck under the eyelid{"\n"}• Sensitivity to light
+            </Text>
+
+            <View className="bg-green-50 rounded-lg p-4 border border-green-200 mb-3">
+              <Text className="text-green-800 text-base mb-2" style={{ fontFamily: "SourceSans3_600SemiBold" }}>
+                First Aid:
+              </Text>
+              <Text className="text-green-900" style={{ fontFamily: "SourceSans3_400Regular" }}>
+                • Wash hands before touching the area{"\n"}• Do not rub the eye{"\n"}• Flush gently with clean water or saline for several minutes{"\n"}• Blink to help work the object out{"\n"}• Seek care if the object doesn't flush out or vision is affected
+              </Text>
+            </View>
+
+            <Pressable
+              onPress={() => openUrl("https://www.mayoclinic.org/first-aid/first-aid-eye-injury/basics/art-20056673")}
+              className="flex-row items-center mt-2 active:opacity-70"
+            >
+              <Ionicons name="open-outline" size={16} color="#2563eb" />
+              <Text className="text-blue-600 ml-2 underline" style={{ fontFamily: "SourceSans3_400Regular" }}>
+                Mayo Clinic - Eye Injury
+              </Text>
+            </Pressable>
+          </View>
+
+          {/* Eye Irritation from Smoke, Sun, or Chemicals */}
+          <View className="bg-parchment rounded-xl p-5 border border-cream-200 mb-4">
+            <Text className="text-xl text-forest-800 mb-3" style={{ fontFamily: "SourceSans3_700Bold" }}>
+              23. Eye Irritation from Smoke, Sun, or Chemical Splash
+            </Text>
+
+            <Text className="text-forest-800 text-base mb-2" style={{ fontFamily: "SourceSans3_600SemiBold" }}>
+              Symptoms:
+            </Text>
+            <Text className="text-stone-700 mb-4" style={{ fontFamily: "SourceSans3_400Regular" }}>
+              • Burning or stinging{"\n"}• Redness{"\n"}• Excess tearing{"\n"}• Blurry vision{"\n"}• Swelling of the eyelid
+            </Text>
+
+            <View className="bg-green-50 rounded-lg p-4 border border-green-200 mb-3">
+              <Text className="text-green-800 text-base mb-2" style={{ fontFamily: "SourceSans3_600SemiBold" }}>
+                First Aid:
+              </Text>
+              <Text className="text-green-900" style={{ fontFamily: "SourceSans3_400Regular" }}>
+                • Move away from smoke or the source of irritation{"\n"}• For a chemical splash, flush continuously with clean water for at least 15 minutes{"\n"}• Remove contact lenses if present{"\n"}• Do not use eye drops after a chemical splash unless directed by a poison control center or medical provider{"\n"}• Call Poison Control (1-800-222-1222) for chemical exposure, or emergency services if pain or vision changes are severe
+              </Text>
+            </View>
+
+            <Pressable
+              onPress={() => openUrl("https://medlineplus.gov/ency/article/000053.htm")}
+              className="flex-row items-center mt-2 active:opacity-70"
+            >
+              <Ionicons name="open-outline" size={16} color="#2563eb" />
+              <Text className="text-blue-600 ml-2 underline" style={{ fontFamily: "SourceSans3_400Regular" }}>
+                MedlinePlus - Chemical Eye Burn
+              </Text>
+            </Pressable>
+          </View>
         </View>
 
+        {/* Category: Dehydration and Fluid Problems */}
         <View
           onLayout={(event) => {
             categoryRefs.current["dehydration"] = event.nativeEvent.layout.y;
@@ -964,11 +1026,75 @@ export default function FirstAidScreen() {
             Dehydration and Fluid Problems
           </Text>
           <View className="h-1 w-16 bg-amber-600 rounded-full mb-6" />
-          <Text className="text-stone-600" style={{ fontFamily: "SourceSans3_400Regular" }}>
-            Content for dehydration coming soon...
-          </Text>
+
+          {/* Dehydration */}
+          <View className="bg-parchment rounded-xl p-5 border border-cream-200 mb-4">
+            <Text className="text-xl text-forest-800 mb-3" style={{ fontFamily: "SourceSans3_700Bold" }}>
+              24. Dehydration
+            </Text>
+
+            <Text className="text-forest-800 text-base mb-2" style={{ fontFamily: "SourceSans3_600SemiBold" }}>
+              Symptoms:
+            </Text>
+            <Text className="text-stone-700 mb-4" style={{ fontFamily: "SourceSans3_400Regular" }}>
+              • Thirst{"\n"}• Dry mouth{"\n"}• Dark yellow urine or little urination{"\n"}• Fatigue or dizziness{"\n"}• Headache{"\n"}• In severe cases: confusion, rapid heartbeat, or fainting
+            </Text>
+
+            <View className="bg-green-50 rounded-lg p-4 border border-green-200 mb-3">
+              <Text className="text-green-800 text-base mb-2" style={{ fontFamily: "SourceSans3_600SemiBold" }}>
+                First Aid:
+              </Text>
+              <Text className="text-green-900" style={{ fontFamily: "SourceSans3_400Regular" }}>
+                • Move to shade or a cool spot{"\n"}• Sip water steadily rather than gulping{"\n"}• Use an electrolyte drink if available, especially after heavy sweating{"\n"}• Rest until symptoms improve{"\n"}• Seek care for confusion, fainting, or inability to keep fluids down
+              </Text>
+            </View>
+
+            <Pressable
+              onPress={() => openUrl("https://www.mayoclinic.org/diseases-conditions/dehydration/diagnosis-treatment/drc-20354092")}
+              className="flex-row items-center mt-2 active:opacity-70"
+            >
+              <Ionicons name="open-outline" size={16} color="#2563eb" />
+              <Text className="text-blue-600 ml-2 underline" style={{ fontFamily: "SourceSans3_400Regular" }}>
+                Mayo Clinic - Dehydration
+              </Text>
+            </Pressable>
+          </View>
+
+          {/* Overhydration / Hyponatremia */}
+          <View className="bg-parchment rounded-xl p-5 border border-cream-200 mb-4">
+            <Text className="text-xl text-forest-800 mb-3" style={{ fontFamily: "SourceSans3_700Bold" }}>
+              25. Overhydration (Hyponatremia)
+            </Text>
+
+            <Text className="text-forest-800 text-base mb-2" style={{ fontFamily: "SourceSans3_600SemiBold" }}>
+              Symptoms:
+            </Text>
+            <Text className="text-stone-700 mb-4" style={{ fontFamily: "SourceSans3_400Regular" }}>
+              • Nausea or vomiting{"\n"}• Headache{"\n"}• Confusion{"\n"}• Swelling in hands or feet{"\n"}• Muscle cramps or weakness{"\n"}• Occurs from drinking large amounts of plain water over hours of exertion without replacing electrolytes
+            </Text>
+
+            <View className="bg-green-50 rounded-lg p-4 border border-green-200 mb-3">
+              <Text className="text-green-800 text-base mb-2" style={{ fontFamily: "SourceSans3_600SemiBold" }}>
+                First Aid:
+              </Text>
+              <Text className="text-green-900" style={{ fontFamily: "SourceSans3_400Regular" }}>
+                • Stop drinking plain water{"\n"}• Offer a small amount of salty food or an electrolyte drink if the person is alert{"\n"}• Have the person rest{"\n"}• Treat confusion, seizures, or severe vomiting as a medical emergency and call emergency services
+              </Text>
+            </View>
+
+            <Pressable
+              onPress={() => openUrl("https://www.mayoclinic.org/diseases-conditions/hyponatremia/symptoms-causes/syc-20373711")}
+              className="flex-row items-center mt-2 active:opacity-70"
+            >
+              <Ionicons name="open-outline" size={16} color="#2563eb" />
+              <Text className="text-blue-600 ml-2 underline" style={{ fontFamily: "SourceSans3_400Regular" }}>
+                Mayo Clinic - Hyponatremia
+              </Text>
+            </Pressable>
+          </View>
         </View>
 
+        {/* Category: Smoke and Fire Related Injuries */}
         <View
           onLayout={(event) => {
             categoryRefs.current["smoke"] = event.nativeEvent.layout.y;
@@ -979,11 +1105,75 @@ export default function FirstAidScreen() {
             Smoke and Fire Related Injuries
           </Text>
           <View className="h-1 w-16 bg-amber-600 rounded-full mb-6" />
-          <Text className="text-stone-600" style={{ fontFamily: "SourceSans3_400Regular" }}>
-            Content for smoke and fire injuries coming soon...
-          </Text>
+
+          {/* Smoke Inhalation */}
+          <View className="bg-parchment rounded-xl p-5 border border-cream-200 mb-4">
+            <Text className="text-xl text-forest-800 mb-3" style={{ fontFamily: "SourceSans3_700Bold" }}>
+              26. Smoke Inhalation
+            </Text>
+
+            <Text className="text-forest-800 text-base mb-2" style={{ fontFamily: "SourceSans3_600SemiBold" }}>
+              Symptoms:
+            </Text>
+            <Text className="text-stone-700 mb-4" style={{ fontFamily: "SourceSans3_400Regular" }}>
+              • Coughing{"\n"}• Sore throat{"\n"}• Shortness of breath{"\n"}• Headache{"\n"}• Irritated eyes{"\n"}• Chest tightness
+            </Text>
+
+            <View className="bg-green-50 rounded-lg p-4 border border-green-200 mb-3">
+              <Text className="text-green-800 text-base mb-2" style={{ fontFamily: "SourceSans3_600SemiBold" }}>
+                First Aid:
+              </Text>
+              <Text className="text-green-900" style={{ fontFamily: "SourceSans3_400Regular" }}>
+                • Move to fresh air immediately{"\n"}• Loosen tight clothing{"\n"}• Sit upright to make breathing easier{"\n"}• Use a rescue inhaler if the person has one and struggles to breathe{"\n"}• Call emergency services for persistent coughing, trouble breathing, or chest pain
+              </Text>
+            </View>
+
+            <Pressable
+              onPress={() => openUrl("https://www.mayoclinic.org/first-aid/first-aid-smoke-inhalation/basics/art-20056649")}
+              className="flex-row items-center mt-2 active:opacity-70"
+            >
+              <Ionicons name="open-outline" size={16} color="#2563eb" />
+              <Text className="text-blue-600 ml-2 underline" style={{ fontFamily: "SourceSans3_400Regular" }}>
+                Mayo Clinic - Smoke Inhalation
+              </Text>
+            </Pressable>
+          </View>
+
+          {/* Carbon Monoxide Exposure */}
+          <View className="bg-parchment rounded-xl p-5 border border-cream-200 mb-4">
+            <Text className="text-xl text-forest-800 mb-3" style={{ fontFamily: "SourceSans3_700Bold" }}>
+              27. Carbon Monoxide Exposure
+            </Text>
+
+            <Text className="text-forest-800 text-base mb-2" style={{ fontFamily: "SourceSans3_600SemiBold" }}>
+              Symptoms:
+            </Text>
+            <Text className="text-stone-700 mb-4" style={{ fontFamily: "SourceSans3_400Regular" }}>
+              • Headache{"\n"}• Dizziness{"\n"}• Weakness{"\n"}• Nausea{"\n"}• Confusion{"\n"}• Loss of consciousness in severe cases{"\n"}• Risk from camp stoves, charcoal grills, or generators used in tents or enclosed spaces
+            </Text>
+
+            <View className="bg-green-50 rounded-lg p-4 border border-green-200 mb-3">
+              <Text className="text-green-800 text-base mb-2" style={{ fontFamily: "SourceSans3_600SemiBold" }}>
+                First Aid:
+              </Text>
+              <Text className="text-green-900" style={{ fontFamily: "SourceSans3_400Regular" }}>
+                • Get the person into fresh air right away{"\n"}• Call emergency services{"\n"}• Begin CPR if the person is not breathing and you're trained to do so{"\n"}• Never run stoves, grills, or generators inside a tent, RV, or other enclosed space — prevention is the best protection since carbon monoxide has no smell or color
+              </Text>
+            </View>
+
+            <Pressable
+              onPress={() => openUrl("https://www.cdc.gov/co/index.html")}
+              className="flex-row items-center mt-2 active:opacity-70"
+            >
+              <Ionicons name="open-outline" size={16} color="#2563eb" />
+              <Text className="text-blue-600 ml-2 underline" style={{ fontFamily: "SourceSans3_400Regular" }}>
+                CDC - Carbon Monoxide Poisoning
+              </Text>
+            </Pressable>
+          </View>
         </View>
 
+        {/* Category: Poisonous Plants and Skin Reactions */}
         <View
           onLayout={(event) => {
             categoryRefs.current["plants"] = event.nativeEvent.layout.y;
@@ -994,9 +1184,72 @@ export default function FirstAidScreen() {
             Poisonous Plants and Skin Reactions
           </Text>
           <View className="h-1 w-16 bg-amber-600 rounded-full mb-6" />
-          <Text className="text-stone-600" style={{ fontFamily: "SourceSans3_400Regular" }}>
-            Content for poisonous plants coming soon...
-          </Text>
+
+          {/* Poison Ivy, Oak, and Sumac */}
+          <View className="bg-parchment rounded-xl p-5 border border-cream-200 mb-4">
+            <Text className="text-xl text-forest-800 mb-3" style={{ fontFamily: "SourceSans3_700Bold" }}>
+              28. Poison Ivy, Oak, and Sumac
+            </Text>
+
+            <Text className="text-forest-800 text-base mb-2" style={{ fontFamily: "SourceSans3_600SemiBold" }}>
+              Symptoms:
+            </Text>
+            <Text className="text-stone-700 mb-4" style={{ fontFamily: "SourceSans3_400Regular" }}>
+              • Red, itchy rash{"\n"}• Swelling{"\n"}• Blisters that may weep fluid{"\n"}• Symptoms usually appear 12 to 48 hours after contact
+            </Text>
+
+            <View className="bg-green-50 rounded-lg p-4 border border-green-200 mb-3">
+              <Text className="text-green-800 text-base mb-2" style={{ fontFamily: "SourceSans3_600SemiBold" }}>
+                First Aid:
+              </Text>
+              <Text className="text-green-900" style={{ fontFamily: "SourceSans3_400Regular" }}>
+                • Rinse skin with lukewarm soapy water as soon as possible to remove the plant oil{"\n"}• Wash clothing and gear that touched the plant{"\n"}• Apply calamine lotion or hydrocortisone cream to ease itching{"\n"}• Use cool compresses for comfort{"\n"}• Seek care if the rash covers a large area, affects the face or genitals, or shows signs of infection
+              </Text>
+            </View>
+
+            <Pressable
+              onPress={() => openUrl("https://www.mayoclinic.org/diseases-conditions/poison-ivy/diagnosis-treatment/drc-20376490")}
+              className="flex-row items-center mt-2 active:opacity-70"
+            >
+              <Ionicons name="open-outline" size={16} color="#2563eb" />
+              <Text className="text-blue-600 ml-2 underline" style={{ fontFamily: "SourceSans3_400Regular" }}>
+                Mayo Clinic - Poison Ivy
+              </Text>
+            </Pressable>
+          </View>
+
+          {/* Insect Stings and Tick Bites */}
+          <View className="bg-parchment rounded-xl p-5 border border-cream-200 mb-4">
+            <Text className="text-xl text-forest-800 mb-3" style={{ fontFamily: "SourceSans3_700Bold" }}>
+              29. Insect Stings and Tick Bites
+            </Text>
+
+            <Text className="text-forest-800 text-base mb-2" style={{ fontFamily: "SourceSans3_600SemiBold" }}>
+              Symptoms:
+            </Text>
+            <Text className="text-stone-700 mb-4" style={{ fontFamily: "SourceSans3_400Regular" }}>
+              • Pain, redness, or swelling at the site{"\n"}• Itching{"\n"}• A tick attached to the skin{"\n"}• Watch for a spreading rash, fever, or joint pain in the days after a tick bite
+            </Text>
+
+            <View className="bg-green-50 rounded-lg p-4 border border-green-200 mb-3">
+              <Text className="text-green-800 text-base mb-2" style={{ fontFamily: "SourceSans3_600SemiBold" }}>
+                First Aid:
+              </Text>
+              <Text className="text-green-900" style={{ fontFamily: "SourceSans3_400Regular" }}>
+                • For a bee sting, scrape out the stinger with a fingernail or card rather than squeezing it{"\n"}• Wash the area with soap and water and apply a cool compress{"\n"}• For a tick, grasp it with fine tweezers as close to the skin as possible and pull straight out steadily, then clean the area{"\n"}• Save or photograph the tick and note the date if possible{"\n"}• Watch for signs of a severe allergic reaction (see Anaphylaxis) and seek care for a spreading rash or flu-like symptoms after a tick bite
+              </Text>
+            </View>
+
+            <Pressable
+              onPress={() => openUrl("https://www.cdc.gov/ticks/index.html")}
+              className="flex-row items-center mt-2 active:opacity-70"
+            >
+              <Ionicons name="open-outline" size={16} color="#2563eb" />
+              <Text className="text-blue-600 ml-2 underline" style={{ fontFamily: "SourceSans3_400Regular" }}>
+                CDC - Tick Bites
+              </Text>
+            </Pressable>
+          </View>
         </View>
       </ScrollView>
 

@@ -45,6 +45,8 @@ import { v4 as uuidv4 } from "uuid";
 import { updateDoc, doc, serverTimestamp } from "firebase/firestore";
 import { db, auth } from "../config/firebase";
 import * as PackingV2 from "../services/packingListServiceV2";
+import * as MealService from "../services/mealsService";
+import * as LocalMealService from "../services/localMealService";
 import { RootStackParamList } from "../navigation/types";
 import { format } from "date-fns";
 import { requirePro } from "../utils/gating";
@@ -105,7 +107,11 @@ export default function TripDetailScreen() {
   // Packing list state
   const [hasPackingList, setHasPackingList] = useState(false);
   const [checkingPackingList, setCheckingPackingList] = useState(true);
-  const [mealStats] = useState({ planned: 0, total: 0 });
+  // Previously a static { planned: 0 } with no setter — this card could
+  // never reflect real progress. Now loaded the same way MealPlanningScreen
+  // reads meals: try Firestore, fall back to local storage on a permission
+  // error (e.g. guest users).
+  const [mealStats, setMealStats] = useState({ planned: 0 });
 
   const [participants, setParticipants] = useState<
     Array<{ id: string; name: string }>
@@ -201,6 +207,33 @@ export default function TripDetailScreen() {
     useCallback(() => {
       loadParticipants();
     }, [loadParticipants])
+  );
+
+  const loadMealStats = useCallback(async () => {
+    const userId = auth.currentUser?.uid;
+    try {
+      if (userId) {
+        const stats = await MealService.getMealStats(userId, tripId, nights);
+        setMealStats({ planned: stats.total });
+        return;
+      }
+    } catch (error: any) {
+      // Falls through to local storage below (e.g. permission-denied for a
+      // guest, or no Firestore access yet).
+    }
+
+    try {
+      const stats = await LocalMealService.getMealStats(tripId, nights);
+      setMealStats({ planned: stats.total });
+    } catch (error) {
+      console.error("[TripDetail] Error loading meal stats:", error);
+    }
+  }, [tripId, nights]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadMealStats();
+    }, [loadMealStats])
   );
 
   // Check if packing list exists for this trip
@@ -438,6 +471,7 @@ export default function TripDetailScreen() {
 
   const handleSaveNotes = useCallback(
     async (newNotes: string) => {
+      const previousNotes = detailsNotes;
       setDetailsNotes(newNotes);
 
       if (!trip) return;
@@ -449,10 +483,14 @@ export default function TripDetailScreen() {
         });
       } catch (err) {
         console.error("Failed to save notes:", err);
-        Alert.alert("Error", "Could not save notes.");
+        // Roll back the optimistic update — otherwise the edit keeps
+        // showing as "saved" and silently disappears next time the trip
+        // reloads from Firestore.
+        setDetailsNotes(previousNotes);
+        Alert.alert("Error", "Could not save notes. Please try again.");
       }
     },
-    [trip]
+    [trip, detailsNotes]
   );
 
   const handleAddLink = useCallback(() => {
@@ -488,6 +526,7 @@ export default function TripDetailScreen() {
         source,
       };
 
+      const previousLinks = detailsLinks;
       const newLinks = [...detailsLinks, newLink];
       setDetailsLinks(newLinks);
 
@@ -500,7 +539,8 @@ export default function TripDetailScreen() {
         });
       } catch (err) {
         console.error("Failed to save link:", err);
-        Alert.alert("Error", "Could not save link.");
+        setDetailsLinks(previousLinks);
+        Alert.alert("Error", "Could not save link. Please try again.");
       }
     },
     [detailsLinks, trip]
@@ -516,6 +556,7 @@ export default function TripDetailScreen() {
         return;
       }
 
+      const previousLinks = detailsLinks;
       const newLinks = detailsLinks.filter((l) => l.id !== id);
       setDetailsLinks(newLinks);
 
@@ -528,7 +569,8 @@ export default function TripDetailScreen() {
         });
       } catch (err) {
         console.error("Failed to delete link:", err);
-        Alert.alert("Error", "Could not delete link.");
+        setDetailsLinks(previousLinks);
+        Alert.alert("Error", "Could not delete link. Please try again.");
       }
     },
     [detailsLinks, trip]

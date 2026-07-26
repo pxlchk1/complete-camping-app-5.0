@@ -112,6 +112,11 @@ export default function CreateTripScreen() {
       return;
     }
 
+    if (endDate.getTime() <= startDate.getTime()) {
+      notifyError(toast, "End date must be after the start date.");
+      return;
+    }
+
     // Prevent double-tap
     if (isCreating) {
       return;
@@ -386,6 +391,14 @@ export default function CreateTripScreen() {
               onChange={(event, date) => {
                 if (date) {
                   setStartDate(date);
+                  // Keep the range valid if the new start date lands on or
+                  // after the current end date — previously nothing
+                  // re-checked this when the start date changed after the
+                  // end date had already been picked, letting a trip be
+                  // created with an end date before its start.
+                  if (date.getTime() >= endDate.getTime()) {
+                    setEndDate(new Date(date.getTime() + 86400000));
+                  }
                   setShowStartDateModal(false);
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 }

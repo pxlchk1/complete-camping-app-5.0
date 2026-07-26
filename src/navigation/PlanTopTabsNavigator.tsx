@@ -21,7 +21,6 @@ import PlanTripIntroModal from "../components/PlanTripIntroModal";
 import MyTripsScreen from "../screens/MyTripsScreen";
 import ParksBrowseScreen from "../screens/ParksBrowseScreen";
 import WeatherScreen from "../screens/WeatherScreen";
-import PlanSafeScreen from "../screens/PlanSafeScreen";
 
 import { DEEP_FOREST, PARCHMENT, BORDER_SOFT, TEXT_ON_DARK } from "../constants/colors";
 import { HERO_IMAGES } from "../constants/images";

@@ -25,6 +25,7 @@ import {
 import { CampgroundContact } from "../types/campground";
 import { RootStackParamList, RootStackNavigationProp } from "../navigation/types";
 import ModalHeader from "../components/ModalHeader";
+import ConfirmationModal from "../components/ConfirmationModal";
 import {
   DEEP_FOREST,
   PARCHMENT,
@@ -100,27 +101,21 @@ export default function EditCamperScreen() {
     }
   };
 
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
   const handleDelete = () => {
-    Alert.alert(
-      "Delete Contact",
-      `Are you sure you want to remove ${displayName} from your campground?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await deleteCampgroundContact(contactId);
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              navigation.goBack();
-            } catch (error) {
-              Alert.alert("Error", "Failed to delete contact");
-            }
-          },
-        },
-      ]
-    );
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = async () => {
+    setShowDeleteConfirm(false);
+    try {
+      await deleteCampgroundContact(contactId);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      navigation.goBack();
+    } catch (error) {
+      Alert.alert("Error", "Failed to delete contact");
+    }
   };
 
   if (loading) {
@@ -288,6 +283,15 @@ export default function EditCamperScreen() {
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <ConfirmationModal
+        visible={showDeleteConfirm}
+        title="Remove contact?"
+        message={`Are you sure you want to remove ${displayName} from your campground?`}
+        primary={{ label: "Remove", iconName: "trash-outline", onPress: confirmDelete }}
+        secondary={{ label: "Cancel", onPress: () => setShowDeleteConfirm(false) }}
+        onClose={() => setShowDeleteConfirm(false)}
+      />
     </View>
   );
 }

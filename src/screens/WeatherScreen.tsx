@@ -675,7 +675,12 @@ export default function WeatherScreen({ onTabChange }: WeatherScreenProps = {}) 
             </View>
 
             {/* Trips with Locations */}
-            {trips.filter((t) => t.coordinates?.latitude && t.coordinates?.longitude).length > 0 && (
+            {/* Was filtering on the legacy `coordinates` field only, which
+                trips created through the current flow never populate (they
+                write `tripDestination` instead) — every new trip was
+                invisible in this list. Now uses the same tripDestination-
+                first, legacy-fallback helper the rest of this screen uses. */}
+            {trips.filter(tripHasLocation).length > 0 && (
               <View style={{ width: "100%", marginTop: spacing.lg }}>
                 <Text
                   style={{
@@ -690,18 +695,15 @@ export default function WeatherScreen({ onTabChange }: WeatherScreenProps = {}) 
                   Or select from your trips
                 </Text>
                 {trips
-                  .filter((t) => t.coordinates?.latitude && t.coordinates?.longitude)
+                  .filter(tripHasLocation)
                   .slice(0, 5)
                   .map((trip) => (
                     <Pressable
                       key={trip.id}
                       onPress={() => {
-                        if (trip.coordinates) {
-                          setSelectedLocation({
-                            name: trip.locationName || trip.name,
-                            latitude: trip.coordinates.latitude,
-                            longitude: trip.coordinates.longitude,
-                          });
+                        const location = getTripLocation(trip);
+                        if (location) {
+                          setSelectedLocation(location);
                           setShowLocationPicker(false);
                         }
                       }}

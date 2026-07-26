@@ -7,7 +7,7 @@
  * - This version is a full, safe overwrite that restores valid structure and keeps your existing UI intent.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -109,11 +109,10 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
 
   const fetchParkById = async (parkId: string) => {
     try {
-      const parkDoc = await getDocs(query(collection(db, "parks"), firestoreLimit(3000)));
-      const park = parkDoc.docs.find(d => d.id === parkId);
+      const raw = await loadRawParks();
+      const park = raw.find((p) => p.id === parkId);
       if (park) {
-        const parkData = { id: park.id, ...park.data() } as Park;
-        setSelectedPark(parkData);
+        setSelectedPark(park);
       }
     } catch (error) {
       console.error("[ParksBrowse] Error fetching park by ID:", error);
@@ -138,6 +137,14 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedPark, setSelectedPark] = useState<Park | null>(null);
+
+  // The full parks collection (~3000 docs) was being re-fetched from
+  // Firestore on every single filter/sort change (state, park type, drive
+  // time, sort order all trigger fetchParks). All of that filtering already
+  // happens client-side after the fetch, so the raw collection only needs
+  // to be fetched once per session and cached here — filter changes just
+  // re-run the existing client-side filter/sort logic against this cache.
+  const rawParksCacheRef = useRef<Park[] | null>(null);
 
   // Add campground + add to trip flow
   const [addModalVisible, setAddModalVisible] = useState(false);
@@ -217,6 +224,110 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
     return Number(driveTime) * 55;
   }, [driveTime]);
 
+  // Fetches the full parks collection once and caches it in
+  // rawParksCacheRef — every filter/sort combination below re-runs against
+  // this cached array instead of re-querying Firestore.
+  const loadRawParks = useCallback(async (): Promise<Park[]> => {
+    if (rawParksCacheRef.current) {
+      return rawParksCacheRef.current;
+    }
+
+    const parksCollection = collection(db, "parks");
+    const q = query(parksCollection, firestoreLimit(3000));
+    const querySnapshot = await getDocs(q);
+
+    console.log("[ParksBrowse] Firebase returned", querySnapshot.size, "documents");
+
+    const fetched: Park[] = [];
+
+    // Track unique filter values and counts for debugging
+    const filterValueCounts: Record<string, number> = {};
+    const samplesByType: Record<string, string[]> = {};
+
+    // Normalize park type filter values to canonical format
+    const normalizeParkType = (rawFilter: string | undefined | null): "national_park" | "state_park" | "national_forest" => {
+      if (!rawFilter) return "national_forest"; // default fallback
+
+      const normalized = rawFilter.toLowerCase().trim().replace(/\s+/g, "_");
+
+      // Map various formats to canonical values
+      if (normalized.includes("state") && normalized.includes("park")) return "state_park";
+      if (normalized === "state_park" || normalized === "statepark") return "state_park";
+
+      if (normalized.includes("national") && normalized.includes("park")) return "national_park";
+      if (normalized === "national_park" || normalized === "nationalpark") return "national_park";
+
+      if (normalized.includes("national") && normalized.includes("forest")) return "national_forest";
+      if (normalized === "national_forest" || normalized === "nationalforest") return "national_forest";
+
+      // Direct matches
+      if (normalized === "state_park") return "state_park";
+      if (normalized === "national_park") return "national_park";
+      if (normalized === "national_forest") return "national_forest";
+
+      // Log unexpected values in dev
+      if (__DEV__) {
+        console.warn(`[FILTER_DEBUG] ⚠️ Unknown filter value: "${rawFilter}" -> defaulting to national_forest`);
+      }
+      return "national_forest";
+    };
+
+    querySnapshot.forEach((d) => {
+      const data: any = d.data();
+      const rawFilter = data.filter;
+
+      // Count raw filter values (including undefined/null) for debugging
+      const filterKey = rawFilter ?? "(undefined)";
+      filterValueCounts[filterKey] = (filterValueCounts[filterKey] || 0) + 1;
+
+      // Store sample park names for each type (first 3)
+      if (!samplesByType[filterKey]) samplesByType[filterKey] = [];
+      if (samplesByType[filterKey].length < 3) {
+        samplesByType[filterKey].push(data.name || "(no name)");
+      }
+
+      // Normalize the filter value
+      const normalizedFilter = normalizeParkType(rawFilter);
+
+      fetched.push({
+        id: d.id,
+        name: data.name || "",
+        filter: normalizedFilter,
+        address: data.address || "",
+        state: data.state || "",
+        latitude: data.latitude || 0,
+        longitude: data.longitude || 0,
+        url: data.url || "",
+      });
+    });
+
+    // === DEV DEBUG: Park Type Analysis ===
+    if (__DEV__) {
+      console.log("\n========== PARK TYPE FILTER DEBUG ==========");
+      console.log("[FILTER_DEBUG] Total parks loaded:", fetched.length);
+      console.log("[FILTER_DEBUG] Raw 'filter' values found in Firestore data:");
+      Object.entries(filterValueCounts).forEach(([value, count]) => {
+        console.log(`  - "${value}": ${count} parks`);
+        console.log(`    Samples: ${samplesByType[value]?.join(", ")}`);
+      });
+
+      // Count after normalization
+      const normalizedCounts = {
+        state_park: fetched.filter(p => p.filter === "state_park").length,
+        national_park: fetched.filter(p => p.filter === "national_park").length,
+        national_forest: fetched.filter(p => p.filter === "national_forest").length,
+      };
+      console.log("[FILTER_DEBUG] Counts AFTER normalization:");
+      console.log(`  - state_park: ${normalizedCounts.state_park}`);
+      console.log(`  - national_park: ${normalizedCounts.national_park}`);
+      console.log(`  - national_forest: ${normalizedCounts.national_forest}`);
+      console.log("=============================================\n");
+    }
+
+    rawParksCacheRef.current = fetched;
+    return fetched;
+  }, []);
+
   const fetchParks = useCallback(async () => {
     // Only fetch after user has initiated search or location flow
     if (!hasSearched) {
@@ -239,97 +350,10 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
     setError(null);
 
     try {
-      const parksCollection = collection(db, "parks");
-      const q = query(parksCollection, firestoreLimit(3000));
-      const querySnapshot = await getDocs(q);
+      let fetched: (Park & { distance?: number })[] = await loadRawParks();
 
-      console.log("[ParksBrowse] Firebase returned", querySnapshot.size, "documents");
-
-      let fetched: (Park & { distance?: number })[] = [];
-
-      // Track unique filter values and counts for debugging
-      const filterValueCounts: Record<string, number> = {};
-      const samplesByType: Record<string, string[]> = {};
-
-      // Normalize park type filter values to canonical format
-      const normalizeParkType = (rawFilter: string | undefined | null): "national_park" | "state_park" | "national_forest" => {
-        if (!rawFilter) return "national_forest"; // default fallback
-        
-        const normalized = rawFilter.toLowerCase().trim().replace(/\s+/g, "_");
-        
-        // Map various formats to canonical values
-        if (normalized.includes("state") && normalized.includes("park")) return "state_park";
-        if (normalized === "state_park" || normalized === "statepark") return "state_park";
-        
-        if (normalized.includes("national") && normalized.includes("park")) return "national_park";
-        if (normalized === "national_park" || normalized === "nationalpark") return "national_park";
-        
-        if (normalized.includes("national") && normalized.includes("forest")) return "national_forest";
-        if (normalized === "national_forest" || normalized === "nationalforest") return "national_forest";
-        
-        // Direct matches
-        if (normalized === "state_park") return "state_park";
-        if (normalized === "national_park") return "national_park";
-        if (normalized === "national_forest") return "national_forest";
-        
-        // Log unexpected values in dev
-        if (__DEV__) {
-          console.warn(`[FILTER_DEBUG] ⚠️ Unknown filter value: "${rawFilter}" -> defaulting to national_forest`);
-        }
-        return "national_forest";
-      };
-
-      querySnapshot.forEach((d) => {
-        const data: any = d.data();
-        const rawFilter = data.filter;
-        
-        // Count raw filter values (including undefined/null) for debugging
-        const filterKey = rawFilter ?? "(undefined)";
-        filterValueCounts[filterKey] = (filterValueCounts[filterKey] || 0) + 1;
-        
-        // Store sample park names for each type (first 3)
-        if (!samplesByType[filterKey]) samplesByType[filterKey] = [];
-        if (samplesByType[filterKey].length < 3) {
-          samplesByType[filterKey].push(data.name || "(no name)");
-        }
-
-        // Normalize the filter value
-        const normalizedFilter = normalizeParkType(rawFilter);
-
-        fetched.push({
-          id: d.id,
-          name: data.name || "",
-          filter: normalizedFilter,
-          address: data.address || "",
-          state: data.state || "",
-          latitude: data.latitude || 0,
-          longitude: data.longitude || 0,
-          url: data.url || "",
-        });
-      });
-
-      // === DEV DEBUG: Park Type Analysis ===
       if (__DEV__) {
-        console.log("\n========== PARK TYPE FILTER DEBUG ==========");
-        console.log("[FILTER_DEBUG] Total parks loaded:", fetched.length);
-        console.log("[FILTER_DEBUG] Raw 'filter' values found in Firestore data:");
-        Object.entries(filterValueCounts).forEach(([value, count]) => {
-          console.log(`  - "${value}": ${count} parks`);
-          console.log(`    Samples: ${samplesByType[value]?.join(", ")}`);
-        });
-        
-        // Count after normalization
-        const normalizedCounts = {
-          state_park: fetched.filter(p => p.filter === "state_park").length,
-          national_park: fetched.filter(p => p.filter === "national_park").length,
-          national_forest: fetched.filter(p => p.filter === "national_forest").length,
-        };
-        console.log("[FILTER_DEBUG] Counts AFTER normalization:");
-        console.log(`  - state_park: ${normalizedCounts.state_park}`);
-        console.log(`  - national_park: ${normalizedCounts.national_park}`);
-        console.log(`  - national_forest: ${normalizedCounts.national_forest}`);
         console.log("[FILTER_DEBUG] Current UI filter selection:", parkType);
-        console.log("=============================================\n");
       }
 
       // Filter by state
@@ -405,7 +429,7 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
     } finally {
       setIsLoading(false);
     }
-  }, [hasSearched, mode, selectedState, userLocation, driveTime, parkType, sortBy, maxDistanceMiles, getDistance]);
+  }, [hasSearched, mode, selectedState, userLocation, driveTime, parkType, sortBy, maxDistanceMiles, getDistance, loadRawParks]);
 
   useEffect(() => {
     fetchParks();

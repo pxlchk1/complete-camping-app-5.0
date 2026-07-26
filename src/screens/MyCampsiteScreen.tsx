@@ -238,126 +238,79 @@ export default function MyCampsiteScreen({ navigation }: any) {
 
   // Load user's latest 9 Connect contributions (tips, reviews, questions, answers)
   const loadConnectContributions = useCallback(async (userId: string) => {
-    try {
-      setConnectLoading(true);
-      const contributions: ConnectContribution[] = [];
-      console.log("[MyCampsite] Loading contributions for userId:", userId);
-      
-      // Get tips
-      const tipsQuery = query(
-        collection(db, "tips"),
-        where("userId", "==", userId),
-        orderBy("createdAt", "desc"),
-        limit(9)
-      );
-      const tipsSnap = await getDocs(tipsQuery);
-      console.log("[MyCampsite] Found tips:", tipsSnap.size);
-      tipsSnap.forEach((doc) => {
-        const data = doc.data();
-        contributions.push({
-          id: doc.id,
-          type: "tip",
-          title: data.title || data.description?.substring(0, 50) || "Tip",
-          createdAt: data.createdAt,
-        });
-      });
-      
-      // Get gear reviews
-      const reviewsQuery = query(
-        collection(db, "gearReviews"),
-        where("userId", "==", userId),
-        orderBy("createdAt", "desc"),
-        limit(9)
-      );
-      const reviewsSnap = await getDocs(reviewsQuery);
-      console.log("[MyCampsite] Found gearReviews:", reviewsSnap.size);
-      reviewsSnap.forEach((doc) => {
-        const data = doc.data();
-        contributions.push({
-          id: doc.id,
-          type: "review",
-          title: data.gearName || data.title || "Gear Review",
-          createdAt: data.createdAt,
-        });
-      });
-      
-      // Get questions - check both authorId and userId fields since different services use different fields
+    setConnectLoading(true);
+
+    // Each of these 5 collection queries used to run one after another —
+    // now they run in parallel via Promise.all, and each catches its own
+    // errors (returning []) so one failing query (e.g. a questions field
+    // that doesn't exist for this user) can't block the others.
+    const safeQuery = async (
+      type: ConnectContribution["type"],
+      q: any,
+      getTitle: (data: any) => string
+    ): Promise<ConnectContribution[]> => {
       try {
-        const questionsQuery1 = query(
-          collection(db, "questions"),
-          where("authorId", "==", userId),
-          orderBy("createdAt", "desc"),
-          limit(9)
-        );
-        const questionsSnap1 = await getDocs(questionsQuery1);
-        console.log("[MyCampsite] Found questions (authorId):", questionsSnap1.size);
-        questionsSnap1.forEach((doc) => {
+        const snap = await getDocs(q);
+        return snap.docs.map((doc: any) => {
           const data = doc.data();
-          contributions.push({
+          return {
             id: doc.id,
-            type: "question",
-            title: data.title || data.question || data.body?.substring(0, 50) || "Question",
+            type,
+            title: getTitle(data),
             createdAt: data.createdAt,
-          });
+          };
         });
-      } catch (e) {
-        console.log("[MyCampsite] authorId questions query failed, trying userId");
+      } catch (error) {
+        console.error(`[MyCampsite] Error loading ${type} contributions:`, error);
+        return [];
       }
-      
-      // Also try userId field for legacy questions
-      try {
-        const questionsQuery2 = query(
-          collection(db, "questions"),
-          where("userId", "==", userId),
-          orderBy("createdAt", "desc"),
-          limit(9)
-        );
-        const questionsSnap2 = await getDocs(questionsQuery2);
-        console.log("[MyCampsite] Found questions (userId):", questionsSnap2.size);
-        questionsSnap2.forEach((doc) => {
-          const data = doc.data();
-          // Only add if not already added (avoid duplicates)
-          if (!contributions.some(c => c.id === doc.id)) {
-            contributions.push({
-              id: doc.id,
-              type: "question",
-              title: data.title || data.question || data.body?.substring(0, 50) || "Question",
-              createdAt: data.createdAt,
-            });
-          }
-        });
-      } catch (e) {
-        console.log("[MyCampsite] userId questions query failed");
+    };
+
+    try {
+      const [tips, reviews, questionsByAuthorId, questionsByUserId, answers] = await Promise.all([
+        safeQuery(
+          "tip",
+          query(collection(db, "tips"), where("userId", "==", userId), orderBy("createdAt", "desc"), limit(9)),
+          (data) => data.title || data.description?.substring(0, 50) || "Tip"
+        ),
+        safeQuery(
+          "review",
+          query(collection(db, "gearReviews"), where("userId", "==", userId), orderBy("createdAt", "desc"), limit(9)),
+          (data) => data.gearName || data.title || "Gear Review"
+        ),
+        // Questions check both authorId and userId since different services use different fields.
+        safeQuery(
+          "question",
+          query(collection(db, "questions"), where("authorId", "==", userId), orderBy("createdAt", "desc"), limit(9)),
+          (data) => data.title || data.question || data.body?.substring(0, 50) || "Question"
+        ),
+        safeQuery(
+          "question",
+          query(collection(db, "questions"), where("userId", "==", userId), orderBy("createdAt", "desc"), limit(9)),
+          (data) => data.title || data.question || data.body?.substring(0, 50) || "Question"
+        ),
+        safeQuery(
+          "answer",
+          query(collection(db, "answers"), where("authorId", "==", userId), orderBy("createdAt", "desc"), limit(9)),
+          (data) => data.body?.substring(0, 50) || "Answer"
+        ),
+      ]);
+
+      // Dedupe (a question can match both the authorId and userId query)
+      const seen = new Set<string>();
+      const contributions: ConnectContribution[] = [];
+      for (const item of [...tips, ...reviews, ...questionsByAuthorId, ...questionsByUserId, ...answers]) {
+        if (seen.has(item.id)) continue;
+        seen.add(item.id);
+        contributions.push(item);
       }
-      
-      // Get answers
-      const answersQuery = query(
-        collection(db, "answers"),
-        where("authorId", "==", userId),
-        orderBy("createdAt", "desc"),
-        limit(9)
-      );
-      const answersSnap = await getDocs(answersQuery);
-      console.log("[MyCampsite] Found answers:", answersSnap.size);
-      answersSnap.forEach((doc) => {
-        const data = doc.data();
-        contributions.push({
-          id: doc.id,
-          type: "answer",
-          title: data.body?.substring(0, 50) || "Answer",
-          createdAt: data.createdAt,
-        });
-      });
-      
-      // Sort all by createdAt and take first 9
+
       contributions.sort((a, b) => {
         const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
         const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
         return bTime - aTime;
       });
-      
-      console.log("[MyCampsite] Total contributions:", contributions.length);
-      
+
       setConnectContributions(contributions.slice(0, 9));
     } catch (error) {
       console.error("[MyCampsite] Error loading Connect contributions:", error);
@@ -470,39 +423,24 @@ export default function MyCampsiteScreen({ navigation }: any) {
 
   const computeAndSaveStats = async (userId: string) => {
     try {
-      // Count trips
-      const tripsQuery = query(collection(db, "trips"), where("userId", "==", userId));
-      const tripsSnap = await getDocs(tripsQuery);
-      const tripsCount = tripsSnap.size;
-
-      // Count tips
-      const tipsQuery = query(collection(db, "tips"), where("userId", "==", userId));
-      const tipsSnap = await getDocs(tipsQuery);
-      const tipsCount = tipsSnap.size;
-
-      // Count gear reviews
-      const gearQuery = query(collection(db, "gearReviews"), where("userId", "==", userId));
-      const gearSnap = await getDocs(gearQuery);
-      const gearReviewsCount = gearSnap.size;
-
-      // Count questions
-      const questionsQuery = query(collection(db, "questions"), where("authorId", "==", userId));
-      const questionsSnap = await getDocs(questionsQuery);
-      const questionsCount = questionsSnap.size;
-
-      // Count photos from both legacy stories and new photoPosts collections
-      const storiesQuery = query(collection(db, "stories"), where("userId", "==", userId));
-      const storiesSnap = await getDocs(storiesQuery);
-      const photoPostsQuery = query(collection(db, "photoPosts"), where("userId", "==", userId));
-      const photoPostsSnap = await getDocs(photoPostsQuery);
-      const photosCount = storiesSnap.size + photoPostsSnap.size;
+      // These 6 count queries previously ran one after another; they're
+      // independent so they now run in parallel.
+      const [tripsSnap, tipsSnap, gearSnap, questionsSnap, storiesSnap, photoPostsSnap] = await Promise.all([
+        getDocs(query(collection(db, "trips"), where("userId", "==", userId))),
+        getDocs(query(collection(db, "tips"), where("userId", "==", userId))),
+        getDocs(query(collection(db, "gearReviews"), where("userId", "==", userId))),
+        getDocs(query(collection(db, "questions"), where("authorId", "==", userId))),
+        // Photos are counted from both the legacy "stories" collection and the current "photoPosts" collection.
+        getDocs(query(collection(db, "stories"), where("userId", "==", userId))),
+        getDocs(query(collection(db, "photoPosts"), where("userId", "==", userId))),
+      ]);
 
       const stats: ProfileStats = {
-        tripsCount,
-        tipsCount,
-        gearReviewsCount,
-        questionsCount,
-        photosCount,
+        tripsCount: tripsSnap.size,
+        tipsCount: tipsSnap.size,
+        gearReviewsCount: gearSnap.size,
+        questionsCount: questionsSnap.size,
+        photosCount: storiesSnap.size + photoPostsSnap.size,
       };
 
       // Update profile with stats
@@ -576,17 +514,23 @@ export default function MyCampsiteScreen({ navigation }: any) {
     }
   };
 
-  // Handler for "Plan a trip" from Favorite Parks
-  const handlePlanFromFavorite = (fav: FavoritePark) => {
+  // Shared by both "Plan a trip" entry points below — they only differed in
+  // how they built the PrefillLocation, not in the gating/navigation.
+  const navigateToCreateTripWithPrefill = (prefillLocation: PrefillLocation) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    
+
     // Gate: Login required to create trips
     if (isGuest || !auth.currentUser) {
       navigation.navigate("Auth");
       return;
     }
 
-    const prefillLocation: PrefillLocation = {
+    navigation.navigate("CreateTrip", { prefillLocation });
+  };
+
+  // Handler for "Plan a trip" from Favorite Parks
+  const handlePlanFromFavorite = (fav: FavoritePark) => {
+    navigateToCreateTripWithPrefill({
       source: "favorites",
       placeType: "park",
       placeId: fav.parkId,
@@ -596,24 +540,14 @@ export default function MyCampsiteScreen({ navigation }: any) {
       address: null,
       lat: null,
       lng: null,
-    };
-
-    navigation.navigate("CreateTrip", { prefillLocation });
+    });
   };
 
   // Handler for "Plan a trip" from Saved Places
   const handlePlanFromSavedPlace = (place: SavedPlace) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    
-    // Gate: Login required to create trips
-    if (isGuest || !auth.currentUser) {
-      navigation.navigate("Auth");
-      return;
-    }
-
-    const prefillLocation: PrefillLocation = {
+    navigateToCreateTripWithPrefill({
       source: "saved_places",
-      placeType: place.placeType === "campground" ? "campground" : 
+      placeType: place.placeType === "campground" ? "campground" :
                  place.placeType === "park" ? "park" : "custom",
       placeId: place.placeId,
       name: place.name,
@@ -622,9 +556,7 @@ export default function MyCampsiteScreen({ navigation }: any) {
       address: place.address || null,
       lat: place.lat || null,
       lng: place.lon || null,
-    };
-
-    navigation.navigate("CreateTrip", { prefillLocation });
+    });
   };
 
   const getMembershipBadgeColor = (tier: MembershipTier): string => {

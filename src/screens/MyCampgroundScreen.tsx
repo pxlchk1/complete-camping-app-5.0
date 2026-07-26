@@ -29,6 +29,7 @@ import { CampgroundContact } from "../types/campground";
 import { RootStackNavigationProp } from "../navigation/types";
 import ModalHeader from "../components/ModalHeader";
 import InviteOptionsSheet from "../components/InviteOptionsSheet";
+import ConfirmationModal from "../components/ConfirmationModal";
 import OnboardingModal from "../components/OnboardingModal";
 import { useScreenOnboarding } from "../hooks/useScreenOnboarding";
 import {
@@ -58,6 +59,9 @@ export default function MyCampgroundScreen() {
 
   // "What is this?" modal state
   const [showWhatIsThis, setShowWhatIsThis] = useState(false);
+
+  // Delete confirmation (shared ConfirmationModal, not a native Alert)
+  const [pendingDeleteContact, setPendingDeleteContact] = useState<CampgroundContact | null>(null);
 
   // Onboarding modal
   const { showModal, currentTooltip, dismissModal, openModal } = useScreenOnboarding("MyCampground");
@@ -112,29 +116,22 @@ export default function MyCampgroundScreen() {
   };
 
   const handleDeleteContact = (contact: CampgroundContact) => {
-    Alert.alert(
-      "Delete Contact",
-      `Are you sure you want to remove ${contact.contactName} from your campground?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await deleteCampgroundContact(contact.id);
-              Haptics.notificationAsync(
-                Haptics.NotificationFeedbackType.Success
-              );
-              await loadContacts();
-            } catch (err) {
-              console.error("Delete contact failed:", err);
-              Alert.alert("Error", "Failed to delete contact");
-            }
-          },
-        },
-      ]
-    );
+    setPendingDeleteContact(contact);
+  };
+
+  const confirmDeleteContact = async () => {
+    const contact = pendingDeleteContact;
+    setPendingDeleteContact(null);
+    if (!contact) return;
+
+    try {
+      await deleteCampgroundContact(contact.id);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await loadContacts();
+    } catch (err) {
+      console.error("Delete contact failed:", err);
+      Alert.alert("Error", "Failed to delete contact");
+    }
   };
 
   const handleInviteContact = (contact: CampgroundContact) => {
@@ -306,7 +303,6 @@ export default function MyCampgroundScreen() {
               >
                 <Pressable
                   onPress={() => handleContactPress(contact)}
-                  onLongPress={() => handleDeleteContact(contact)}
                   className="active:opacity-70"
                 >
                   <View className="flex-row items-start justify-between">
@@ -348,10 +344,29 @@ export default function MyCampgroundScreen() {
                       ) : null}
                     </View>
 
+                    {/* Previously the only way to delete a contact from
+                        this list was an undiscoverable long-press; this
+                        button gives it a visible affordance (Edit Camper
+                        still offers delete too). */}
+                    <Pressable
+                      onPress={() => handleDeleteContact(contact)}
+                      hitSlop={8}
+                      className="p-1.5 -mr-1.5 active:opacity-60"
+                      accessibilityLabel={`Remove ${contact.contactName}`}
+                      accessibilityRole="button"
+                    >
+                      <Ionicons
+                        name="trash-outline"
+                        size={18}
+                        color={TEXT_MUTED}
+                      />
+                    </Pressable>
+
                     <Ionicons
                       name="chevron-forward"
                       size={20}
                       color={TEXT_MUTED}
+                      style={{ marginLeft: 8 }}
                     />
                   </View>
                 </Pressable>
@@ -540,6 +555,15 @@ export default function MyCampgroundScreen() {
         visible={showModal}
         tooltip={currentTooltip}
         onDismiss={dismissModal}
+      />
+
+      <ConfirmationModal
+        visible={!!pendingDeleteContact}
+        title="Remove contact?"
+        message={`Are you sure you want to remove ${pendingDeleteContact?.contactName} from your campground?`}
+        primary={{ label: "Remove", iconName: "trash-outline", onPress: confirmDeleteContact }}
+        secondary={{ label: "Cancel", onPress: () => setPendingDeleteContact(null) }}
+        onClose={() => setPendingDeleteContact(null)}
       />
     </View>
   );
