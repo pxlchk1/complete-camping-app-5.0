@@ -3,6 +3,12 @@
  * 30-Day Non-Intrusive Onboarding Campaign
  */
 
+// The old `FirebaseFirestore.Timestamp` (Admin SDK / Node) namespace type
+// isn't available to this client app, which uses the modular `firebase`
+// SDK's `Timestamp` instead — this was a pre-existing type error on every
+// field below.
+import type { Timestamp } from "firebase/firestore";
+
 // ============================================
 // CORE ACTION KEYS (any 2 ends onboarding)
 // ============================================
@@ -48,17 +54,17 @@ export interface OnboardingCounters {
 }
 
 export interface UserOnboarding {
-  startedAt: FirebaseFirestore.Timestamp | Date;
-  lastActiveAt: FirebaseFirestore.Timestamp | Date;
-  lastPushAt?: FirebaseFirestore.Timestamp | Date;
+  startedAt: Timestamp | Date;
+  lastActiveAt: Timestamp | Date;
+  lastPushAt?: Timestamp | Date;
   pushesThisWeek: number;
-  weekStartedAt?: FirebaseFirestore.Timestamp | Date;
+  weekStartedAt?: Timestamp | Date;
   lastNudgeKey?: string;
   completedActions: OnboardingCompletedActions;
   counters: OnboardingCounters;
   campaignCompleted?: boolean;
   campaignCompletedReason?: "2_core_actions" | "day_30";
-  campaignCompletedAt?: FirebaseFirestore.Timestamp | Date;
+  campaignCompletedAt?: Timestamp | Date;
 }
 
 // ============================================
@@ -111,12 +117,12 @@ export interface NotificationQueueItem {
   id?: string;
   userId: string;
   type: NotificationType;
-  sendAt: FirebaseFirestore.Timestamp | Date;
+  sendAt: Timestamp | Date;
   payload: NotificationPayload;
   status: NotificationStatus;
   suppressionReason?: SuppressionReason;
-  createdAt: FirebaseFirestore.Timestamp | Date;
-  sentAt?: FirebaseFirestore.Timestamp | Date;
+  createdAt: Timestamp | Date;
+  sentAt?: Timestamp | Date;
   metadata?: Record<string, any>;
 }
 

@@ -235,7 +235,7 @@ export default function AcceptInvitationScreen() {
             className="text-3xl text-center"
             style={{ fontFamily: "Raleway_700Bold", color: TEXT_PRIMARY_STRONG }}
           >
-            You're Invited!
+            You&apos;re Invited!
           </Text>
         </View>
 
@@ -279,7 +279,7 @@ export default function AcceptInvitationScreen() {
             className="text-base mb-3"
             style={{ fontFamily: "SourceSans3_600SemiBold", color: TEXT_PRIMARY_STRONG }}
           >
-            By joining their campground, you'll:
+            By joining their campground, you&apos;ll:
           </Text>
           <View className="space-y-2">
             <View className="flex-row items-start">

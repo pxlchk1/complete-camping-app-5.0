@@ -4,6 +4,12 @@
  * Supports OS permission tracking and compliance-ready email segmentation
  */
 
+// The old `FirebaseFirestore.Timestamp` (Admin SDK / Node) namespace type
+// isn't available to this client app, which uses the modular `firebase`
+// SDK's `Timestamp` instead — this was a pre-existing type error on every
+// field below.
+import type { Timestamp } from "firebase/firestore";
+
 // ============================================
 // NOTIFICATION PERMISSION STATUS
 // ============================================
@@ -50,25 +56,25 @@ export interface UserPreferences {
  * Extended onboarding data model with email/push tracking
  */
 export interface UserOnboardingData {
-  startedAt: Date | FirebaseFirestore.Timestamp;
-  lastActiveAt: Date | FirebaseFirestore.Timestamp;
+  startedAt: Date | Timestamp;
+  lastActiveAt: Date | Timestamp;
   
   // Push tracking
-  lastPushAt?: Date | FirebaseFirestore.Timestamp;
+  lastPushAt?: Date | Timestamp;
   pushesThisWeek: number;
-  weekStartedAt?: Date | FirebaseFirestore.Timestamp;
+  weekStartedAt?: Date | Timestamp;
   
   // Email tracking  
-  lastEmailAt?: Date | FirebaseFirestore.Timestamp;
+  lastEmailAt?: Date | Timestamp;
   emailsThisWeek: number;
-  emailWeekStartedAt?: Date | FirebaseFirestore.Timestamp;
+  emailWeekStartedAt?: Date | Timestamp;
   
   // Re-engagement
-  lastReengageAt?: Date | FirebaseFirestore.Timestamp; // For 30-day inactive nudge suppression
+  lastReengageAt?: Date | Timestamp; // For 30-day inactive nudge suppression
   
   // In-app nudge tracking
   lastNudgeKey?: string;
-  lastNudgeAt?: Date | FirebaseFirestore.Timestamp;
+  lastNudgeAt?: Date | Timestamp;
   
   // Completed actions
   completedActions: OnboardingCompletedActions;
@@ -77,7 +83,7 @@ export interface UserOnboardingData {
   // Campaign status
   campaignCompleted?: boolean;
   campaignCompletedReason?: "2_core_actions" | "day_30";
-  campaignCompletedAt?: Date | FirebaseFirestore.Timestamp;
+  campaignCompletedAt?: Date | Timestamp;
 }
 
 export interface OnboardingCompletedActions {
@@ -119,9 +125,9 @@ export interface EmailSubscriber {
   source: "signup" | "app-settings" | "sendgrid-webhook" | "manual";
   
   // Timestamps
-  createdAt: Date | FirebaseFirestore.Timestamp;
-  updatedAt: Date | FirebaseFirestore.Timestamp;
-  unsubscribedAt?: Date | FirebaseFirestore.Timestamp;
+  createdAt: Date | Timestamp;
+  updatedAt: Date | Timestamp;
+  unsubscribedAt?: Date | Timestamp;
 }
 
 // ============================================

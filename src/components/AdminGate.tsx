@@ -39,7 +39,7 @@ export default function AdminGate({ children }: { children: React.ReactNode }) {
           className="text-center mb-6"
           style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}
         >
-          You don't have access to this page.
+          You don&apos;t have access to this page.
         </Text>
         <Pressable
           onPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate("HomeTabs" as never))}
