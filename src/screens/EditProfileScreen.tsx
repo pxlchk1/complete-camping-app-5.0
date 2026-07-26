@@ -30,10 +30,14 @@ import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { auth, db, storage } from "../config/firebase";
 import { doc, getDoc, updateDoc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
-import { deleteUser, reauthenticateWithCredential, EmailAuthProvider, updatePassword } from "firebase/auth";
+import { deleteUser } from "firebase/auth";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useCurrentUser, useUserStore } from "../state/userStore";
 import ModalHeader from "../components/ModalHeader";
+import { useToast } from "../components/ToastManager";
+import { notifySuccess, notifyError } from "../ui/notify";
+import { validateHandle, isAdminEmail } from "../constants/reservedHandles";
+import { useChangePassword } from "../hooks/useChangePassword";
 import {
   DEEP_FOREST,
   EARTH_GREEN,
@@ -78,137 +82,10 @@ const GEAR_ICONS: Partial<Record<GearCategory, keyof typeof Ionicons.glyphMap>> 
   seating: "resize-outline",
 };
 
-// Reserved handles that cannot be used by regular users
-const RESERVED_HANDLES = [
-  // Brand and product
-  "tentandlantern",
-  "tentlantern",
-  "tentandlanternapp",
-  "completecampingapp",
-  "completecamping",
-  "thecompletecampingapp",
-  "tentandlanternofficial",
-  "tentandlanternhq",
-  "tentandlanternteam",
-  "tentandlanternsupport",
-
-  // Variants people will try
-  "tent_and_lantern",
-  "tent_lantern",
-  "complete_camping_app",
-  "complete_camping",
-  "camping_app",
-  "campingapp",
-
-  // Staff and authority impersonation
-  "admin",
-  "administrator",
-  "root",
-  "owner",
-  "moderator",
-  "mod",
-  "staff",
-  "team",
-  "official",
-  "support",
-  "help",
-  "security",
-  "trust",
-  "trustandsafety",
-  "safety",
-  "billing",
-  "payments",
-  "payment",
-  "refund",
-  "refunds",
-  "subscriptions",
-  "subscription",
-  "premium",
-  "pro",
-  "plus",
-  "developer",
-  "dev",
-
-  // App navigation and core features
-  "plan",
-  "trips",
-  "trip",
-  "newtrip",
-  "packing",
-  "packinglist",
-  "packinglists",
-  "gear",
-  "gearcloset",
-  "mygear",
-  "meal",
-  "meals",
-  "mealplan",
-  "mealplans",
-  "shopping",
-  "shoppinglist",
-  "parks",
-  "park",
-  "campground",
-  "campgrounds",
-  "itinerary",
-  "itinerarylinks",
-  "links",
-  "weather",
-  "learn",
-  "skills",
-  "leavenotrace",
-  "lnt",
-  "connect",
-  "community",
-  "askacamper",
-  "campfire",
-  "mycampsite",
-  "campsite",
-  "profile",
-  "account",
-  "settings",
-  "notifications",
-  "favorites",
-  "favorite",
-
-  // System and technical words that cause confusion
-  "api",
-  "app",
-  "system",
-  "null",
-  "undefined",
-  "test",
-  "tester",
-  "demo",
-  "staging",
-  "production",
-  "prod",
-  "beta",
-  "qa",
-
-  // Messaging and contact
-  "email",
-  "mail",
-  "sms",
-  "text",
-  "contact",
-  "press",
-  "media",
-  "partnerships",
-  "partners",
-
-  // Avoid platform brand impersonation
-  "apple",
-  "appstore",
-  "google",
-  "android",
-  "ios",
-  "firebase",
-  "revenuecat",
-];
-
 export default function EditProfileScreen() {
   const navigation = useNavigation();
+  const toast = useToast();
+  const { changePassword, updating: updatingPassword } = useChangePassword();
   const currentUser = useCurrentUser();
   const updateCurrentUser = useUserStore((s) => s.updateCurrentUser);
 
@@ -251,7 +128,6 @@ export default function EditProfileScreen() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [updatingPassword, setUpdatingPassword] = useState(false);
 
   // Load account fields from users collection
   useEffect(() => {
@@ -289,30 +165,13 @@ export default function EditProfileScreen() {
       return;
     }
 
-    // Validate handle
-    if (!handle.trim()) {
-      Alert.alert("Required Field", "Please enter a handle");
+    // Validate handle (shared rules — see constants/reservedHandles.ts)
+    const handleError = validateHandle(handle, isAdminEmail(user.email));
+    if (handleError) {
+      Alert.alert("Invalid Handle", handleError);
       return;
     }
-
     const cleanHandle = handle.trim().toLowerCase();
-
-    if (cleanHandle.length < 3 || cleanHandle.length > 30) {
-      Alert.alert("Invalid Handle", "Handle must be between 3 and 30 characters");
-      return;
-    }
-
-    if (!/^[a-z0-9_-]+$/.test(cleanHandle)) {
-      Alert.alert("Invalid Handle", "Handle can only contain lowercase letters, numbers, hyphens, and underscores");
-      return;
-    }
-
-    // Check reserved handles (allow admin email to use reserved handles)
-    const isAdminEmail = user.email?.toLowerCase() === "alana@tentandlantern.com";
-    if (RESERVED_HANDLES.includes(cleanHandle) && !isAdminEmail) {
-      Alert.alert("Reserved Handle", "This handle is reserved. Please choose a different one.");
-      return;
-    }
 
     try {
       setSaving(true);
@@ -471,52 +330,46 @@ export default function EditProfileScreen() {
     const user = auth.currentUser;
     if (!user || !user.email) return;
 
-    // Verify email matches
+    // Verify email matches — typing the account email back is the
+    // confirmation gesture for this destructive action; no extra
+    // native alert is stacked on top of it.
     if (deleteConfirmEmail.toLowerCase() !== user.email.toLowerCase()) {
       Alert.alert("Email Mismatch", "The email you entered doesn't match your account email.");
       return;
     }
 
-    Alert.alert(
-      "Final Confirmation",
-      "This action is irreversible. All your data will be permanently deleted. Are you absolutely sure?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete Forever",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              setDeleting(true);
+    try {
+      setDeleting(true);
 
-              // Delete user profile from Firestore
-              await deleteDoc(doc(db, "profiles", user.uid));
+      // Delete user profile from Firestore
+      await deleteDoc(doc(db, "profiles", user.uid));
 
-              // Delete the user account
-              await deleteUser(user);
+      // Delete the user account
+      await deleteUser(user);
 
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              Alert.alert("Account Deleted", "Your account has been permanently deleted.");
-              
-              setShowDeleteConfirm(false);
-            } catch (error: any) {
-              console.error("[EditProfile] Error deleting account:", error);
-              
-              if (error.code === "auth/requires-recent-login") {
-                Alert.alert(
-                  "Re-authentication Required",
-                  "For security, please sign out and sign back in, then try again."
-                );
-              } else {
-                Alert.alert("Delete Failed", "Unable to delete account. Please contact support.");
-              }
-            } finally {
-              setDeleting(false);
-            }
-          },
-        },
-      ]
-    );
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setShowDeleteConfirm(false);
+      setDeleteConfirmEmail("");
+
+      // Deleting the account signs the user out; land them back on the
+      // main tabs (same destination the app's sign-out flow uses) instead
+      // of leaving them stranded on a profile screen for a deleted account.
+      notifySuccess(toast, "Your account has been permanently deleted.");
+      (navigation as any).reset({ index: 0, routes: [{ name: "HomeTabs" }] });
+    } catch (error: any) {
+      console.error("[EditProfile] Error deleting account:", error);
+
+      if (error.code === "auth/requires-recent-login") {
+        Alert.alert(
+          "Re-authentication Required",
+          "For security, please sign out and sign back in, then try again."
+        );
+      } else {
+        Alert.alert("Delete Failed", "Unable to delete account. Please contact support.");
+      }
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const handleManageSubscription = async () => {
@@ -601,71 +454,20 @@ export default function EditProfileScreen() {
   };
 
   const handleChangePassword = async () => {
-    const user = auth.currentUser;
-    if (!user || !user.email) return;
+    const result = await changePassword(currentPassword, newPassword, confirmPassword);
 
-    // Validate passwords
-    if (!currentPassword.trim()) {
-      Alert.alert("Required Field", "Please enter your current password");
+    if (!result.success) {
+      Alert.alert("Couldn't Update Password", result.error);
       return;
     }
 
-    if (!newPassword.trim()) {
-      Alert.alert("Required Field", "Please enter your new password");
-      return;
-    }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    notifySuccess(toast, "Your password has been updated successfully");
 
-    if (newPassword.length < 8) {
-      Alert.alert("Weak Password", "Password must be at least 8 characters long");
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      Alert.alert("Passwords Don't Match", "New password and confirmation do not match");
-      return;
-    }
-
-    if (currentPassword === newPassword) {
-      Alert.alert("Same Password", "New password must be different from current password");
-      return;
-    }
-
-    try {
-      setUpdatingPassword(true);
-
-      // Re-authenticate user first (security requirement)
-      const credential = EmailAuthProvider.credential(user.email, currentPassword);
-      await reauthenticateWithCredential(user, credential);
-
-      // Update password in Firebase Auth
-      await updatePassword(user, newPassword);
-
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert("Success", "Your password has been updated successfully");
-
-      // Close modal and reset fields
-      setShowPasswordModal(false);
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-    } catch (error: any) {
-      console.error("[EditProfile] Error updating password:", error);
-
-      if (error.code === "auth/wrong-password") {
-        Alert.alert("Incorrect Password", "The current password you entered is incorrect");
-      } else if (error.code === "auth/weak-password") {
-        Alert.alert("Weak Password", "Please choose a stronger password");
-      } else if (error.code === "auth/requires-recent-login") {
-        Alert.alert(
-          "Re-authentication Required",
-          "For security, please sign out and sign back in, then try again."
-        );
-      } else {
-        Alert.alert("Error", error.message || "Failed to update password. Please try again.");
-      }
-    } finally {
-      setUpdatingPassword(false);
-    }
+    setShowPasswordModal(false);
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
   };
 
   return (
@@ -1257,14 +1059,14 @@ export default function EditProfileScreen() {
         >
           <Pressable
             className="flex-1 bg-black/50 items-center justify-end pb-8 px-4"
-            onPress={() => setShowDeleteConfirm(false)}
+            onPress={() => !deleting && setShowDeleteConfirm(false)}
           >
             <Pressable
               className="rounded-2xl p-6 w-full max-w-sm"
               style={{ backgroundColor: PARCHMENT, maxHeight: "85%" }}
               onPress={(e) => e.stopPropagation()}
             >
-              <ScrollView 
+              <ScrollView
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
                 bounces={false}
@@ -1286,7 +1088,7 @@ export default function EditProfileScreen() {
                     className="text-center mb-3"
                     style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY, lineHeight: 20 }}
                   >
-                    This action cannot be undone. All your data, trips, and preferences will be permanently deleted. For that reason, we require 2 factor authentication.
+                    This action cannot be undone. All your data, trips, and preferences will be permanently deleted. For that reason, we ask you to type your account email below to confirm.
                   </Text>
                 </View>
 
@@ -1339,8 +1141,9 @@ export default function EditProfileScreen() {
                       setShowDeleteConfirm(false);
                       setDeleteConfirmEmail("");
                     }}
+                    disabled={deleting}
                     className="flex-1 rounded-xl py-3 border active:opacity-70"
-                    style={{ borderColor: BORDER_SOFT }}
+                    style={{ borderColor: BORDER_SOFT, opacity: deleting ? 0.5 : 1 }}
                   >
                     <Text
                       className="text-center"

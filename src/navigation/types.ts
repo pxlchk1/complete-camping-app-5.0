@@ -42,7 +42,10 @@ export type RootStackParamList = {
   AddPeopleToTrip: { tripId: string };
   Notifications: undefined;
   Settings: undefined;
-  Auth: undefined;
+  // returnTo: when true, a successful sign-in/sign-up goes back to whatever
+  // screen pushed Auth (e.g. an invite-acceptance flow) instead of jumping
+  // to HomeTabs.
+  Auth: { returnTo?: boolean } | undefined;
   ForgotPassword: undefined;
   Paywall: { triggerKey?: string; variant?: "standard" | "nudge_trial" } | undefined;
   SeedData: undefined;
@@ -58,7 +61,6 @@ export type RootStackParamList = {
   ModuleDetail: { moduleId: string };
 
   // Plan section with trip context
-  MealPlan: { tripId: string };
 
   // Packing List screens (local-first store-based)
   PackingList: { tripId: string };

@@ -11,7 +11,6 @@ import {
   ScrollView,
   Switch,
   ActivityIndicator,
-  Alert,
   TouchableOpacity,
   Platform,
 } from "react-native";
@@ -21,6 +20,8 @@ import * as Haptics from "expo-haptics";
 import { auth, db } from "../config/firebase";
 import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import ModalHeader from "../components/ModalHeader";
+import { useToast } from "../components/ToastManager";
+import { notifySuccess, notifyError, notifyInfo } from "../ui/notify";
 import {
   PARCHMENT,
   CARD_BACKGROUND_LIGHT,
@@ -47,6 +48,7 @@ import { Ionicons } from "@expo/vector-icons";
 export default function NotificationsScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const toast = useToast();
 
   const [loading, setLoading] = useState(true);
   const [preferences, setPreferences] = useState<NotificationPreferences>(DEFAULT_NOTIFICATION_PREFERENCES);
@@ -83,7 +85,7 @@ export default function NotificationsScreen() {
   const handleMasterToggle = async (value: boolean) => {
     const user = auth.currentUser;
     if (!user) {
-      Alert.alert("Error", "You must be signed in to manage notifications");
+      notifyError(toast, "You must be signed in to manage notifications");
       return;
     }
 
@@ -103,10 +105,7 @@ export default function NotificationsScreen() {
       // Check device support
       const status = await getNotificationStatus();
       if (!status.isDevice) {
-        Alert.alert(
-          "Not Available",
-          "Push notifications are not available on simulators/emulators."
-        );
+        notifyInfo(toast, "Push notifications are not available on simulators/emulators.");
         setUpdating(false);
         return;
       }
@@ -114,10 +113,7 @@ export default function NotificationsScreen() {
       // Request permission
       const granted = await requestNotificationPermission();
       if (!granted) {
-        Alert.alert(
-          "Permission Denied",
-          "Please enable notifications in your device settings to receive updates."
-        );
+        notifyInfo(toast, "Please enable notifications in your device settings to receive updates.");
         setUpdating(false);
         return;
       }
@@ -138,10 +134,10 @@ export default function NotificationsScreen() {
 
       setPreferences(newPrefs);
       setPermissionStatus("granted");
-      Alert.alert("Success", "Notifications have been enabled");
+      notifySuccess(toast, "Notifications have been enabled");
     } catch (error: any) {
       console.error("[Notifications] Error enabling:", error);
-      Alert.alert("Error", error.message || "Failed to enable notifications");
+      notifyError(toast, error.message || "Failed to enable notifications");
     } finally {
       setUpdating(false);
     }
@@ -165,10 +161,10 @@ export default function NotificationsScreen() {
       await unregisterPushTokens(userId);
 
       setPreferences({ ...preferences, enabled: false });
-      Alert.alert("Success", "Notifications have been disabled");
+      notifySuccess(toast, "Notifications have been disabled");
     } catch (error: any) {
       console.error("[Notifications] Error disabling:", error);
-      Alert.alert("Error", error.message || "Failed to disable notifications");
+      notifyError(toast, error.message || "Failed to disable notifications");
     } finally {
       setUpdating(false);
     }

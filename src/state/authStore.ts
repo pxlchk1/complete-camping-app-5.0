@@ -30,7 +30,11 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       user: null,
       isAuthenticated: false,
-      isLoading: false,
+      // Starts true on every launch: we don't yet know whether Firebase has
+      // a signed-in user until its first onAuthStateChanged callback fires
+      // (see App.tsx). Deliberately excluded from persistence below so a
+      // stale "false" from a previous session can never skip this gate.
+      isLoading: true,
 
       setUser: (user) =>
         set({
@@ -54,6 +58,10 @@ export const useAuthStore = create<AuthState>()(
     {
       name: "auth-storage",
       storage: createJSONStorage(() => AsyncStorage),
+      // isLoading is a transient, per-session flag — persisting it would let
+      // a rehydrated "false" from a prior session mask this session's real
+      // auth-resolution gate.
+      partialize: (state) => ({ user: state.user, isAuthenticated: state.isAuthenticated }),
     }
   )
 );

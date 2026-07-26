@@ -26,14 +26,17 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import * as Notifications from "expo-notifications";
+import { registerPushToken } from "../services/notificationService";
 import { auth, db, storage } from "../config/firebase";
 import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, serverTimestamp } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { updateEmail, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "firebase/auth";
+import { updateEmail, reauthenticateWithCredential, EmailAuthProvider } from "firebase/auth";
 import { useSubscriptionStore } from "../state/subscriptionStore";
 import { restorePurchases } from "../services/subscriptionService";
 import { clearLocalAppCache, isCacheResetAvailable, getUpdateSummaryText } from "../utils/updateDiagnostics";
 import ModalHeader from "../components/ModalHeader";
+import { validateHandle, isAdminEmail } from "../constants/reservedHandles";
+import { useChangePassword } from "../hooks/useChangePassword";
 import {
   PARCHMENT,
   CARD_BACKGROUND_LIGHT,
@@ -45,135 +48,6 @@ import {
   DEEP_FOREST,
   GRANITE_GOLD,
 } from "../constants/colors";
-
-// Reserved handles that cannot be used by regular users
-const RESERVED_HANDLES = [
-  // Brand and product
-  "tentandlantern",
-  "tentlantern",
-  "tentandlanternapp",
-  "completecampingapp",
-  "completecamping",
-  "thecompletecampingapp",
-  "tentandlanternofficial",
-  "tentandlanternhq",
-  "tentandlanternteam",
-  "tentandlanternsupport",
-
-  // Variants people will try
-  "tent_and_lantern",
-  "tent_lantern",
-  "complete_camping_app",
-  "complete_camping",
-  "camping_app",
-  "campingapp",
-
-  // Staff and authority impersonation
-  "admin",
-  "administrator",
-  "root",
-  "owner",
-  "moderator",
-  "mod",
-  "staff",
-  "team",
-  "official",
-  "support",
-  "help",
-  "security",
-  "trust",
-  "trustandsafety",
-  "safety",
-  "billing",
-  "payments",
-  "payment",
-  "refund",
-  "refunds",
-  "subscriptions",
-  "subscription",
-  "premium",
-  "pro",
-  "plus",
-  "developer",
-  "dev",
-
-  // App navigation and core features
-  "plan",
-  "trips",
-  "trip",
-  "newtrip",
-  "packing",
-  "packinglist",
-  "packinglists",
-  "gear",
-  "gearcloset",
-  "mygear",
-  "meal",
-  "meals",
-  "mealplan",
-  "mealplans",
-  "shopping",
-  "shoppinglist",
-  "parks",
-  "park",
-  "campground",
-  "campgrounds",
-  "itinerary",
-  "itinerarylinks",
-  "links",
-  "weather",
-  "learn",
-  "skills",
-  "leavenotrace",
-  "lnt",
-  "connect",
-  "community",
-  "askacamper",
-  "campfire",
-  "mycampsite",
-  "campsite",
-  "profile",
-  "account",
-  "settings",
-  "notifications",
-  "favorites",
-  "favorite",
-
-  // System and technical words that cause confusion
-  "api",
-  "app",
-  "system",
-  "null",
-  "undefined",
-  "test",
-  "tester",
-  "demo",
-  "staging",
-  "production",
-  "prod",
-  "beta",
-  "qa",
-
-  // Messaging and contact
-  "email",
-  "mail",
-  "sms",
-  "text",
-  "contact",
-  "press",
-  "media",
-  "partnerships",
-  "partners",
-
-  // Avoid platform brand impersonation
-  "apple",
-  "appstore",
-  "google",
-  "android",
-  "ios",
-  "firebase",
-  "revenuecat",
-];
 
 export default function SettingsScreen() {
   const navigation = useNavigation();
@@ -209,7 +83,7 @@ export default function SettingsScreen() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [updatingPassword, setUpdatingPassword] = useState(false);
+  const { changePassword, updating: updatingPassword } = useChangePassword();
 
   // Toast
   const toast = useToast();
@@ -253,7 +127,7 @@ export default function SettingsScreen() {
         setProfilePublic(data.profilePublic !== false); // default true
         setShowUsernamePublicly(data.showUsernamePublicly !== false); // default true
         // Check if user is admin
-        setIsAdmin(data.role === "admin" || user.email?.toLowerCase() === "alana@tentandlantern.com");
+        setIsAdmin(data.role === "admin" || isAdminEmail(user.email));
       }
     } catch (error) {
       console.error("[Settings] Error loading:", error);
@@ -276,7 +150,7 @@ export default function SettingsScreen() {
     // Validate all fields and collect errors
     const newErrors: typeof errors = {};
     const cleanHandle = handle.trim().toLowerCase();
-    const isAdminEmail = user.email?.toLowerCase() === "alana@tentandlantern.com";
+    const userIsAdmin = isAdminEmail(user.email);
 
     // Validate display name
     if (!displayName.trim()) {
@@ -285,15 +159,10 @@ export default function SettingsScreen() {
       newErrors.displayName = "Must be 1-50 characters";
     }
 
-    // Validate handle
-    if (!handle.trim()) {
-      newErrors.handle = "Handle is required";
-    } else if (cleanHandle.length < 3 || cleanHandle.length > 30) {
-      newErrors.handle = "Must be 3-30 characters";
-    } else if (!/^[a-z0-9_-]+$/.test(cleanHandle)) {
-      newErrors.handle = "Only lowercase letters, numbers, hyphens, and underscores";
-    } else if (RESERVED_HANDLES.includes(cleanHandle) && !isAdminEmail) {
-      newErrors.handle = "This handle is reserved";
+    // Validate handle (shared rules — see constants/reservedHandles.ts)
+    const handleError = validateHandle(handle, userIsAdmin);
+    if (handleError) {
+      newErrors.handle = handleError;
     }
 
     // If any validation errors, show inline errors + toast
@@ -487,20 +356,16 @@ export default function SettingsScreen() {
         }
 
         if (finalStatus === "granted") {
-          // Permission granted - get push token and save
-          const tokenData = await Notifications.getExpoPushTokenAsync({
-            projectId: "your-expo-project-id", // This will be replaced by EAS config
-          });
+          // Permission granted - register the real device push token.
+          // (Previously hardcoded a placeholder EAS projectId here, which
+          // meant this path could never actually register a working token —
+          // now shares the same token-fetch logic NotificationsScreen uses.)
+          const registered = await registerPushToken(user.uid);
 
-          // Save token to pushTokens collection
-          const pushTokenRef = doc(collection(db, "pushTokens"), `${user.uid}_${Platform.OS}`);
-          await setDoc(pushTokenRef, {
-            userId: user.uid,
-            token: tokenData.data,
-            platform: Platform.OS,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
+          if (!registered) {
+            notifyError(toast, "Couldn't register this device for push notifications. Please try again.");
+            return;
+          }
 
           // Update users document
           await updateDoc(doc(db, "users", user.uid), {
@@ -687,70 +552,26 @@ export default function SettingsScreen() {
   };
 
   const handleChangePassword = async () => {
-    const user = auth.currentUser;
-    if (!user || !user.email) return;
-
-    // Clear and validate
     setErrors({});
-    const newErrors: typeof errors = {};
 
-    if (!currentPassword.trim()) {
-      newErrors.currentPassword = "Current password is required";
-    }
+    const result = await changePassword(currentPassword, newPassword, confirmPassword);
 
-    if (!newPassword.trim()) {
-      newErrors.newPassword = "New password is required";
-    } else if (newPassword.length < 8) {
-      newErrors.newPassword = "Must be at least 8 characters";
-    } else if (currentPassword === newPassword) {
-      newErrors.newPassword = "Must differ from current password";
-    }
-
-    if (!confirmPassword.trim()) {
-      newErrors.confirmPassword = "Confirmation is required";
-    } else if (newPassword !== confirmPassword) {
-      newErrors.confirmPassword = "Passwords do not match";
-    }
-
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      notifyValidationError(toast);
+    if (!result.success) {
+      if (result.field) {
+        setErrors({ [result.field]: result.error });
+      } else {
+        notifyError(toast, result.error);
+      }
       return;
     }
 
-    try {
-      setUpdatingPassword(true);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    notifySuccess(toast, "Password updated successfully");
 
-      // Re-authenticate user first (security requirement)
-      const credential = EmailAuthProvider.credential(user.email, currentPassword);
-      await reauthenticateWithCredential(user, credential);
-
-      // Update password in Firebase Auth
-      await updatePassword(user, newPassword);
-
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      notifySuccess(toast, "Password updated successfully");
-
-      // Close modal and reset fields
-      setShowPasswordModal(false);
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-    } catch (error: any) {
-      console.error("[Settings] Error updating password:", error);
-
-      if (error.code === "auth/wrong-password") {
-        setErrors({ currentPassword: "Incorrect password" });
-      } else if (error.code === "auth/weak-password") {
-        setErrors({ newPassword: "Choose a stronger password" });
-      } else if (error.code === "auth/requires-recent-login") {
-        notifyError(toast, "Session expired. Sign out and back in.");
-      } else {
-        notifyError(toast, error.message || "Failed to update password");
-      }
-    } finally {
-      setUpdatingPassword(false);
-    }
+    setShowPasswordModal(false);
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
   };
 
   if (loading) {

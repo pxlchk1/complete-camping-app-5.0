@@ -100,7 +100,6 @@ const Tab = createBottomTabNavigator();
 const PlanStack = createNativeStackNavigator();
 
 function PlanStackNavigator(props: any) {
-  console.log("[PlanStackNavigator] mount");
   return (
     <PlanErrorBoundary navigation={props.navigation}>
       <PlanStack.Navigator
@@ -116,7 +115,6 @@ function PlanStackNavigator(props: any) {
 }
 
 function CommunityStackNavigator(props: any) {
-  console.log("[CommunityStackNavigator] mount");
   // Extract screen param to pass as initialRouteName to the top tabs
   const initialTab = props?.route?.params?.screen;
   return (
@@ -163,7 +161,6 @@ export default function RootNavigator() {
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
-        animation: 'none',
       }}
       initialRouteName={user ? "HomeTabs" : "Auth"}
     >
@@ -227,7 +224,6 @@ export default function RootNavigator() {
       {/* Trip Planning screens */}
       <Stack.Screen name="MealPlanning" component={MealPlanningScreen} />
       <Stack.Screen name="ShoppingList" component={ShoppingListScreen} />
-      <Stack.Screen name="MealPlan" component={MyCampsiteScreen} />
       <Stack.Screen name="ParksBrowse" component={ParksBrowseScreen} />
 
       {/* New Packing List screens (local-first) */}

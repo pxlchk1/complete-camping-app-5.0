@@ -1,20 +1,20 @@
 /**
  * Accept Invitation Screen
- * Handles campground invitation acceptance via deep link
+ * Handles campground invitation acceptance via deep link (old /invite/:token format)
  */
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   View,
   Text,
   Pressable,
   ActivityIndicator,
-  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../config/firebase";
 import {
   getInvitationData,
@@ -30,6 +30,7 @@ import {
   TEXT_PRIMARY_STRONG,
   TEXT_SECONDARY,
   TEXT_MUTED,
+  RUST,
 } from "../constants/colors";
 
 type AcceptInvitationRouteProp = RouteProp<RootStackParamList, "AcceptInvitation">;
@@ -43,10 +44,30 @@ export default function AcceptInvitationScreen() {
   const [accepting, setAccepting] = useState(false);
   const [invitation, setInvitation] = useState<InvitationData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Shown inline instead of a native Alert — e.g. "wrong account signed in".
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [accepted, setAcceptedInfo] = useState<{ inviterName: string } | null>(null);
+
+  // Guards against redeeming twice if Firebase fires more than one auth event.
+  const hasAttemptedRef = useRef(false);
 
   useEffect(() => {
     loadInvitation();
   }, []);
+
+  // Mirrors the fix in AcceptInviteScreen: rather than sending a guest to
+  // Auth and hoping they come back on their own, listen for the moment
+  // Firebase reports a signed-in user and resume acceptance automatically.
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user && invitation && !accepted && !hasAttemptedRef.current) {
+        hasAttemptedRef.current = true;
+        handleAccept();
+      }
+    });
+    return unsubscribe;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invitation, accepted]);
 
   const loadInvitation = async () => {
     try {
@@ -83,20 +104,8 @@ export default function AcceptInvitationScreen() {
     const user = auth.currentUser;
 
     if (!user) {
-      // Redirect to sign up with invitation token
-      Alert.alert(
-        "Sign In Required",
-        "Please sign in or create an account to accept this invitation.",
-        [
-          {
-            text: "Sign In",
-            onPress: () => {
-              navigation.navigate("Auth" as any, { invitationToken });
-            },
-          },
-          { text: "Cancel", style: "cancel" },
-        ]
-      );
+      setActionMessage(null);
+      navigation.navigate("Auth" as any, { returnTo: true });
       return;
     }
 
@@ -104,35 +113,22 @@ export default function AcceptInvitationScreen() {
 
     // Check if email matches
     if (user.email?.toLowerCase() !== invitation.recipientEmail.toLowerCase()) {
-      Alert.alert(
-        "Wrong Account",
-        `This invitation was sent to ${invitation.recipientEmail}. Please sign out and sign in with that email address.`,
-        [{ text: "OK" }]
+      setActionMessage(
+        `This invitation was sent to ${invitation.recipientEmail}. Please sign out and sign in with that email address.`
       );
       return;
     }
 
     try {
       setAccepting(true);
+      setActionMessage(null);
       await acceptInvitation(invitationToken);
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-      Alert.alert(
-        "Welcome to the Campground! 🏕️",
-        `You've successfully joined ${invitation.inviterName}'s campground. You'll now be included in their camping trips.`,
-        [
-          {
-            text: "View My Campground",
-            onPress: () => {
-              navigation.navigate("MyCampground" as any);
-            },
-          },
-        ]
-      );
+      setAcceptedInfo({ inviterName: invitation.inviterName });
     } catch (err: any) {
       console.error("Error accepting invitation:", err);
-      Alert.alert("Error", err.message || "Failed to accept invitation");
+      setActionMessage(err.message || "Failed to accept invitation");
     } finally {
       setAccepting(false);
     }
@@ -178,6 +174,45 @@ export default function AcceptInvitationScreen() {
           >
             <Text style={{ fontFamily: "SourceSans3_600SemiBold", color: PARCHMENT }}>
               Go Back
+            </Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (accepted) {
+    return (
+      <SafeAreaView className="flex-1" style={{ backgroundColor: PARCHMENT }}>
+        <View className="flex-1 items-center justify-center px-8">
+          <View
+            className="w-24 h-24 rounded-full items-center justify-center mb-6"
+            style={{ backgroundColor: EARTH_GREEN + "20" }}
+          >
+            <Ionicons name="checkmark-circle" size={64} color={EARTH_GREEN} />
+          </View>
+          <Text
+            className="text-2xl text-center mb-3"
+            style={{ fontFamily: "SourceSans3_700Bold", color: TEXT_PRIMARY_STRONG }}
+          >
+            {"Welcome to the Campground! 🏕️"}
+          </Text>
+          <Text
+            className="text-center mb-8"
+            style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY, fontSize: 16 }}
+          >
+            {`You've successfully joined ${accepted.inviterName}'s campground. You'll now be included in their camping trips.`}
+          </Text>
+          <Pressable
+            onPress={() => navigation.navigate("MyCampground" as any)}
+            className="w-full py-4 rounded-xl active:opacity-90"
+            style={{ backgroundColor: DEEP_FOREST }}
+          >
+            <Text
+              className="text-center"
+              style={{ fontFamily: "SourceSans3_600SemiBold", color: PARCHMENT, fontSize: 16 }}
+            >
+              View My Campground
             </Text>
           </Pressable>
         </View>
@@ -277,6 +312,21 @@ export default function AcceptInvitationScreen() {
           </View>
         </View>
 
+        {actionMessage ? (
+          <View
+            className="flex-row items-start p-3 rounded-xl mb-4"
+            style={{ backgroundColor: RUST + "15" }}
+          >
+            <Ionicons name="alert-circle" size={18} color={RUST} style={{ marginTop: 1 }} />
+            <Text
+              className="ml-2 flex-1"
+              style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_PRIMARY_STRONG, fontSize: 13, lineHeight: 18 }}
+            >
+              {actionMessage}
+            </Text>
+          </View>
+        ) : null}
+
         {/* Accept Button */}
         <Pressable
           onPress={handleAccept}
@@ -288,7 +338,7 @@ export default function AcceptInvitationScreen() {
             <ActivityIndicator color={PARCHMENT} />
           ) : (
             <Text style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 15, color: PARCHMENT }}>
-              Accept Invitation
+              {auth.currentUser ? "Accept Invitation" : "Sign In to Accept"}
             </Text>
           )}
         </Pressable>

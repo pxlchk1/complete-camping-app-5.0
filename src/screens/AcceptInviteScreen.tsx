@@ -3,7 +3,7 @@
  * Allows users to accept a campground invitation via deep link token
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import { useRoute, useNavigation, RouteProp } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../config/firebase";
 import { redeemCampgroundInvite } from "../services/campgroundInviteService";
 import { useUserStatus } from "../utils/authHelper";
@@ -47,16 +48,38 @@ export default function AcceptInviteScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showAccountModal, setShowAccountModal] = useState(false);
 
+  // Guards the auth-state listener below from redeeming the invite more
+  // than once if Firebase fires multiple auth events in quick succession.
+  const hasAttemptedRef = useRef(false);
+
   useEffect(() => {
-    // If user is guest, prompt to sign in
     if (isGuest) {
       setShowAccountModal(true);
       setState("ready");
     } else {
-      // Token is ready to be redeemed
       setState("ready");
     }
   }, [isGuest, token]);
+
+  // Previously, tapping "Create Account" or "Log In" in the modal closed
+  // the modal and immediately re-ran the accept check — which still saw no
+  // signed-in user (account creation hadn't happened yet) and reopened the
+  // same modal, producing an endless flash loop with no way for a guest to
+  // ever actually accept the invite. Now the buttons send the guest to the
+  // real sign-in screen, and this listener picks up the moment Firebase
+  // reports a signed-in user (whether that happens here or on the Auth
+  // screen above us) and resumes acceptance automatically.
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user && !hasAttemptedRef.current && (state === "ready" || state === "loading")) {
+        hasAttemptedRef.current = true;
+        setShowAccountModal(false);
+        handleAcceptInvite();
+      }
+    });
+    return unsubscribe;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state]);
 
   const handleAcceptInvite = async () => {
     if (!token) {
@@ -96,7 +119,7 @@ export default function AcceptInviteScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     navigation.reset({
       index: 0,
-      routes: [{ name: "MainTabs", params: { screen: "Profile" } }],
+      routes: [{ name: "HomeTabs" }],
     });
     // Navigate to My Campground
     setTimeout(() => {
@@ -113,10 +136,13 @@ export default function AcceptInviteScreen() {
     setShowAccountModal(false);
   };
 
-  const handleAuthSuccess = () => {
+  // Guest tapped "Create Account" / "Log In": route to the real auth screen
+  // instead of pretending the invite can be redeemed immediately. The
+  // onAuthStateChanged listener above resumes acceptance once they're
+  // actually signed in.
+  const handleGoToAuth = () => {
     setShowAccountModal(false);
-    // After auth, try accepting the invite
-    handleAcceptInvite();
+    navigation.navigate("Auth", { returnTo: true });
   };
 
   // Loading state
@@ -305,7 +331,9 @@ export default function AcceptInviteScreen() {
       {/* Account Required Modal */}
       <AccountRequiredModal
         visible={showAccountModal}
-        onCreateAccount={handleAuthSuccess}
+        triggerKey="view_shared_trip"
+        onCreateAccount={handleGoToAuth}
+        onLogIn={handleGoToAuth}
         onMaybeLater={handleAccountModalClose}
       />
     </View>

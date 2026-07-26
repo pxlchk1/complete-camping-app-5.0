@@ -207,10 +207,6 @@ export default function PaywallScreen() {
     }
   };
 
-  useEffect(() => {
-    loadOfferings();
-  }, []);
-
   const loadOfferings = async () => {
     try {
       setLoading(true);

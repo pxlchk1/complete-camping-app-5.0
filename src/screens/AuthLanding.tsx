@@ -12,7 +12,19 @@ import { Ionicons } from "@expo/vector-icons";
 import { bootstrapNewAccount, getOnboardingErrorMessage, isPermissionDeniedError, isEmailInUseError } from "../onboarding";
 import { identifyUser } from "../services/subscriptionService";
 
-export default function AuthLanding({ navigation }: { navigation: any }) {
+export default function AuthLanding({ navigation, route }: { navigation: any; route?: any }) {
+  const returnTo = Boolean(route?.params?.returnTo);
+  // After a successful sign-in/sign-up: go back to whichever screen sent the
+  // user here (e.g. an invite-acceptance flow) when returnTo is set,
+  // otherwise land on the main tabs as usual.
+  const navigateAfterAuth = () => {
+    if (returnTo && navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate("HomeTabs");
+    }
+  };
+
   const [loading, setLoading] = useState(false);
   const [showEmailAuth, setShowEmailAuth] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
@@ -44,7 +56,7 @@ export default function AuthLanding({ navigation }: { navigation: any }) {
       // Check if Apple Authentication is available
       const isAvailable = await AppleAuthentication.isAvailableAsync();
       if (!isAvailable) {
-        alert("Apple Sign In is not available on this device");
+        setError("Apple Sign In is not available on this device");
         return;
       }
 
@@ -116,7 +128,7 @@ export default function AuthLanding({ navigation }: { navigation: any }) {
     } catch (error: any) {
       if (error.code !== "ERR_REQUEST_CANCELED") {
         console.error("Apple Sign In Error:", error);
-        alert("Failed to sign in with Apple. Please try again.");
+        setError("Failed to sign in with Apple. Please try again.");
       }
     } finally {
       setLoading(false);
@@ -296,8 +308,8 @@ export default function AuthLanding({ navigation }: { navigation: any }) {
       } catch (rcError) {
         if (__DEV__) console.warn("🔐 [AuthLanding] RevenueCat identify failed (non-blocking):", rcError);
       }
-      
-      navigation.navigate("HomeTabs");
+
+      navigateAfterAuth();
     } catch (error) {
       if (__DEV__) console.error("Load User Profile Error:", error);
       throw error;
@@ -512,8 +524,8 @@ export default function AuthLanding({ navigation }: { navigation: any }) {
       } catch (rcError) {
         if (__DEV__) console.warn("🔐 [AuthLanding - Email] RevenueCat identify failed (non-blocking):", rcError);
       }
-      
-      navigation.navigate("HomeTabs");
+
+      navigateAfterAuth();
     } catch (error: any) {
       if (__DEV__) console.error("Email Auth Error:", error);
       if (__DEV__) console.error("Email Auth Error Code:", error.code);
@@ -646,14 +658,14 @@ export default function AuthLanding({ navigation }: { navigation: any }) {
                       <Text style={styles.errorText}>{error}</Text>
                       {pendingOnboardingRetry && (
                         <TouchableOpacity
-                          style={[styles.authButton, { marginTop: 12 }]}
+                          style={[styles.secondaryButton, { marginTop: 12 }]}
                           onPress={handleRetryOnboarding}
                           disabled={loading}
                         >
                           {loading ? (
-                            <ActivityIndicator color="#1A2F1C" />
+                            <ActivityIndicator color="#F4EBD0" />
                           ) : (
-                            <Text style={styles.authButtonText}>Retry</Text>
+                            <Text style={styles.secondaryButtonText}>Retry</Text>
                           )}
                         </TouchableOpacity>
                       )}

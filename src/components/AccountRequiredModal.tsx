@@ -1,23 +1,16 @@
 /**
- * Account Required Modal (Updated 2026-01-01)
- * 
+ * Account Required Modal
+ *
  * Prompts guests to create an account when attempting free-tier actions that require persistence.
- * 
+ *
  * ONLY use for: Actions that are FREE but need a logged-in user to persist data.
  * Examples: First trip creation, favorites #1-5, trip-linked packing checklist, My Campsite
- * 
+ *
  * DO NOT use for: Pro-gated features (use PaywallModal instead)
  */
 
 import React, { useEffect } from "react";
-import {
-  View,
-  Text,
-  Modal,
-  StyleSheet,
-  Pressable,
-  TouchableOpacity,
-} from "react-native";
+import { View, Text, Modal, StyleSheet, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { trackGateImpression } from "../services/gateAnalyticsService";
 import {
@@ -26,7 +19,6 @@ import {
   PARCHMENT,
   TEXT_PRIMARY_STRONG,
   TEXT_SECONDARY,
-  CARD_BACKGROUND_LIGHT,
 } from "../constants/colors";
 
 /**
@@ -105,18 +97,23 @@ export default function AccountRequiredModal({
   triggerKey = "default",
 }: AccountRequiredModalProps) {
   const content = ACCOUNT_MODAL_CONTENT[triggerKey] || ACCOUNT_MODAL_CONTENT.default;
-  
+
   // Track gate impression when modal becomes visible
   useEffect(() => {
     if (visible && triggerKey && triggerKey !== "default") {
       trackGateImpression(triggerKey);
     }
   }, [visible, triggerKey]);
-  
+
   // Use onClose for dismiss actions if specific handlers not provided
   const handleCreateAccount = onCreateAccount || onClose;
   const handleMaybeLater = onMaybeLater || onClose;
-  
+  // "Log In" previously fell through to the create-account handler even
+  // when a caller passed its own onLogIn — the button ignored the prop
+  // entirely. It now genuinely uses onLogIn, falling back to
+  // handleCreateAccount only when a screen doesn't distinguish the two.
+  const handleLogIn = onLogIn || handleCreateAccount;
+
   return (
     <Modal
       visible={visible}
@@ -127,10 +124,10 @@ export default function AccountRequiredModal({
     >
       <View style={styles.backdrop}>
         <Pressable style={styles.backdropTouchable} onPress={handleMaybeLater} />
-        
+
         <View style={styles.modalContainer}>
           <View style={styles.handle} />
-          
+
           {/* Icon */}
           <View style={styles.iconContainer}>
             <Ionicons name="person-add" size={48} color={EARTH_GREEN} />
@@ -144,29 +141,26 @@ export default function AccountRequiredModal({
 
           {/* Buttons */}
           <View style={styles.buttonContainer}>
-            <TouchableOpacity 
-              style={styles.primaryButton} 
+            <Pressable
+              style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
               onPress={handleCreateAccount}
-              activeOpacity={0.8}
             >
               <Text style={styles.primaryButtonText}>Create Account</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.loginButton} 
-              onPress={handleCreateAccount}
-              activeOpacity={0.8}
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [styles.loginButton, pressed && styles.pressed]}
+              onPress={handleLogIn}
             >
               <Text style={styles.loginButtonText}>Log In</Text>
-            </TouchableOpacity>
+            </Pressable>
 
-            <TouchableOpacity 
-              style={styles.secondaryButton} 
+            <Pressable
+              style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
               onPress={handleMaybeLater}
-              activeOpacity={0.8}
             >
               <Text style={styles.secondaryButtonText}>Not Now</Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </View>
       </View>
@@ -220,6 +214,9 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     width: "100%",
+  },
+  pressed: {
+    opacity: 0.8,
   },
   primaryButton: {
     backgroundColor: EARTH_GREEN,

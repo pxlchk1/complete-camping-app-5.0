@@ -110,6 +110,20 @@ export default function App() {
 
   const [appReady, setAppReady] = useState(false);
   const [subscriptionsInitialized, setSubscriptionsInitialized] = useState(false);
+  // Tracks whether the persisted auth store (user/isAuthenticated) has
+  // finished rehydrating from AsyncStorage, and whether Firebase's own
+  // onAuthStateChanged has fired at least once. Until both are true, `user`
+  // may still read as null even for a returning signed-in user — mounting
+  // navigation before then is what let the login screen flash before
+  // snapping to Home. See RootNavigator's initialRouteName.
+  const [authStoreHydrated, setAuthStoreHydrated] = useState(() => useAuthStore.persist.hasHydrated());
+  const [authChecked, setAuthChecked] = useState(false);
+
+  useEffect(() => {
+    if (authStoreHydrated) return;
+    const unsubscribe = useAuthStore.persist.onFinishHydration(() => setAuthStoreHydrated(true));
+    return unsubscribe;
+  }, [authStoreHydrated]);
 
   // Initialize subscriptions ONCE at app launch (anonymous, before auth)
   useEffect(() => {
@@ -181,21 +195,29 @@ export default function App() {
         useAuthStore.getState().signOut();
         // User remains anonymous in RevenueCat or call logOut if needed
       }
+
+      useAuthStore.getState().setLoading(false);
+      setAuthChecked(true);
     });
 
     return () => unsubscribe();
   }, [subscriptionsInitialized]);
 
-  // Show splash screen for minimum 3 seconds on cold start
+  // Splash stays up until fonts, subscriptions, the persisted-session
+  // rehydration, and the first real Firebase auth check have all resolved —
+  // rather than a flat multi-second timer that either wastes time once
+  // everything is ready sooner, or isn't long enough when it's slower. The
+  // short timeout below is just an anti-flash smoothing buffer, not a
+  // readiness gate.
   useEffect(() => {
-    if (fontsLoaded) {
+    if (fontsLoaded && subscriptionsInitialized && authStoreHydrated && authChecked) {
       const timer = setTimeout(() => {
         setAppReady(true);
-      }, 3000);
+      }, 400);
 
       return () => clearTimeout(timer);
     }
-  }, [fontsLoaded]);
+  }, [fontsLoaded, subscriptionsInitialized, authStoreHydrated, authChecked]);
 
   if (!fontsLoaded || !appReady) {
     return (
@@ -215,9 +237,6 @@ export default function App() {
             <ToastProvider>
               <NavigationContainer
                 linking={linking}
-                onStateChange={(state) => {
-                  console.log('[Navigation] State changed:', state);
-                }}
                 onUnhandledAction={(action) => {
                   console.error('[Navigation] Unhandled action:', action);
                 }}
