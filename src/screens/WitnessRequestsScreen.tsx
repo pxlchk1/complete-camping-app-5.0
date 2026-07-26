@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Image,
+  Modal,
 } from "react-native";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -59,6 +60,7 @@ export default function WitnessRequestsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
 
   const userId = auth.currentUser?.uid;
 
@@ -266,7 +268,9 @@ export default function WitnessRequestsScreen() {
               {/* Divider */}
               <View style={{ height: 1, backgroundColor: BORDER_SOFT }} />
 
-              {/* Photo if provided */}
+              {/* Photo if provided — previously just a placeholder icon
+                  with no onPress, so witnesses could never actually see
+                  the evidence photo they were asked to approve or deny. */}
               {claim.photoUrl && (
                 <View className="p-4">
                   <Text className="text-sm font-medium mb-2" style={{ color: TEXT_MUTED }}>
@@ -275,14 +279,15 @@ export default function WitnessRequestsScreen() {
                   <Pressable
                     className="h-40 rounded-lg overflow-hidden"
                     style={{ backgroundColor: DEEP_FOREST + "10" }}
+                    onPress={() => setPreviewPhotoUrl(claim.photoUrl!)}
+                    accessibilityLabel="View photo evidence"
+                    accessibilityRole="button"
                   >
-                    {/* Would use Image component here with claim.photoUrl */}
-                    <View className="flex-1 items-center justify-center">
-                      <Ionicons name="image-outline" size={32} color={TEXT_MUTED} />
-                      <Text className="text-sm mt-2" style={{ color: TEXT_MUTED }}>
-                        Tap to view photo
-                      </Text>
-                    </View>
+                    <Image
+                      source={{ uri: claim.photoUrl }}
+                      style={{ width: "100%", height: "100%" }}
+                      resizeMode="cover"
+                    />
                   </Pressable>
                 </View>
               )}
@@ -329,6 +334,36 @@ export default function WitnessRequestsScreen() {
           );
         })}
       </ScrollView>
+
+      {/* Full-screen photo preview */}
+      <Modal
+        visible={!!previewPhotoUrl}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPreviewPhotoUrl(null)}
+      >
+        <Pressable
+          className="flex-1 items-center justify-center"
+          style={{ backgroundColor: "rgba(0,0,0,0.9)" }}
+          onPress={() => setPreviewPhotoUrl(null)}
+        >
+          {previewPhotoUrl && (
+            <Image
+              source={{ uri: previewPhotoUrl }}
+              style={{ width: "100%", height: "80%" }}
+              resizeMode="contain"
+            />
+          )}
+          <Pressable
+            className="absolute top-14 right-6 w-10 h-10 rounded-full items-center justify-center"
+            style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
+            onPress={() => setPreviewPhotoUrl(null)}
+            accessibilityLabel="Close photo preview"
+          >
+            <Ionicons name="close" size={24} color="#FFFFFF" />
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }

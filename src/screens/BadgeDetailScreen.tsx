@@ -298,8 +298,35 @@ export default function BadgeDetailScreen() {
     );
   }
 
-  // Badge not found
+  // Badge not found — or, for a guest, loadData never even attempted to
+  // fetch it. Previously both cases showed the same "Badge not found"
+  // text, which reads as broken content rather than an auth requirement.
   if (!badge) {
+    if (!auth.currentUser) {
+      return (
+        <View className="flex-1 bg-parchment">
+          <ModalHeader title="Badge" onBack={() => navigation.goBack()} />
+          <View className="flex-1 justify-center items-center px-8">
+            <Text className="font-source-semibold text-lg text-center mb-2" style={{ color: TEXT_MUTED }}>
+              Sign In to View This Badge
+            </Text>
+            <Text className="font-source-regular text-center mb-6" style={{ color: TEXT_MUTED }}>
+              Create a free account to track your progress and earn camping badges.
+            </Text>
+            <Pressable
+              onPress={() => navigation.navigate("Auth")}
+              className="px-6 py-3 rounded-xl active:opacity-80"
+              style={{ backgroundColor: EARTH_GREEN }}
+            >
+              <Text className="font-source-semibold" style={{ color: PARCHMENT }}>
+                Sign In
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      );
+    }
+
     return (
       <View className="flex-1 bg-parchment">
         <ModalHeader title="Badge" onBack={() => navigation.goBack()} />

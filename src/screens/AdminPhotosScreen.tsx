@@ -9,7 +9,7 @@ import { View, Text, ScrollView, Pressable, ActivityIndicator, RefreshControl, I
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { db, auth, functions } from "../config/firebase";
-import { collection, query, getDocs, doc, orderBy, limit, getDoc, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, query, getDocs, doc, orderBy, limit, getDoc, addDoc, serverTimestamp, startAfter, DocumentSnapshot } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import ModalHeader from "../components/ModalHeader";
 import { useToast } from "../components/ToastManager";
@@ -43,6 +43,11 @@ export default function AdminPhotosScreen() {
   const [confirmModalVisible, setConfirmModalVisible] = useState(false);
   const [photoToDelete, setPhotoToDelete] = useState<Story | null>(null);
   const [uploaderNames, setUploaderNames] = useState<Record<string, string>>({});
+  // Previously a hard limit(50) with no way to reach anything beyond it —
+  // now paginated the same way AdminUsersScreen already is.
+  const [lastDoc, setLastDoc] = useState<DocumentSnapshot | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const currentUserId = auth.currentUser?.uid;
   const { showSuccess, showError } = useToast();
 
@@ -87,10 +92,16 @@ export default function AdminPhotosScreen() {
     return userId.slice(0, 8);
   }, [uploaderNames]);
 
-  const loadStories = async () => {
+  const loadStories = async (loadMore = false) => {
     try {
+      if (loadMore) {
+        setLoadingMore(true);
+      }
+
       const storiesRef = collection(db, "stories");
-      const q = query(storiesRef, orderBy("createdAt", "desc"), limit(50));
+      const q = loadMore && lastDoc
+        ? query(storiesRef, orderBy("createdAt", "desc"), startAfter(lastDoc), limit(50))
+        : query(storiesRef, orderBy("createdAt", "desc"), limit(50));
       const snapshot = await getDocs(q);
 
       const storiesData = snapshot.docs.map(doc => ({
@@ -98,12 +109,15 @@ export default function AdminPhotosScreen() {
         ...doc.data()
       })) as Story[];
 
-      setStories(storiesData);
+      setStories((prev) => (loadMore ? [...prev, ...storiesData] : storiesData));
+      setLastDoc(snapshot.docs[snapshot.docs.length - 1] || null);
+      setHasMore(snapshot.docs.length === 50);
 
-      // Fetch uploader names for all unique userIds
+      // Fetch uploader names for all unique userIds (merged, not
+      // replaced, so loading page 2 doesn't drop page 1's names)
       const uniqueUserIds = [...new Set(storiesData.map(s => s.ownerUid || s.userId || s.authorId).filter(Boolean))];
       const namesMap: Record<string, string> = {};
-      
+
       await Promise.all(
         uniqueUserIds.map(async (userId) => {
           if (!userId) return;
@@ -120,15 +134,27 @@ export default function AdminPhotosScreen() {
           }
         })
       );
-      
-      setUploaderNames(namesMap);
+
+      setUploaderNames((prev) => ({ ...prev, ...namesMap }));
     } catch (error) {
       console.error("[AdminPhotos] Error loading stories:", error);
       showError("Failed to load photos");
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setLoadingMore(false);
     }
+  };
+
+  const handleLoadMore = () => {
+    if (!loadingMore && hasMore) {
+      loadStories(true);
+    }
+  };
+
+  const isCloseToBottom = ({ layoutMeasurement, contentOffset, contentSize }: any) => {
+    const paddingToBottom = 100;
+    return layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
   };
 
   // Check if current user can delete this photo (owner OR admin)
@@ -241,6 +267,12 @@ export default function AdminPhotosScreen() {
             tintColor={DEEP_FOREST}
           />
         }
+        onScroll={({ nativeEvent }) => {
+          if (isCloseToBottom(nativeEvent)) {
+            handleLoadMore();
+          }
+        }}
+        scrollEventThrottle={400}
       >
         <View className="px-5 pt-5 pb-8">
           {stories.length === 0 && (
@@ -322,6 +354,20 @@ export default function AdminPhotosScreen() {
               </View>
             );
           })}
+
+          {loadingMore && (
+            <View className="py-4 items-center">
+              <ActivityIndicator size="small" color={DEEP_FOREST} />
+            </View>
+          )}
+          {!hasMore && stories.length > 0 && (
+            <Text
+              className="text-center py-4"
+              style={{ fontFamily: "SourceSans3_400Regular", fontSize: 13, color: TEXT_SECONDARY }}
+            >
+              No more photos
+            </Text>
+          )}
         </View>
       </ScrollView>
 

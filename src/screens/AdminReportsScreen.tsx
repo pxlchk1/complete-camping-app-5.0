@@ -8,7 +8,7 @@ import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, RefreshCon
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { db } from "../config/firebase";
-import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, getDoc, serverTimestamp, orderBy, limit } from "firebase/firestore";
+import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, getDoc, serverTimestamp, orderBy, limit, startAfter, DocumentSnapshot } from "firebase/firestore";
 import ModalHeader from "../components/ModalHeader";
 import {
   PARCHMENT,
@@ -32,24 +32,43 @@ interface Report {
   status: "pending" | "reviewed" | "dismissed";
 }
 
+const PAGE_SIZE = 50;
+
 export default function AdminReportsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [reports, setReports] = useState<Report[]>([]);
+  // Previously a hard limit(50) with no way to reach anything beyond it —
+  // now paginated the same way AdminUsersScreen already is.
+  const [lastDoc, setLastDoc] = useState<DocumentSnapshot | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   useEffect(() => {
     loadReports();
   }, []);
 
-  const loadReports = async () => {
+  const loadReports = async (loadMore = false) => {
     try {
+      if (loadMore) {
+        setLoadingMore(true);
+      }
+
       const reportsRef = collection(db, "reports");
-      const q = query(
-        reportsRef,
-        where("status", "==", "pending"),
-        orderBy("reportedAt", "desc"),
-        limit(50)
-      );
+      const q = loadMore && lastDoc
+        ? query(
+            reportsRef,
+            where("status", "==", "pending"),
+            orderBy("reportedAt", "desc"),
+            startAfter(lastDoc),
+            limit(PAGE_SIZE)
+          )
+        : query(
+            reportsRef,
+            where("status", "==", "pending"),
+            orderBy("reportedAt", "desc"),
+            limit(PAGE_SIZE)
+          );
 
       const snapshot = await getDocs(q);
       const reportsData = snapshot.docs.map(doc => ({
@@ -57,24 +76,38 @@ export default function AdminReportsScreen() {
         ...doc.data()
       })) as Report[];
 
-      setReports(reportsData);
+      setReports((prev) => (loadMore ? [...prev, ...reportsData] : reportsData));
+      setLastDoc(snapshot.docs[snapshot.docs.length - 1] || null);
+      setHasMore(snapshot.docs.length === PAGE_SIZE);
     } catch (error: any) {
       console.error("Error loading reports:", error);
       // Don't show error for missing index or empty collection - just show empty state
       const errorMessage = error?.message || "";
       const isIndexError = errorMessage.includes("index") || errorMessage.includes("Index");
       const isPermissionError = errorMessage.includes("permission") || errorMessage.includes("Permission");
-      
+
       if (!isIndexError && !isPermissionError) {
         // Only show alert for unexpected errors, not missing indexes or empty collections
         Alert.alert("Error", "Failed to load reports");
       }
       // Set empty array so UI shows empty state instead of loading forever
-      setReports([]);
+      if (!loadMore) setReports([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setLoadingMore(false);
     }
+  };
+
+  const handleLoadMore = () => {
+    if (!loadingMore && hasMore) {
+      loadReports(true);
+    }
+  };
+
+  const isCloseToBottom = ({ layoutMeasurement, contentOffset, contentSize }: any) => {
+    const paddingToBottom = 100;
+    return layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
   };
 
   const handleDismiss = async (reportId: string) => {
@@ -168,6 +201,12 @@ export default function AdminReportsScreen() {
             tintColor={DEEP_FOREST}
           />
         }
+        onScroll={({ nativeEvent }) => {
+          if (isCloseToBottom(nativeEvent)) {
+            handleLoadMore();
+          }
+        }}
+        scrollEventThrottle={400}
       >
         <View className="px-5 pt-5 pb-8">
           {reports.length === 0 ? (
@@ -283,6 +322,20 @@ export default function AdminReportsScreen() {
                 </View>
               </View>
             ))
+          )}
+
+          {loadingMore && (
+            <View className="py-4 items-center">
+              <ActivityIndicator size="small" color={DEEP_FOREST} />
+            </View>
+          )}
+          {!hasMore && reports.length > 0 && (
+            <Text
+              className="text-center py-4"
+              style={{ fontFamily: "SourceSans3_400Regular", fontSize: 13, color: TEXT_MUTED }}
+            >
+              No more reports
+            </Text>
           )}
         </View>
       </ScrollView>

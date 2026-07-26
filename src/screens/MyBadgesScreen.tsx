@@ -76,7 +76,14 @@ export default function MyBadgesScreen() {
   );
 
   const loadBadges = async () => {
-    if (!targetUserId) return;
+    if (!targetUserId) {
+      // Previously returned here without ever clearing `loading`, leaving
+      // a guest viewing their own badges (no route userId, no signed-in
+      // user) stuck on the spinner forever.
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
 
     if (!refreshing) {
       setLoading(true);
@@ -228,34 +235,63 @@ export default function MyBadgesScreen() {
         )}
 
         {/* Empty State */}
-        {badges.length === 0 && (
+        {badges.length === 0 && !targetUserId ? (
+          // A guest with no route userId and no signed-in account — this
+          // used to render the generic "No Badges Yet" empty state, which
+          // reads as broken/empty content rather than an auth requirement.
           <View className="mx-4 mt-6 p-8 rounded-xl items-center" style={{ backgroundColor: CARD_BACKGROUND_LIGHT }}>
             <View
               className="w-16 h-16 rounded-full items-center justify-center mb-4"
               style={{ backgroundColor: GRANITE_GOLD + "20" }}
             >
-              <Ionicons name="ribbon-outline" size={32} color={GRANITE_GOLD} />
+              <Ionicons name="person-circle-outline" size={32} color={GRANITE_GOLD} />
             </View>
             <Text className="text-lg font-medium text-center" style={{ color: TEXT_PRIMARY_STRONG }}>
-              {isOwnProfile ? "No Badges Yet" : "No Badges Earned"}
+              Sign In to See Your Badges
             </Text>
             <Text className="text-center mt-2" style={{ color: TEXT_SECONDARY }}>
-              {isOwnProfile
-                ? "Start earning badges to showcase your camping accomplishments!"
-                : "This camper hasn't earned any badges yet."}
+              Create a free account to start earning and tracking camping badges.
             </Text>
-            {isOwnProfile && (
-              <Pressable
-                className="mt-4 px-6 py-3 rounded-xl"
-                style={{ backgroundColor: EARTH_GREEN }}
-                onPress={() => navigation.navigate("MeritBadges")}
-              >
-                <Text className="font-semibold" style={{ color: PARCHMENT }}>
-                  Browse Badges
-                </Text>
-              </Pressable>
-            )}
+            <Pressable
+              className="mt-4 px-6 py-3 rounded-xl"
+              style={{ backgroundColor: EARTH_GREEN }}
+              onPress={() => navigation.navigate("Auth")}
+            >
+              <Text className="font-semibold" style={{ color: PARCHMENT }}>
+                Sign In
+              </Text>
+            </Pressable>
           </View>
+        ) : (
+          badges.length === 0 && (
+            <View className="mx-4 mt-6 p-8 rounded-xl items-center" style={{ backgroundColor: CARD_BACKGROUND_LIGHT }}>
+              <View
+                className="w-16 h-16 rounded-full items-center justify-center mb-4"
+                style={{ backgroundColor: GRANITE_GOLD + "20" }}
+              >
+                <Ionicons name="ribbon-outline" size={32} color={GRANITE_GOLD} />
+              </View>
+              <Text className="text-lg font-medium text-center" style={{ color: TEXT_PRIMARY_STRONG }}>
+                {isOwnProfile ? "No Badges Yet" : "No Badges Earned"}
+              </Text>
+              <Text className="text-center mt-2" style={{ color: TEXT_SECONDARY }}>
+                {isOwnProfile
+                  ? "Start earning badges to showcase your camping accomplishments!"
+                  : "This camper hasn't earned any badges yet."}
+              </Text>
+              {isOwnProfile && (
+                <Pressable
+                  className="mt-4 px-6 py-3 rounded-xl"
+                  style={{ backgroundColor: EARTH_GREEN }}
+                  onPress={() => navigation.navigate("MeritBadges")}
+                >
+                  <Text className="font-semibold" style={{ color: PARCHMENT }}>
+                    Browse Badges
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+          )
         )}
 
         {/* Badges by Category */}

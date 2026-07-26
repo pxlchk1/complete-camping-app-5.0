@@ -162,13 +162,33 @@ export default function MeritBadgesScreen() {
         {/* Empty State */}
         {categories.length === 0 && (
           <View className="items-center py-10 px-6">
-            <Ionicons name="ribbon-outline" size={48} color={TEXT_MUTED} />
+            <Ionicons
+              name={auth.currentUser ? "ribbon-outline" : "person-circle-outline"}
+              size={48}
+              color={TEXT_MUTED}
+            />
             <Text
               className="font-source-regular text-base mt-3 text-center"
               style={{ color: TEXT_SECONDARY }}
             >
-              No badges available yet.
+              {auth.currentUser
+                ? "No badges available yet."
+                : "Sign in to see your badge progress."}
             </Text>
+            {/* Guests previously saw the same "no badges" message as a
+                signed-in user with none earned yet — indistinguishable
+                from broken/empty content. */}
+            {!auth.currentUser && (
+              <Pressable
+                onPress={() => navigation.navigate("Auth")}
+                className="mt-4 px-6 py-3 rounded-xl active:opacity-80"
+                style={{ backgroundColor: EARTH_GREEN }}
+              >
+                <Text className="font-source-semibold" style={{ color: PARCHMENT }}>
+                  Sign In
+                </Text>
+              </Pressable>
+            )}
           </View>
         )}
       </ScrollView>

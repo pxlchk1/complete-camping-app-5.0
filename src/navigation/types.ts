@@ -116,7 +116,6 @@ export type RootStackParamList = {
   AdminSubscriptions: undefined;
   AdminPhotos: undefined;
   AdminContent: undefined;
-  AdminBanned: undefined;
   AdminGatingReport: undefined;
   AdminCommunications: undefined;
 

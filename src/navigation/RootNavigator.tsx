@@ -79,6 +79,29 @@ import AdminPhotosScreen from "../screens/AdminPhotosScreen";
 import AdminContentScreen from "../screens/AdminContentScreen";
 import AdminGatingReportScreen from "../screens/admin/AdminGatingReportScreen";
 import AdminCommunicationsScreen from "../screens/AdminCommunicationsScreen";
+import AdminGate from "../components/AdminGate";
+
+// None of the admin screens checked whether the signed-in user was
+// actually an admin — wrapping them here (once, in the navigator) rather
+// than editing all 8 screens individually.
+function withAdminGate<P extends object>(Component: React.ComponentType<P>) {
+  return function AdminGated(props: P) {
+    return (
+      <AdminGate>
+        <Component {...props} />
+      </AdminGate>
+    );
+  };
+}
+
+const GatedAdminDashboardScreen = withAdminGate(AdminDashboardScreen);
+const GatedAdminReportsScreen = withAdminGate(AdminReportsScreen);
+const GatedAdminUsersScreen = withAdminGate(AdminUsersScreen);
+const GatedAdminSubscriptionsScreen = withAdminGate(AdminSubscriptionsScreen);
+const GatedAdminPhotosScreen = withAdminGate(AdminPhotosScreen);
+const GatedAdminContentScreen = withAdminGate(AdminContentScreen);
+const GatedAdminGatingReportScreen = withAdminGate(AdminGatingReportScreen);
+const GatedAdminCommunicationsScreen = withAdminGate(AdminCommunicationsScreen);
 
 // Invite screens
 import AcceptInviteScreen from "../screens/AcceptInviteScreen";
@@ -174,7 +197,10 @@ export default function RootNavigator() {
       <Stack.Screen name="AddPeopleToTrip" component={AddPeopleToTripScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
-      <Stack.Screen name="SeedData" component={SeedDataScreen} />
+      {/* Dev-only data seeding tool — its "Verify Badge Assets" button is
+          already gated behind __DEV__, but the screen itself wasn't,
+          so gate the route the same way as MeritBadgeAssetCheck below. */}
+      {__DEV__ && <Stack.Screen name="SeedData" component={SeedDataScreen} />}
 
       {/* Accept Invite (from deep link - new format: /join?token=...) */}
       <Stack.Screen 
@@ -264,15 +290,15 @@ export default function RootNavigator() {
       <Stack.Screen name="GearDetail" component={GearDetailScreen} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
 
-      {/* Admin screens */}
-      <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
-      <Stack.Screen name="AdminReports" component={AdminReportsScreen} />
-      <Stack.Screen name="AdminUsers" component={AdminUsersScreen} />
-      <Stack.Screen name="AdminSubscriptions" component={AdminSubscriptionsScreen} />
-      <Stack.Screen name="AdminPhotos" component={AdminPhotosScreen} />
-      <Stack.Screen name="AdminContent" component={AdminContentScreen} />
-      <Stack.Screen name="AdminGatingReport" component={AdminGatingReportScreen} />
-      <Stack.Screen name="AdminCommunications" component={AdminCommunicationsScreen} />
+      {/* Admin screens — gated behind AdminGate (see withAdminGate above) */}
+      <Stack.Screen name="AdminDashboard" component={GatedAdminDashboardScreen} />
+      <Stack.Screen name="AdminReports" component={GatedAdminReportsScreen} />
+      <Stack.Screen name="AdminUsers" component={GatedAdminUsersScreen} />
+      <Stack.Screen name="AdminSubscriptions" component={GatedAdminSubscriptionsScreen} />
+      <Stack.Screen name="AdminPhotos" component={GatedAdminPhotosScreen} />
+      <Stack.Screen name="AdminContent" component={GatedAdminContentScreen} />
+      <Stack.Screen name="AdminGatingReport" component={GatedAdminGatingReportScreen} />
+      <Stack.Screen name="AdminCommunications" component={GatedAdminCommunicationsScreen} />
     </Stack.Navigator>
     {user && <EmailVerificationGate />}
     </View>

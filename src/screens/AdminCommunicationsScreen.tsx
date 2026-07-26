@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { View, Text, ScrollView, Pressable, TextInput, KeyboardAvoidingView, Platform, Alert } from "react-native";
+import { View, Text, ScrollView, Pressable, TextInput, KeyboardAvoidingView, Platform, Alert, Modal, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
@@ -737,28 +737,30 @@ export default function AdminCommunicationsScreen() {
     }
   };
 
+  // Broadcasting to the entire user base is the single highest-blast-radius
+  // action in the app — irreversible once sent. A stock Cancel/Publish
+  // Alert (the same dialog used for routine validation errors elsewhere)
+  // isn't enough friction for that, so this now requires typing the exact
+  // campaign name to confirm, matching the pattern already used for account
+  // deletion (EditProfileScreen).
+  const [showPublishConfirm, setShowPublishConfirm] = useState(false);
+  const [publishConfirmText, setPublishConfirmText] = useState("");
+
   const onPublish = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    Alert.alert(
-      "Publish Campaign",
-      `Are you sure you want to publish this ${activeTab === "push" ? "push notification" : activeTab === "modal" ? "modal" : "email"} to all users?\n\nCampaign: ${draft.campaignName}`,
-      [
-        { text: "Cancel", style: "cancel" },
-        { 
-          text: "Publish", 
-          style: "destructive", 
-          onPress: () => {
-            if (activeTab === "email") {
-              handlePublishEmail();
-            } else if (activeTab === "push") {
-              handlePublishPush();
-            } else if (activeTab === "modal") {
-              handlePublishModal();
-            }
-          } 
-        },
-      ]
-    );
+    setPublishConfirmText("");
+    setShowPublishConfirm(true);
+  };
+
+  const confirmPublish = () => {
+    setShowPublishConfirm(false);
+    if (activeTab === "email") {
+      handlePublishEmail();
+    } else if (activeTab === "push") {
+      handlePublishPush();
+    } else if (activeTab === "modal") {
+      handlePublishModal();
+    }
   };
 
   return (
@@ -1684,6 +1686,94 @@ export default function AdminCommunicationsScreen() {
           </Button>
         </View>
       </View>
+
+      {/* Publish confirmation — requires typing the exact campaign name */}
+      <Modal
+        visible={showPublishConfirm}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !isSending && setShowPublishConfirm(false)}
+      >
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+          <Pressable
+            style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "flex-end" }}
+            onPress={() => !isSending && setShowPublishConfirm(false)}
+          >
+            <Pressable
+              style={{ backgroundColor: PARCHMENT, borderRadius: 20, padding: 24, width: "100%", maxWidth: 420 }}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <View style={{ alignItems: "center", marginBottom: 12 }}>
+                <View
+                  style={{ width: 56, height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center", marginBottom: 12, backgroundColor: "#dc2626" }}
+                >
+                  <Ionicons name="megaphone" size={28} color={PARCHMENT} />
+                </View>
+                <Text style={{ fontFamily: "Raleway_700Bold", fontSize: 20, color: "#dc2626" }}>
+                  Publish to All Users?
+                </Text>
+              </View>
+
+              <Text style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY, textAlign: "center", marginBottom: 16, lineHeight: 20 }}>
+                This immediately sends a {activeTab === "push" ? "push notification" : activeTab === "modal" ? "home screen modal" : "email"} to every eligible user and cannot be undone.
+              </Text>
+
+              <Text style={{ fontFamily: "SourceSans3_600SemiBold", color: TEXT_PRIMARY_STRONG, marginBottom: 6 }}>
+                Type the campaign name to confirm:
+              </Text>
+              <Text style={{ fontFamily: "SourceSans3_700Bold", color: TEXT_PRIMARY_STRONG, marginBottom: 8 }}>
+                {draft.campaignName || "(untitled)"}
+              </Text>
+              <TextInput
+                value={publishConfirmText}
+                onChangeText={setPublishConfirmText}
+                placeholder={draft.campaignName || "(untitled)"}
+                placeholderTextColor={TEXT_MUTED}
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!isSending}
+                style={{
+                  borderWidth: 1,
+                  borderColor: "#dc2626",
+                  borderRadius: 12,
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  fontFamily: "SourceSans3_400Regular",
+                  color: TEXT_PRIMARY_STRONG,
+                  marginBottom: 20,
+                }}
+              />
+
+              <View style={{ flexDirection: "row", gap: 12 }}>
+                <Pressable
+                  onPress={() => setShowPublishConfirm(false)}
+                  disabled={isSending}
+                  style={{ flex: 1, borderRadius: 12, paddingVertical: 12, alignItems: "center", borderWidth: 1, borderColor: BORDER_SOFT, opacity: isSending ? 0.5 : 1 }}
+                >
+                  <Text style={{ fontFamily: "SourceSans3_600SemiBold", color: TEXT_PRIMARY_STRONG }}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  onPress={confirmPublish}
+                  disabled={isSending || publishConfirmText.trim() !== (draft.campaignName || "").trim()}
+                  style={{
+                    flex: 1,
+                    borderRadius: 12,
+                    paddingVertical: 12,
+                    alignItems: "center",
+                    backgroundColor: publishConfirmText.trim() === (draft.campaignName || "").trim() ? "#dc2626" : "#f87171",
+                  }}
+                >
+                  {isSending ? (
+                    <ActivityIndicator size="small" color={PARCHMENT} />
+                  ) : (
+                    <Text style={{ fontFamily: "SourceSans3_600SemiBold", color: PARCHMENT }}>Publish</Text>
+                  )}
+                </Pressable>
+              </View>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }

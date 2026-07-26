@@ -10,6 +10,7 @@ import * as Haptics from "expo-haptics";
 import { auth, db } from "../config/firebase";
 import { doc, getDoc, updateDoc, serverTimestamp, collection, query, where, getDocs } from "firebase/firestore";
 import ModalHeader from "../components/ModalHeader";
+import ConfirmationModal from "../components/ConfirmationModal";
 import {
   PARCHMENT,
   CARD_BACKGROUND_LIGHT,
@@ -33,12 +34,20 @@ export default function AdminSubscriptionsScreen() {
   const [email, setEmail] = useState("");
   const [selectedDuration, setSelectedDuration] = useState("");
   const [loading, setLoading] = useState(false);
+  // Previously this granted the subscription immediately on tap, with no
+  // confirmation step at all — unlike AdminPhotos/AdminContent, which both
+  // gate their destructive actions behind a confirm modal. A mistyped
+  // email plus a fat-finger tap could grant free lifetime premium.
+  const [pendingGrant, setPendingGrant] = useState<{ userId: string; email: string; duration: typeof SUBSCRIPTION_DURATIONS[number] } | null>(null);
 
   const handleAwardSubscription = async () => {
     if (!email.trim() || !selectedDuration) {
       Alert.alert("Missing Information", "Please enter an email and select a duration");
       return;
     }
+
+    const duration = SUBSCRIPTION_DURATIONS.find((d) => d.id === selectedDuration);
+    if (!duration) return;
 
     try {
       setLoading(true);
@@ -54,10 +63,22 @@ export default function AdminSubscriptionsScreen() {
       }
 
       const userDoc = querySnapshot.docs[0];
-      const userId = userDoc.id;
-      const duration = SUBSCRIPTION_DURATIONS.find(d => d.id === selectedDuration);
+      setPendingGrant({ userId: userDoc.id, email: email.trim(), duration });
+    } catch (error: any) {
+      console.error("Error looking up user:", error);
+      Alert.alert("Error", error.message || "Failed to look up user");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      if (!duration) return;
+  const confirmAwardSubscription = async () => {
+    if (!pendingGrant) return;
+    const { userId, email: grantedEmail, duration } = pendingGrant;
+    setPendingGrant(null);
+
+    try {
+      setLoading(true);
 
       // Calculate expiration date
       let expiresAt = null;
@@ -81,7 +102,7 @@ export default function AdminSubscriptionsScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert(
         "Success",
-        `${duration.label} premium subscription awarded to ${email}`,
+        `${duration.label} premium subscription awarded to ${grantedEmail}`,
         [
           {
             text: "OK",
@@ -231,6 +252,15 @@ export default function AdminSubscriptionsScreen() {
           </Pressable>
         </View>
       </ScrollView>
+
+      <ConfirmationModal
+        visible={!!pendingGrant}
+        title="Confirm subscription grant"
+        message={pendingGrant ? `Grant a ${pendingGrant.duration.label} premium subscription to ${pendingGrant.email}?` : undefined}
+        primary={{ label: "Grant Subscription", iconName: "gift", onPress: confirmAwardSubscription }}
+        secondary={{ label: "Cancel", onPress: () => setPendingGrant(null) }}
+        onClose={() => setPendingGrant(null)}
+      />
     </View>
   );
 }

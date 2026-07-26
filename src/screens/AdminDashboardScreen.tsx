@@ -119,7 +119,10 @@ export default function AdminDashboardScreen() {
       title: "Banned Users",
       subtitle: `${stats.bannedUsers} banned`,
       icon: "ban" as const,
-      screen: "AdminBanned" as const,
+      // "AdminBanned" was never implemented as a screen — this quick
+      // action was a guaranteed dead end. Banned users are already
+      // visible (highlighted) in the main user list, so route there.
+      screen: "AdminUsers" as const,
       color: "#455A64",
     },
     {

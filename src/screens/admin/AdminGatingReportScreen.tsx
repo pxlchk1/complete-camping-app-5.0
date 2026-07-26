@@ -1,8 +1,9 @@
 /**
  * Admin Gating Report Screen
- * Dev-only screen to view all gates, their levels, and export the registry
- * 
- * Access: Only visible in __DEV__ mode or for admin users
+ * Screen to view all gates, their levels, and export the registry
+ *
+ * Access: gated by AdminGate at registration (see RootNavigator.tsx) —
+ * requires users/{uid}.isAdmin or role "admin"/"administrator".
  */
 
 import React, { useState, useMemo } from "react";
