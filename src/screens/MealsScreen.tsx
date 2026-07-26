@@ -61,12 +61,6 @@ const PREP_TYPE_LABELS: Record<PrepType, string> = {
 };
 
 export default function MealsScreen({ onTabChange }: MealsScreenProps) {
-  console.log("[PLAN_TRACE] Enter MealsScreen");
-
-  useEffect(() => {
-    console.log("[PLAN_TRACE] MealsScreen mounted");
-  }, []);
-
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<MealsScreenNavigationProp>();
   const allTrips = useTrips();
@@ -74,9 +68,6 @@ export default function MealsScreen({ onTabChange }: MealsScreenProps) {
 
   // Filter trips to only show those for the current logged-in user
   const trips = currentUser ? allTrips.filter((t) => t.userId === currentUser.id) : [];
-
-  // Debug: Log trips from store
-  console.log(`[MealsScreen] Total trips in store: ${allTrips.length}, User trips: ${trips.length}`, trips.map(t => ({ id: t.id, name: t.name, start: t.startDate, end: t.endDate })));
 
   // Toggle state
   const [activeView, setActiveView] = useState<MealsView>("planner");
@@ -114,10 +105,7 @@ export default function MealsScreen({ onTabChange }: MealsScreenProps) {
     const end = new Date(trip.endDate);
     // Set end to end of day to include trips ending today
     end.setHours(23, 59, 59, 999);
-    
-    // Debug logging
-    console.log(`[MealsScreen] Trip "${trip.name}": start=${start.toISOString()}, end=${end.toISOString()}, now=${now.toISOString()}, isActive=${now <= end}`);
-    
+
     return now <= end;
   });
 

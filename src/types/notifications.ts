@@ -322,20 +322,27 @@ export const EVENT_TRIGGERS: Record<string, EventTriggerConfig> = {
 // DEEP LINK MAPPING
 // ============================================
 
+// Previously pointed at screen names that don't exist in RootNavigator
+// ("MainTabs", "PackingListGenerate", "PackingList", "GearCloset",
+// "NationalParksList") — NudgeBanner calls navigation.navigate() with these
+// directly and there's no translation layer, so every one of those was a
+// silently-broken tap (React Navigation logs an "unhandled action" warning
+// and nothing happens). These now match the screens actually registered in
+// RootNavigator/HomeTabs.
 export const DEEP_LINK_ROUTES: Record<string, { screen: string; params?: Record<string, any> }> = {
   "cta://plan/new": { screen: "CreateTrip" },
-  "cta://plan": { screen: "MainTabs", params: { screen: "Plan" } },
-  "cta://packinglist/start": { screen: "PackingListGenerate" },
-  "cta://packinglist/categories": { screen: "PackingList" },
-  "cta://packinglist/save-template": { screen: "PackingList" },
-  "cta://packinglist/add-from-gear": { screen: "GearCloset" },
-  "cta://parks": { screen: "NationalParksList" },
-  "cta://gearcloset": { screen: "GearCloset" },
-  "cta://weather": { screen: "MainTabs", params: { screen: "Plan" } },
+  "cta://plan": { screen: "HomeTabs", params: { screen: "Plan" } },
+  "cta://packinglist/start": { screen: "PackingListCreate" },
+  "cta://packinglist/categories": { screen: "PackingListCreate" },
+  "cta://packinglist/save-template": { screen: "PackingListCreate" },
+  "cta://packinglist/add-from-gear": { screen: "MyGearCloset" },
+  "cta://parks": { screen: "ParksBrowse" },
+  "cta://gearcloset": { screen: "MyGearCloset" },
+  "cta://weather": { screen: "HomeTabs", params: { screen: "Plan" } },
   "cta://profile/edit": { screen: "EditProfile" },
   "cta://campground/invite": { screen: "AddCamper" },
-  "cta://meals": { screen: "MainTabs", params: { screen: "Plan" } },
-  "cta://community": { screen: "MainTabs", params: { screen: "Community" } },
+  "cta://meals": { screen: "HomeTabs", params: { screen: "Plan" } },
+  "cta://community": { screen: "HomeTabs", params: { screen: "Connect" } },
 };
 
 // ============================================

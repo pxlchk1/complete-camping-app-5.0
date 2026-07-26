@@ -25,6 +25,8 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useTripsStore, useTrips } from "../state/tripsStore";
 import { useMealLibrary, useMealStore } from "../state/mealStore";
+import { auth } from "../config/firebase";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import AccountButton from "../components/AccountButton";
 import { RootStackParamList } from "../navigation/types";
 import { Meal, MealCategory, MealLibraryItem, PrepType, SuggestibleMealCategory } from "../types/meal";
@@ -96,11 +98,17 @@ export default function MealPlanningScreen() {
   const trip = useTripsStore((s) => s.getTripById(tripId));
   const allTrips = useTrips();
   const mealLibrary = useMealLibrary();
-  const userId = "demo_user_1"; // TODO: Get from auth
+  // Was hardcoded to a fake "demo_user_1" id, meaning every Firestore
+  // write/read here targeted the wrong document and (depending on
+  // security rules) either silently no-op'd or fell back to local
+  // storage for every real signed-in user. useLocalStorage starts true
+  // for guests so they skip the Firebase attempt entirely instead of
+  // hitting it with no uid.
+  const userId = auth.currentUser?.uid || "";
 
   const [meals, setMeals] = useState<Meal[]>([]);
   const [loading, setLoading] = useState(true);
-  const [useLocalStorage, setUseLocalStorage] = useState(false);
+  const [useLocalStorage, setUseLocalStorage] = useState(!auth.currentUser);
   const [selectedDay, setSelectedDay] = useState(1);
   const [showAddMeal, setShowAddMeal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<SuggestibleMealCategory>("breakfast");
@@ -140,7 +148,27 @@ export default function MealPlanningScreen() {
 
   // Beverages checklist state - tracks which beverages are selected per day
   // Key format: "day_beverageName" e.g., "1_Coffee"
+  // Persisted per trip so ShoppingListScreen can read it — previously this
+  // was local-only state that was lost on navigating away and never once
+  // fed into the shopping list, so nothing checked here ever showed up as
+  // something to actually buy.
   const [selectedBeverages, setSelectedBeverages] = useState<Set<string>>(new Set());
+  const beveragesStorageKey = `mealPlanBeverages:${tripId}`;
+
+  useEffect(() => {
+    let cancelled = false;
+    AsyncStorage.getItem(beveragesStorageKey)
+      .then((raw) => {
+        if (cancelled || !raw) return;
+        setSelectedBeverages(new Set(JSON.parse(raw)));
+      })
+      .catch((error) => {
+        console.error("[MealPlanning] Failed to load selected beverages:", error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [beveragesStorageKey]);
 
   // Gating modal state
   const [showAccountModal, setShowAccountModal] = useState(false);
@@ -636,6 +664,9 @@ export default function MealPlanningScreen() {
       } else {
         newSet.add(key);
       }
+      AsyncStorage.setItem(beveragesStorageKey, JSON.stringify(Array.from(newSet))).catch((error) => {
+        console.error("[MealPlanning] Failed to save selected beverages:", error);
+      });
       return newSet;
     });
     try {

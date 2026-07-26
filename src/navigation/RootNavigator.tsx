@@ -22,9 +22,6 @@ import FirstAidScreen from "../screens/FirstAidScreen";
 import CreateTripScreen from "../screens/CreateTripScreen";
 import TripDetailScreen from "../screens/TripDetailScreen";
 import ParksBrowseScreen from "../screens/ParksBrowseScreen";
-import GearListsScreen from "../screens/GearListsScreen";
-import CreateGearListScreen from "../screens/CreateGearListScreen";
-import GearListDetailScreen from "../screens/GearListDetailScreen";
 import MyCampsiteScreen from "../screens/MyCampsiteScreen";
 import AccountScreen from "../screens/AccountScreen";
 import MyCampgroundScreen from "../screens/MyCampgroundScreen";
@@ -169,9 +166,6 @@ export default function RootNavigator() {
       <Stack.Screen name="HomeTabs" component={HomeTabs} />
       <Stack.Screen name="CreateTrip" component={CreateTripScreen} />
       <Stack.Screen name="TripDetail" component={TripDetailScreen} />
-      <Stack.Screen name="GearLists" component={GearListsScreen} />
-      <Stack.Screen name="CreateGearList" component={CreateGearListScreen} />
-      <Stack.Screen name="GearListDetail" component={GearListDetailScreen} />
       <Stack.Screen name="Account" component={AccountScreen} />
       <Stack.Screen name="MyCampsite" component={MyCampsiteScreen} />
       <Stack.Screen name="MyCampground" component={MyCampgroundScreen} options={{ title: "My Campground" }} />

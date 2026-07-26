@@ -250,23 +250,18 @@ export default function EditGearScreen() {
           <View className="mb-4 items-center">
             <Pressable
               onPress={() => {
+                // Previously a photo tapped an alert whose "Change Photo"
+                // option opened a second alert nested inside the first —
+                // now it's one alert with all the choices, same as the
+                // no-photo-yet case below.
                 if (displayImageUri) {
                   Alert.alert(
                     "Photo Options",
-                    "What would you like to do?",
+                    "How would you like to update your gear photo?",
                     [
                       { text: "Cancel", style: "cancel" },
-                      { text: "Change Photo", onPress: () => {
-                        Alert.alert(
-                          "Change Photo",
-                          "How would you like to add a photo?",
-                          [
-                            { text: "Cancel", style: "cancel" },
-                            { text: "Take Photo", onPress: handleTakePhoto },
-                            { text: "Choose from Library", onPress: handlePickImage },
-                          ]
-                        );
-                      }},
+                      { text: "Take Photo", onPress: handleTakePhoto },
+                      { text: "Choose from Library", onPress: handlePickImage },
                       { text: "Remove Photo", style: "destructive", onPress: handleRemoveImage },
                     ]
                   );

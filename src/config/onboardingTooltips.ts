@@ -17,7 +17,6 @@ export const onboardingTooltips: OnboardingTooltip[] = [
     message: 'Start by adding a trip name and dates, then build everything else around it—packing lists, meal plans, itinerary links, and notes. You can also invite friends and share trip details; some sharing tools may require a Pro subscription.',
     order: 1,
   },
-  // PackingTabScreenNew (Packing tab within trip)
   {
     id: 'packing-intro',
     screenName: 'Packing',

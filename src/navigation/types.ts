@@ -31,9 +31,6 @@ export type RootStackParamList = {
   Parks: undefined;
   ParksBrowse: { selectedParkId?: string; tripId?: string; returnTo?: string } | undefined;
   ParkDetail: { parkId: string; tripId?: string; returnTo?: string };
-  GearLists: undefined;
-  GearListDetail: { listId: string };
-  CreateGearList: { tripId?: string };
   Account: undefined;
   MyCampsite: { userId?: string; viewAsPublic?: boolean } | undefined;
   MyCampground: undefined;
@@ -63,8 +60,7 @@ export type RootStackParamList = {
   // Plan section with trip context
 
   // Packing List screens (local-first store-based)
-  PackingList: { tripId: string };
-  PackingListCreate: { 
+  PackingListCreate: {
     tripId?: string; 
     tripName?: string;
     tripStartDate?: string;

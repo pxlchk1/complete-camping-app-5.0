@@ -13,12 +13,14 @@ import {
   Share,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as Clipboard from "expo-clipboard";
 import { useTripsStore } from "../state/tripsStore";
+import { auth } from "../config/firebase";
 import AccountButton from "../components/AccountButton";
 import { RootStackParamList } from "../navigation/types";
 import { Meal } from "../types/meal";
@@ -73,15 +75,81 @@ export default function ShoppingListScreen() {
   const { tripId } = route.params;
 
   const trip = useTripsStore((s) => s.getTripById(tripId));
-  const userId = "demo_user_1"; // TODO: Get from auth
+  // Was hardcoded to a fake "demo_user_1" id (see MealPlanningScreen for
+  // the same issue) — every Firestore read here targeted the wrong user's
+  // documents. useLocalStorage starts true for guests so they skip the
+  // Firebase attempt entirely instead of hitting it with no uid.
+  const userId = auth.currentUser?.uid || "";
 
   const [meals, setMeals] = useState<Meal[]>([]);
   const [loading, setLoading] = useState(true);
-  const [useLocalStorage, setUseLocalStorage] = useState(false);
+  const [useLocalStorage, setUseLocalStorage] = useState(!auth.currentUser);
   const [ingredients, setIngredients] = useState<IngredientItem[]>([]);
   const [showStaples, setShowStaples] = useState(true);
   const [viewMode, setViewMode] = useState<"category" | "list">("category");
-  const [checkedStaples, setCheckedStaples] = useState<Set<string>>(new Set());
+  // Checked-off item names (both meal ingredients and staples), persisted
+  // per trip in AsyncStorage. Previously nothing here survived a re-render:
+  // the ingredient list is recomputed from `meals` on every load and always
+  // set `checked: false`, and this set itself was never saved to disk —
+  // leaving the screen and coming back wiped every checkbox.
+  const [checkedItemNames, setCheckedItemNames] = useState<Set<string>>(new Set());
+  const checkedItemsStorageKey = `shoppingListChecked:${tripId}`;
+
+  useEffect(() => {
+    let cancelled = false;
+    AsyncStorage.getItem(checkedItemsStorageKey)
+      .then((raw) => {
+        if (cancelled || !raw) return;
+        setCheckedItemNames(new Set(JSON.parse(raw)));
+      })
+      .catch((error) => {
+        console.error("[ShoppingList] Failed to load checked items:", error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [checkedItemsStorageKey]);
+
+  // Beverages checked off in MealPlanningScreen's per-day checklist — read
+  // from the same AsyncStorage key that screen writes to, so they actually
+  // show up here instead of only ever existing on the meal-planning screen.
+  const [selectedBeverageNames, setSelectedBeverageNames] = useState<string[]>([]);
+  const beveragesStorageKey = `mealPlanBeverages:${tripId}`;
+
+  useEffect(() => {
+    let cancelled = false;
+    AsyncStorage.getItem(beveragesStorageKey)
+      .then((raw) => {
+        if (cancelled || !raw) return;
+        const keys: string[] = JSON.parse(raw);
+        const names = Array.from(new Set(keys.map((key) => key.replace(/^\d+_/, ""))));
+        setSelectedBeverageNames(names);
+      })
+      .catch((error) => {
+        console.error("[ShoppingList] Failed to load selected beverages:", error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [beveragesStorageKey]);
+
+  const toggleCheckedItemName = useCallback(
+    (name: string) => {
+      setCheckedItemNames((prev) => {
+        const next = new Set(prev);
+        if (next.has(name)) {
+          next.delete(name);
+        } else {
+          next.add(name);
+        }
+        AsyncStorage.setItem(checkedItemsStorageKey, JSON.stringify(Array.from(next))).catch((error) => {
+          console.error("[ShoppingList] Failed to save checked items:", error);
+        });
+        return next;
+      });
+    },
+    [checkedItemsStorageKey]
+  );
 
   // Calculate trip duration for staples calculation
   const tripDays = trip
@@ -125,9 +193,12 @@ export default function ShoppingListScreen() {
     loadMeals();
   }, [loadMeals]);
 
-  // Aggregate ingredients from all meals with intelligent categorization
+  // Aggregate ingredients from all meals (plus any selected beverages) with
+  // intelligent categorization. Previously returned early with an empty
+  // list whenever there were no planned meals yet, which also meant
+  // selected beverages could never appear here even on their own.
   useEffect(() => {
-    if (meals.length === 0) {
+    if (meals.length === 0 && selectedBeverageNames.length === 0) {
       setIngredients([]);
       return;
     }
@@ -192,11 +263,22 @@ export default function ShoppingListScreen() {
       }
     });
 
+    // Merge in beverages selected on the Meal Planning screen's per-day
+    // checklist — these aren't tied to a specific planned meal, so they're
+    // attributed to "Beverages" rather than a meal name.
+    selectedBeverageNames.forEach((beverage) => {
+      const normalized = beverage.toLowerCase().trim();
+      if (!ingredientMap.has(normalized)) {
+        ingredientMap.set(normalized, { mealNames: new Set(), category: "beverages" });
+      }
+      ingredientMap.get(normalized)!.mealNames.add("Beverages");
+    });
+
     // Convert to array and sort by category order, then alphabetically within category
     const ingredientsList: IngredientItem[] = Array.from(ingredientMap.entries())
       .map(([name, data]) => ({
         name,
-        checked: false,
+        checked: checkedItemNames.has(name),
         mealNames: Array.from(data.mealNames),
         category: data.category,
       }))
@@ -208,7 +290,7 @@ export default function ShoppingListScreen() {
       });
 
     setIngredients(ingredientsList);
-  }, [meals]);
+  }, [meals, checkedItemNames, selectedBeverageNames]);
 
   // Group ingredients by category for display
   const groupedIngredients = useMemo(() => {
@@ -261,24 +343,14 @@ export default function ShoppingListScreen() {
 
   const toggleIngredient = async (index: number) => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setIngredients((prev) =>
-      prev.map((item, i) =>
-        i === index ? { ...item, checked: !item.checked } : item
-      )
-    );
+    const item = ingredients[index];
+    if (!item) return;
+    toggleCheckedItemName(item.name);
   };
 
   const toggleStaple = async (stapleName: string) => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setCheckedStaples((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(stapleName)) {
-        newSet.delete(stapleName);
-      } else {
-        newSet.add(stapleName);
-      }
-      return newSet;
-    });
+    toggleCheckedItemName(stapleName);
   };
 
   const checkedCount = ingredients.filter((i) => i.checked).length;
@@ -570,7 +642,7 @@ export default function ShoppingListScreen() {
                       className="text-xs"
                       style={{ fontFamily: "SourceSans3_400Regular", color: "#8B7355" }}
                     >
-                      {checkedStaples.size}/{suggestedStaples.length}
+                      {suggestedStaples.filter((s) => checkedItemNames.has(s.item)).length}/{suggestedStaples.length}
                     </Text>
                   </View>
                   <Text
@@ -580,7 +652,7 @@ export default function ShoppingListScreen() {
                     Common items for a {tripDays}-day trip with {numCampers} {numCampers === 1 ? "person" : "people"}
                   </Text>
                   {suggestedStaples.map((staple) => {
-                    const isChecked = checkedStaples.has(staple.item);
+                    const isChecked = checkedItemNames.has(staple.item);
                     return (
                       <Pressable
                         key={staple.item}
