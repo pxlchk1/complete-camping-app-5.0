@@ -87,20 +87,15 @@ export type RootStackParamList = {
   GearReviewDetail: { reviewId: string };
   CreateGearReview: undefined;
   EditGearReview: { reviewId: string };
-  SubmitGearReview: undefined;
   GearReviewsListScreen: { filterByTag?: string } | undefined;
 
   // Questions/Ask
   QuestionDetail: { questionId: string };
   CreateQuestion: undefined;
-  AskQuestion: undefined;
-  AskQuestionModal: undefined;
-  ThreadDetail: { questionId: string };
   QuestionsListScreen: undefined;
 
   // Photos/Stories
   PhotoDetail: { storyId?: string; photoId?: string };
-  UploadPhoto: undefined;
   PhotoComposer: { postType?: string };
   PhotosListScreen: undefined;
 

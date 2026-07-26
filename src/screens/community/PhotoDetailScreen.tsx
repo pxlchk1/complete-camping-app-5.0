@@ -26,6 +26,9 @@ import ModalHeader from "../../components/ModalHeader";
 import VotePill from "../../components/VotePill";
 import AccountRequiredModal from "../../components/AccountRequiredModal";
 import EditPhotoPostModal from "../../components/EditPhotoPostModal";
+import ConfirmationModal from "../../components/ConfirmationModal";
+import { useToast } from "../../components/ToastManager";
+import { notifySuccess, notifyError } from "../../ui/notify";
 import { ContentActionsAffordance } from "../../components/contentActions";
 import { requireEmailVerification } from "../../utils/authHelper";
 import { isAdmin, isModerator, canModerateContent, getUser } from "../../services/userService";
@@ -62,8 +65,6 @@ const { width } = Dimensions.get("window");
 type RouteParams = { storyId: string; photoId?: string };
 
 export default function PhotoDetailScreen() {
-  console.log("[PLAN_TRACE] Enter PhotoDetailScreen");
-
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
   const { storyId, photoId } = (route.params || {}) as RouteParams;
@@ -72,6 +73,11 @@ export default function PhotoDetailScreen() {
   const currentUser = useCurrentUser();
   const scrollViewRef = useRef<ScrollView>(null);
   const [showAccountRequired, setShowAccountRequired] = useState(false);
+  const toast = useToast();
+  // Permanent photo deletion (by the owner) or moderator removal — the
+  // single most consequential action on this screen — previously
+  // confirmed via a native Alert like any routine error message.
+  const [pendingPhotoAction, setPendingPhotoAction] = useState<"delete" | "remove" | null>(null);
 
   // Permission checks for content actions
   const canModerate = currentUser ? canModerateContent(currentUser as User) : false;
@@ -84,58 +90,22 @@ export default function PhotoDetailScreen() {
     : null;
 
   // Content action handlers
-  const handleDeletePhoto = async () => {
-    Alert.alert(
-      "Delete Photo",
-      "Are you sure you want to delete this photo? This action cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            const result = await deletePhotoPost(postId!);
-            if (result.success) {
-              Alert.alert("Success", "Photo deleted successfully");
-              navigation.goBack();
-            } else {
-              console.error("[PhotoDetail] Delete failed:", result.error);
-              Alert.alert(
-                "Error",
-                result.error?.message || "Failed to delete photo"
-              );
-            }
-          },
-        },
-      ]
-    );
-  };
+  const handleDeletePhoto = async () => setPendingPhotoAction("delete");
+  const handleRemovePhoto = async () => setPendingPhotoAction("remove");
 
-  const handleRemovePhoto = async () => {
-    Alert.alert(
-      "Remove Photo",
-      "Are you sure you want to remove this photo? This moderation action cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: async () => {
-            const result = await deletePhotoPost(postId!);
-            if (result.success) {
-              Alert.alert("Success", "Photo removed successfully");
-              navigation.goBack();
-            } else {
-              console.error("[PhotoDetail] Remove failed:", result.error);
-              Alert.alert(
-                "Error",
-                result.error?.message || "Failed to remove photo"
-              );
-            }
-          },
-        },
-      ]
-    );
+  const confirmPendingPhotoAction = async () => {
+    const mode = pendingPhotoAction;
+    setPendingPhotoAction(null);
+    if (!mode) return;
+
+    const result = await deletePhotoPost(postId!);
+    if (result.success) {
+      notifySuccess(toast, mode === "delete" ? "Photo deleted successfully" : "Photo removed successfully");
+      navigation.goBack();
+    } else {
+      console.error(`[PhotoDetail] ${mode} failed:`, result.error);
+      notifyError(toast, result.error?.message || `Failed to ${mode} photo`);
+    }
   };
 
   // Edit handler - only for new format posts and owners
@@ -1015,6 +985,23 @@ export default function PhotoDetailScreen() {
         photoPost={photoPost}
         onSave={handleEditSave}
         onClose={() => setShowEditModal(false)}
+      />
+
+      <ConfirmationModal
+        visible={!!pendingPhotoAction}
+        title={pendingPhotoAction === "remove" ? "Remove photo?" : "Delete photo?"}
+        message={
+          pendingPhotoAction === "remove"
+            ? "This moderation action cannot be undone."
+            : "Are you sure you want to delete this photo? This cannot be undone."
+        }
+        primary={{
+          label: pendingPhotoAction === "remove" ? "Remove" : "Delete",
+          iconName: "trash-outline",
+          onPress: confirmPendingPhotoAction,
+        }}
+        secondary={{ label: "Cancel", onPress: () => setPendingPhotoAction(null) }}
+        onClose={() => setPendingPhotoAction(null)}
       />
     </View>
   );

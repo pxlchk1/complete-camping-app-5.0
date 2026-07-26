@@ -43,8 +43,6 @@ import SettingsScreen from "../screens/SettingsScreen";
 import SeedDataScreen from "../screens/SeedDataScreen";
 
 // Community screens
-import AskQuestionModal from "../screens/community/AskQuestionModal";
-import ThreadDetailScreen from "../screens/community/ThreadDetailScreen";
 import TipsListScreen from "../screens/community/TipsListScreen";
 import TipDetailScreen from "../screens/community/TipDetailScreen";
 import CreateTipScreen from "../screens/community/CreateTipScreen";
@@ -57,7 +55,6 @@ import QuestionDetailScreen from "../screens/community/QuestionDetailScreen";
 import CreateQuestionScreen from "../screens/community/CreateQuestionScreen";
 import PhotosListScreen from "../screens/community/PhotosListScreen";
 import PhotoDetailScreen from "../screens/community/PhotoDetailScreen";
-import UploadPhotoScreen from "../screens/community/UploadPhotoScreen";
 import PhotoComposerScreen from "../screens/community/PhotoComposerScreen";
 import FeedbackListScreen from "../screens/community/FeedbackListScreen";
 import FeedbackDetailScreen from "../screens/community/FeedbackDetailScreen";
@@ -250,10 +247,6 @@ export default function RootNavigator() {
       <Stack.Screen name="PackingListCreate" component={PackingListCreateScreen} />
       <Stack.Screen name="PackingListEditor" component={PackingListEditorScreen} />
 
-      {/* Community screens */}
-      <Stack.Screen name="AskQuestionModal" component={AskQuestionModal} />
-      <Stack.Screen name="ThreadDetail" component={ThreadDetailScreen} />
-
       {/* Tips */}
       <Stack.Screen name="TipsListScreen" component={TipsListScreen} />
       <Stack.Screen name="TipDetail" component={TipDetailScreen} />
@@ -264,18 +257,15 @@ export default function RootNavigator() {
       <Stack.Screen name="GearReviewDetail" component={GearReviewDetailScreen} />
       <Stack.Screen name="CreateGearReview" component={CreateGearReviewScreen} />
       <Stack.Screen name="EditGearReview" component={EditGearReviewScreen} />
-      <Stack.Screen name="SubmitGearReview" component={CreateGearReviewScreen} />
 
       {/* Questions/Ask */}
       <Stack.Screen name="QuestionsListScreen" component={QuestionsListScreen} />
       <Stack.Screen name="QuestionDetail" component={QuestionDetailScreen} />
       <Stack.Screen name="CreateQuestion" component={CreateQuestionScreen} />
-      <Stack.Screen name="AskQuestion" component={CreateQuestionScreen} />
 
       {/* Photos */}
       <Stack.Screen name="PhotosListScreen" component={PhotosListScreen} />
       <Stack.Screen name="PhotoDetail" component={PhotoDetailScreen} />
-      <Stack.Screen name="UploadPhoto" component={UploadPhotoScreen} />
       <Stack.Screen name="PhotoComposer" component={PhotoComposerScreen} />
 
       {/* Feedback */}
