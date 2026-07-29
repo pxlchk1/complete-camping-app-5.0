@@ -27,6 +27,11 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
       - name: Setup EAS
         uses: expo/expo-github-action@v8
         with:
