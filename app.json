@@ -3,12 +3,12 @@
     "name": "Complete Camping App",
     "slug": "complete-camping-app",
     "scheme": "tentlantern",
-    "version": "1.1.5",
+    "version": "1.2.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "runtimeVersion": "1.1.5",
+    "runtimeVersion": "1.2.1",
     "plugins": [
       [
         "expo-build-properties",
