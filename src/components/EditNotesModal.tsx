@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Modal, View, Text, TextInput, Pressable, StyleSheet, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { DEEP_FOREST, PARCHMENT } from "../constants/colors";
+import { DEEP_FOREST, PARCHMENT, TEXT_SECONDARY } from "../constants/colors";
 
 interface EditNotesModalProps {
   visible: boolean;
@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   cancelText: {
-    color: "#bfae9b",
+    color: TEXT_SECONDARY,
     fontSize: 15,
   },
   saveBtn: {

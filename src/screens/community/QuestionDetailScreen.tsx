@@ -366,7 +366,7 @@ export default function QuestionDetailScreen() {
             <View className="flex-row items-center justify-between pt-4 border-t" style={{ borderColor: BORDER_SOFT }}>
               <View>
                 <View className="flex-row items-center">
-                  <Text className="text-xs" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED }}>
+                  <Text className="text-xs" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}>
                     Asked by{" "}
                   </Text>
                   {question.authorId && question.authorHandle ? (
@@ -382,12 +382,12 @@ export default function QuestionDetailScreen() {
                       </Text>
                     </Pressable>
                   ) : (
-                    <Text className="text-xs" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED }}>
+                    <Text className="text-xs" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}>
                       @{getConnectDisplayHandle(question.authorHandle, question.authorId)}
                     </Text>
                   )}
                 </View>
-                <Text className="text-xs" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED }}>
+                <Text className="text-xs" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}>
                   {formatTimeAgo(question.createdAt)}
                 </Text>
               </View>
@@ -470,11 +470,11 @@ export default function QuestionDetailScreen() {
                             </Text>
                           </Pressable>
                         ) : (
-                          <Text className="text-xs" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED }}>
+                          <Text className="text-xs" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}>
                             @{getConnectDisplayHandle(answer.authorHandle, answer.authorId)}
                           </Text>
                         )}
-                        <Text className="text-xs" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED }}>
+                        <Text className="text-xs" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}>
                           {" "}• {formatTimeAgo(answer.createdAt)}
                         </Text>
                       </View>

@@ -350,11 +350,11 @@ export default function FeedbackDetailScreen() {
                     </Text>
                   </Pressable>
                 ) : (
-                  <Text className="text-xs" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED }}>
+                  <Text className="text-xs" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}>
                     Posted by {authorName || "Anonymous"}
                   </Text>
                 )}
-                <Text className="text-xs" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED }}>
+                <Text className="text-xs" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}>
                   {formatTimeAgo(post.createdAt)}
                 </Text>
               </View>
@@ -411,7 +411,7 @@ export default function FeedbackDetailScreen() {
                       />
                     </View>
 
-                    <Text className="text-xs" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED }}>
+                    <Text className="text-xs" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}>
                       {formatTimeAgo(comment.createdAt)}
                     </Text>
                   </View>

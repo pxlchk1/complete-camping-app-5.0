@@ -61,7 +61,7 @@ import {
   TEXT_SECONDARY,
   TEXT_MUTED,
   RIVER_ROCK,
-  GRANITE_GOLD,
+  RUST_DEEP,
 } from "../constants/colors";
 import ModalHeader from "../components/ModalHeader";
 import ErrorModal from "../components/ErrorModal";
@@ -475,12 +475,12 @@ export default function BadgeDetailScreen() {
         {isPending && (
           <View className="rounded-xl p-4 mb-5" style={{ backgroundColor: "rgba(152, 108, 66, 0.15)" }}>
             <View className="flex-row items-center mb-1">
-              <Ionicons name="time-outline" size={16} color={GRANITE_GOLD} />
-              <Text className="font-source-semibold text-sm ml-2" style={{ color: GRANITE_GOLD }}>
+              <Ionicons name="time-outline" size={16} color={RUST_DEEP} />
+              <Text className="font-source-semibold text-sm ml-2" style={{ color: RUST_DEEP }}>
                 Awaiting Approval
               </Text>
             </View>
-            <Text className="font-source-regular text-[13px]" style={{ color: GRANITE_GOLD }}>
+            <Text className="font-source-regular text-[13px]" style={{ color: RUST_DEEP }}>
               Your evidence has been submitted. Waiting for your witness to confirm.
             </Text>
           </View>

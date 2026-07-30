@@ -147,15 +147,10 @@ export function SelectValue({ placeholder, className }: SelectValueProps) {
 
   const displayText =
     selectedLabel || value || placeholder || selectPlaceholder || "Select...";
-  const isPlaceholder = !value;
 
   return (
     <Text
-      className={cn(
-        "text-base",
-        isPlaceholder ? "text-earthGreen" : "text-forest",
-        className
-      )}
+      className={cn("text-base", "text-forest", className)}
       numberOfLines={1}
     >
       {displayText}

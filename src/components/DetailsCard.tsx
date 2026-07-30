@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   placeholder: {
-    color: "#bfae9b",
+    color: "#485951",
     fontStyle: "italic",
   },
   addBtn: {

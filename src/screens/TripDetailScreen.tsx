@@ -663,7 +663,7 @@ export default function TripDetailScreen() {
               {format(startDate, "MMMM d, yyyy")} - {format(endDate, "MMMM d, yyyy")}
             </BodyText>
 
-            <BodyText className="text-earthGreen">
+            <BodyText className="text-forest">
               {nights} {nights === 1 ? "night" : "nights"}
             </BodyText>
           </View>
@@ -708,7 +708,7 @@ export default function TripDetailScreen() {
               <ActivityIndicator size="small" color={EARTH_GREEN} />
             ) : participants.length === 0 ? (
               <Pressable onPress={handleAddPeople} className="active:opacity-70">
-                <BodyText className="text-earthGreen">Add people from your campground</BodyText>
+                <BodyText className="text-forest">Add people from your campground</BodyText>
               </Pressable>
             ) : (
               <View className="flex-row flex-wrap" style={{ gap: 8 }}>

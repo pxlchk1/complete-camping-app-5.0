@@ -40,7 +40,7 @@ const DEEP_FOREST = "#1F3B2C";
 // const PARCHMENT = "#F7F1E4";
 const TEXT_PRIMARY_STRONG = "#3D2817";
 const TEXT_SECONDARY = "#6B5A4A";
-const TEXT_MUTED = "#9CA3AF";
+const TEXT_MUTED = "#485951";
 const BORDER_SOFT = "#E5E7EB";
 
 type GearReview = {

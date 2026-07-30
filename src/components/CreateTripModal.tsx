@@ -267,7 +267,7 @@ export default function CreateTripModal({ visible, onClose, onTripCreated }: Cre
           <View className="px-5 pb-5 pt-3 border-t border-parchmentDark">
             <Pressable
               onPress={handleCreateTrip}
-              className="bg-[#AC9A6D] rounded-2xl px-4 py-4 items-center justify-center active:bg-[#9a8860]"
+              className="bg-forest rounded-2xl px-4 py-4 items-center justify-center active:bg-[#374543]"
             >
               <Text className="text-parchment font-semibold text-base" style={{ fontFamily: "SourceSans3_600SemiBold" }}>Create Trip</Text>
             </Pressable>

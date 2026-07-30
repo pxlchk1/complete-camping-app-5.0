@@ -607,7 +607,7 @@ export default function PhotoDetailScreen() {
             ) : (
               <View className="items-center justify-center bg-gray-100" style={{ width, height: width }}>
                 <Ionicons name="image" size={48} color={TEXT_MUTED} />
-                <Text style={{ color: TEXT_MUTED, fontFamily: "SourceSans3_400Regular" }}>
+                <Text style={{ color: TEXT_SECONDARY, fontFamily: "SourceSans3_400Regular" }}>
                   Image unavailable
                 </Text>
               </View>
@@ -664,7 +664,7 @@ export default function PhotoDetailScreen() {
             {/* Author and action row */}
             <View className="flex-row items-center justify-between py-3 border-t" style={{ borderColor: BORDER_SOFT }}>
               <View className="flex-row items-center flex-1">
-                <Text className="text-sm" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED }}>
+                <Text className="text-sm" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}>
                   by{" "}
                 </Text>
                 {rawHandle && authorUserId ? (
@@ -680,7 +680,7 @@ export default function PhotoDetailScreen() {
                     </Text>
                   </Pressable>
                 ) : (
-                  <Text className="text-sm" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED }}>
+                  <Text className="text-sm" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}>
                     {displayName}
                   </Text>
                 )}

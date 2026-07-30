@@ -36,6 +36,7 @@ import {
   PARCHMENT,
   CARD_BACKGROUND_LIGHT,
   BORDER_SOFT,
+  DISABLED_BG,
   TEXT_PRIMARY_STRONG,
   TEXT_SECONDARY,
   TEXT_MUTED,
@@ -367,19 +368,21 @@ export default function InviteOptionsSheet({
               disabled={loading !== null || !contact.contactEmail}
               className="flex-row items-center p-4 mb-3 rounded-xl active:opacity-80"
               style={{
-                backgroundColor: contact.contactEmail ? DEEP_FOREST : BORDER_SOFT,
-                opacity: !contact.contactEmail ? 0.5 : 1,
+                backgroundColor: contact.contactEmail ? DEEP_FOREST : DISABLED_BG,
               }}
             >
               {loading === "email" ? (
-                <ActivityIndicator size="small" color={PARCHMENT} />
+                <ActivityIndicator size="small" color={contact.contactEmail ? PARCHMENT : TEXT_SECONDARY} />
               ) : (
-                <Ionicons name="mail" size={24} color={PARCHMENT} />
+                <Ionicons name="mail" size={24} color={contact.contactEmail ? PARCHMENT : TEXT_SECONDARY} />
               )}
               <View className="ml-4 flex-1">
                 <Text
                   className="text-base"
-                  style={{ fontFamily: "SourceSans3_600SemiBold", color: PARCHMENT }}
+                  style={{
+                    fontFamily: "SourceSans3_600SemiBold",
+                    color: contact.contactEmail ? PARCHMENT : TEXT_SECONDARY,
+                  }}
                 >
                   Send email invite
                 </Text>
@@ -393,13 +396,13 @@ export default function InviteOptionsSheet({
                 ) : (
                   <Text
                     className="text-sm"
-                    style={{ fontFamily: "SourceSans3_400Regular", color: PARCHMENT, opacity: 0.8 }}
+                    style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}
                   >
                     No email address
                   </Text>
                 )}
               </View>
-              <Ionicons name="chevron-forward" size={20} color={PARCHMENT} />
+              <Ionicons name="chevron-forward" size={20} color={contact.contactEmail ? PARCHMENT : TEXT_SECONDARY} />
             </Pressable>
 
             {/* Text Button */}

@@ -39,6 +39,7 @@ import {
   PARCHMENT,
   CARD_BACKGROUND_LIGHT,
   BORDER_SOFT,
+  DISABLED_BG,
   TEXT_PRIMARY_STRONG,
   TEXT_SECONDARY,
   TEXT_MUTED,
@@ -356,7 +357,7 @@ export default function SelectWitnessScreen() {
           <Pressable
             className="py-4 rounded-xl items-center"
             style={{
-              backgroundColor: selectedContactId ? EARTH_GREEN : BORDER_SOFT,
+              backgroundColor: selectedContactId ? EARTH_GREEN : DISABLED_BG,
             }}
             onPress={handleSendRequest}
             disabled={!selectedContactId || submitting}
@@ -366,7 +367,7 @@ export default function SelectWitnessScreen() {
             ) : (
               <Text
                 className="text-lg font-semibold"
-                style={{ color: selectedContactId ? PARCHMENT : TEXT_MUTED }}
+                style={{ color: selectedContactId ? PARCHMENT : TEXT_SECONDARY }}
               >
                 {existingClaim?.status === "PENDING_STAMP"
                   ? "Update Request"

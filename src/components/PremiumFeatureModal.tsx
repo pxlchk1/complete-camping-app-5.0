@@ -82,7 +82,7 @@ export default function PremiumFeatureModal({
 
           {/* Body */}
           <Text
-            className="text-earthGreen mb-5 leading-5"
+            className="text-forest mb-5 leading-5"
             style={{ fontFamily: "SourceSans3_400Regular", fontSize: 15 }}
           >
             {copy.body}
@@ -105,7 +105,7 @@ export default function PremiumFeatureModal({
 
             {/* Trial fine print */}
             <Text
-              className="text-earthGreen/70 text-center text-xs"
+              className="text-forest text-center text-xs"
               style={{ fontFamily: "SourceSans3_400Regular" }}
             >
               After your free trial, your annual subscription begins. Cancel anytime.
@@ -117,7 +117,7 @@ export default function PremiumFeatureModal({
               className="px-4 py-3 items-center justify-center"
             >
               <Text
-                className="text-earthGreen font-medium text-base"
+                className="text-forest font-medium text-base"
                 style={{ fontFamily: "SourceSans3_500Medium" }}
               >
                 Not now

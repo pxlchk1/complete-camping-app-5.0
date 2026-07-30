@@ -39,9 +39,9 @@ function badgeColor(status: string) {
     case "In Progress":
       return { bg: "bg-[#d4e7dc]", text: "text-forest" };
     case "Upcoming":
-      return { bg: "bg-sierraSky/30", text: "text-riverRock" };
+      return { bg: "bg-sierraSky/30", text: "text-forest" };
     default:
-      return { bg: "bg-parchment", text: "text-earthGreen" };
+      return { bg: "bg-parchment", text: "text-forest" };
   }
 }
 
@@ -77,7 +77,7 @@ export default function TripCard({ trip, onResume, onMenu, onPackingPress, onWea
           <Text className="text-forest text-base font-bold mb-1" style={{ fontFamily: "Raleway_700Bold" }} numberOfLines={1}>
             {trip.name}
           </Text>
-          <Text className="text-earthGreen text-sm" style={{ fontFamily: "SourceSans3_400Regular" }} numberOfLines={1}>
+          <Text className="text-forest text-sm" style={{ fontFamily: "SourceSans3_400Regular" }} numberOfLines={1}>
             {formatDateRange(trip.startDate, trip.endDate)}
           </Text>
         </View>
@@ -101,7 +101,7 @@ export default function TripCard({ trip, onResume, onMenu, onPackingPress, onWea
         {trip.destination && (
           <View className="flex-row items-center ml-2">
             <Ionicons name="location" size={14} color={EARTH_GREEN} />
-            <Text className="text-earthGreen text-xs ml-1" style={{ fontFamily: "SourceSans3_400Regular" }} numberOfLines={1}>
+            <Text className="text-forest text-xs ml-1" style={{ fontFamily: "SourceSans3_400Regular" }} numberOfLines={1}>
               {trip.destination.name}
             </Text>
           </View>
@@ -129,7 +129,7 @@ export default function TripCard({ trip, onResume, onMenu, onPackingPress, onWea
             className="px-2 py-1 rounded-full bg-parchment border border-parchmentDark flex-row items-center active:opacity-70"
           >
             <Ionicons name="checkmark-circle" size={12} color={GRANITE_GOLD} />
-            <Text className="text-xs text-earthGreen ml-1" style={{ fontFamily: "SourceSans3_400Regular" }}>{packingProgress}</Text>
+            <Text className="text-xs text-forest ml-1" style={{ fontFamily: "SourceSans3_400Regular" }}>{packingProgress}</Text>
           </Pressable>
         )}
 
@@ -139,7 +139,7 @@ export default function TripCard({ trip, onResume, onMenu, onPackingPress, onWea
             className="px-2 py-1 rounded-full bg-sierraSky/20 border border-sierraSky flex-row items-center active:opacity-70"
           >
             <Ionicons name="partly-sunny" size={12} color={TEXT_SECONDARY} />
-            <Text className="text-xs text-secondary ml-1" style={{ fontFamily: "SourceSans3_400Regular" }}>
+            <Text className="text-xs text-forest ml-1" style={{ fontFamily: "SourceSans3_400Regular" }}>
               {Math.round(weatherInfo.high)}°
             </Text>
           </Pressable>

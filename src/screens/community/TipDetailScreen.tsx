@@ -362,7 +362,7 @@ export default function TipDetailScreen() {
             )}
 
             <View className="flex-row items-center justify-between py-3 border-t" style={{ borderColor: BORDER_SOFT }}>
-              <Text className="text-sm" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED }}>
+              <Text className="text-sm" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}>
                 by @{authorName} • {formatTimeAgo(tip.createdAt)}
               </Text>
               <VotePill
@@ -385,7 +385,7 @@ export default function TipDetailScreen() {
 
             {comments.length === 0 ? (
               <View className="py-8 items-center">
-                <Text style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED }}>
+                <Text style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}>
                   No comments yet. Be the first!
                 </Text>
               </View>
@@ -420,7 +420,7 @@ export default function TipDetailScreen() {
                       iconSize={16}
                     />
                   </View>
-                  <Text className="text-xs" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED }}>
+                  <Text className="text-xs" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}>
                     by @{getConnectDisplayHandle((comment as any).username, comment.authorId)} • {formatTimeAgo(comment.createdAt)}
                   </Text>
                 </View>

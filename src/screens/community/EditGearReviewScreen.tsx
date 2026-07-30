@@ -671,7 +671,7 @@ export default function EditGearReviewScreen() {
           </View>
         ) : null}
 
-        <Text style={{ marginTop: 10, fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED, fontSize: 12 }}>
+        <Text style={{ marginTop: 10, fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY, fontSize: 12 }}>
           Tip: tap a tag to remove it.
         </Text>
       </ScrollView>

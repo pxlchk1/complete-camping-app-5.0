@@ -29,7 +29,7 @@ import {
   EARTH_GREEN,
   GRANITE_GOLD,
   PARCHMENT,
-  SIERRA_SKY,
+  RUST_DEEP,
 } from "../constants/colors";
 
 interface AdminPanelProps {
@@ -220,9 +220,9 @@ export default function AdminPanel({ currentUserId }: AdminPanelProps) {
             setActiveSection("membership");
           }}
           className={`flex-1 px-3 py-2 rounded-xl ${
-            activeSection === "membership" ? "bg-granite" : "bg-white border border-stone-300"
+            activeSection === "membership" ? "" : "bg-white border border-stone-300"
           }`}
-          style={activeSection === "membership" ? { backgroundColor: GRANITE_GOLD } : {}}
+          style={activeSection === "membership" ? { backgroundColor: RUST_DEEP } : {}}
         >
           <Text
             className="text-center text-sm"
@@ -261,9 +261,9 @@ export default function AdminPanel({ currentUserId }: AdminPanelProps) {
             setActiveSection("role");
           }}
           className={`flex-1 px-3 py-2 rounded-xl ${
-            activeSection === "role" ? "bg-sierra" : "bg-white border border-stone-300"
+            activeSection === "role" ? "" : "bg-white border border-stone-300"
           }`}
-          style={activeSection === "role" ? { backgroundColor: SIERRA_SKY } : {}}
+          style={activeSection === "role" ? { backgroundColor: DEEP_FOREST } : {}}
         >
           <Text
             className="text-center text-sm"
@@ -315,10 +315,10 @@ export default function AdminPanel({ currentUserId }: AdminPanelProps) {
                 }}
                 className={`px-3 py-2 rounded-xl ${
                   membershipDuration === option.value
-                    ? "bg-granite"
+                    ? ""
                     : "bg-white border border-stone-300"
                 }`}
-                style={membershipDuration === option.value ? { backgroundColor: GRANITE_GOLD } : {}}
+                style={membershipDuration === option.value ? { backgroundColor: RUST_DEEP } : {}}
               >
                 <Text
                   className="text-sm"
@@ -336,8 +336,8 @@ export default function AdminPanel({ currentUserId }: AdminPanelProps) {
           <Pressable
             onPress={handleGrantMembership}
             disabled={loading}
-            className={`bg-granite rounded-xl py-3 items-center ${loading ? "opacity-50" : "active:opacity-90"}`}
-            style={{ backgroundColor: GRANITE_GOLD }}
+            className={`rounded-xl py-3 items-center ${loading ? "opacity-50" : "active:opacity-90"}`}
+            style={{ backgroundColor: RUST_DEEP }}
           >
             {loading ? (
               <ActivityIndicator size="small" color={PARCHMENT} />
@@ -431,9 +431,9 @@ export default function AdminPanel({ currentUserId }: AdminPanelProps) {
                   setNewRole(role as typeof newRole);
                 }}
                 className={`flex-1 px-3 py-2 rounded-xl ${
-                  newRole === role ? "bg-sierra" : "bg-white border border-stone-300"
+                  newRole === role ? "" : "bg-white border border-stone-300"
                 }`}
-                style={newRole === role ? { backgroundColor: SIERRA_SKY } : {}}
+                style={newRole === role ? { backgroundColor: DEEP_FOREST } : {}}
               >
                 <Text
                   className="text-center text-sm capitalize"
@@ -451,8 +451,8 @@ export default function AdminPanel({ currentUserId }: AdminPanelProps) {
           <Pressable
             onPress={handleUpdateRole}
             disabled={loading}
-            className={`bg-sierra rounded-xl py-3 items-center ${loading ? "opacity-50" : "active:opacity-90"}`}
-            style={{ backgroundColor: SIERRA_SKY }}
+            className={`rounded-xl py-3 items-center ${loading ? "opacity-50" : "active:opacity-90"}`}
+            style={{ backgroundColor: DEEP_FOREST }}
           >
             {loading ? (
               <ActivityIndicator size="small" color={PARCHMENT} />

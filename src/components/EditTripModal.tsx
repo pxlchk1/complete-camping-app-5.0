@@ -243,7 +243,7 @@ export default function EditTripModal({ visible, onClose, tripId }: EditTripModa
           <View className="px-5 pb-5 pt-3 border-t border-parchmentDark">
             <Pressable
               onPress={handleSaveTrip}
-              className="bg-[#AC9A6D] rounded-2xl px-4 py-4 items-center justify-center active:bg-[#9a8860]"
+              className="bg-forest rounded-2xl px-4 py-4 items-center justify-center active:bg-[#374543]"
             >
               <Text className="text-parchment font-semibold text-base" style={{ fontFamily: "SourceSans3_600SemiBold" }}>Save changes</Text>
             </Pressable>

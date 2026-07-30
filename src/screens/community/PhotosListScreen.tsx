@@ -339,7 +339,7 @@ export default function PhotosListScreen() {
     <View style={{ paddingBottom: 8 }}>
       {/* Helper line - minimal */}
       <View style={{ paddingHorizontal: GRID_PADDING, paddingTop: 4, paddingBottom: 8 }}>
-        <Text style={{ fontFamily: "SourceSans3_400Regular", fontSize: 13, color: TEXT_MUTED }}>
+        <Text style={{ fontFamily: "SourceSans3_400Regular", fontSize: 13, color: TEXT_SECONDARY }}>
           Pick a category, add tags, post.
         </Text>
       </View>

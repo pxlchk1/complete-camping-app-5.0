@@ -35,6 +35,7 @@ import {
   TEXT_SECONDARY,
   CARD_BACKGROUND_LIGHT,
   GRANITE_GOLD,
+  RUST_DEEP,
 } from "../constants/colors";
 
 interface GearClosetPickerModalProps {
@@ -447,7 +448,7 @@ export default function GearClosetPickerModal({
                   style={{
                     fontFamily: "SourceSans3_600SemiBold",
                     fontSize: 14,
-                    color: GRANITE_GOLD,
+                    color: RUST_DEEP,
                     marginLeft: 8,
                     flex: 1,
                   }}

@@ -112,9 +112,9 @@ export default function ModeratorPanel({ currentUserId }: ModeratorPanelProps) {
               setContentType(type);
             }}
             className={`px-3 py-2 rounded-xl ${
-              contentType === type ? "bg-sierra" : "bg-white border border-stone-300"
+              contentType === type ? "" : "bg-white border border-stone-300"
             }`}
-            style={contentType === type ? { backgroundColor: SIERRA_SKY } : {}}
+            style={contentType === type ? { backgroundColor: DEEP_FOREST } : {}}
           >
             <Text
               className="text-sm capitalize"
@@ -187,8 +187,8 @@ export default function ModeratorPanel({ currentUserId }: ModeratorPanelProps) {
       <Pressable
         onPress={handleHideContent}
         disabled={loading}
-        className={`bg-sierra rounded-xl py-3 items-center ${loading ? "opacity-50" : "active:opacity-90"}`}
-        style={{ backgroundColor: SIERRA_SKY }}
+        className={`rounded-xl py-3 items-center ${loading ? "opacity-50" : "active:opacity-90"}`}
+        style={{ backgroundColor: DEEP_FOREST }}
       >
         {loading ? (
           <ActivityIndicator size="small" color={PARCHMENT} />

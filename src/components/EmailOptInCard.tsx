@@ -30,6 +30,7 @@ import { httpsCallable, getFunctions } from "firebase/functions";
 import {
   CARD_BACKGROUND_LIGHT,
   BORDER_SOFT,
+  DISABLED_BG,
   TEXT_PRIMARY_STRONG,
   TEXT_SECONDARY,
   TEXT_MUTED,
@@ -345,7 +346,7 @@ export default function EmailOptInCard({
         disabled={!isFormValid || isSubmitting}
         className="rounded-lg py-3 items-center active:opacity-80"
         style={{
-          backgroundColor: isFormValid ? DEEP_FOREST : BORDER_SOFT,
+          backgroundColor: isFormValid ? DEEP_FOREST : DISABLED_BG,
           opacity: isSubmitting ? 0.7 : 1,
         }}
       >
@@ -356,7 +357,7 @@ export default function EmailOptInCard({
             className="text-base"
             style={{
               fontFamily: "SourceSans3_600SemiBold",
-              color: isFormValid ? "#FFFFFF" : TEXT_MUTED,
+              color: isFormValid ? "#FFFFFF" : TEXT_SECONDARY,
             }}
           >
             Turn on emails

@@ -43,7 +43,9 @@ import {
   TEXT_PRIMARY_STRONG,
   TEXT_SECONDARY,
   TEXT_MUTED,
+  INK,
 } from "../constants/colors";
+import { getContrastTextColor } from "../utils/contrastText";
 
 // FREE user gear limit
 const FREE_GEAR_LIMIT = 5;
@@ -392,7 +394,10 @@ export default function MyGearClosetScreen() {
                     >
                       <Text
                         className="text-xs"
-                        style={{ fontFamily: "SourceSans3_600SemiBold", color: PARCHMENT }}
+                        style={{
+                          fontFamily: "SourceSans3_600SemiBold",
+                          color: getContrastTextColor(getCategoryColor(item.category), INK, PARCHMENT),
+                        }}
                       >
                         {getCategoryLabel(item.category)}
                       </Text>

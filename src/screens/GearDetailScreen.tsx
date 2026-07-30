@@ -31,7 +31,9 @@ import {
   TEXT_PRIMARY_STRONG,
   TEXT_SECONDARY,
   TEXT_MUTED,
+  INK,
 } from "../constants/colors";
+import { getContrastTextColor } from "../utils/contrastText";
 
 type GearDetailRouteProp = RouteProp<RootStackParamList, "GearDetail">;
 
@@ -250,7 +252,10 @@ export default function GearDetailScreen() {
             >
               <Text
                 className="text-sm"
-                style={{ fontFamily: "SourceSans3_600SemiBold", color: PARCHMENT }}
+                style={{
+                  fontFamily: "SourceSans3_600SemiBold",
+                  color: getContrastTextColor(getCategoryColor(gear.category), INK, PARCHMENT),
+                }}
               >
                 {getCategoryLabel(gear.category)}
               </Text>

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { View, Text, StyleSheet, ImageBackground, TouchableOpacity, Platform, ActivityIndicator, TextInput, KeyboardAvoidingView, ScrollView, Linking, Modal, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as Crypto from "expo-crypto";
 import { OAuthProvider, signInWithCredential, signInWithEmailAndPassword, createUserWithEmailAndPassword, fetchSignInMethodsForEmail, linkWithCredential, sendEmailVerification } from "firebase/auth";
@@ -624,6 +625,10 @@ export default function AuthLanding({ navigation, route }: { navigation: any; ro
         style={styles.background}
         resizeMode="cover"
       >
+        <LinearGradient
+          colors={["rgba(16,24,16,0.45)", "rgba(10,15,10,0.7)"]}
+          style={StyleSheet.absoluteFillObject}
+        />
         <SafeAreaView style={styles.safeArea} edges={["top"]}>
           <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.flex}>
             <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -776,6 +781,10 @@ export default function AuthLanding({ navigation, route }: { navigation: any; ro
       style={styles.background}
       resizeMode="cover"
     >
+      <LinearGradient
+        colors={["rgba(16,24,16,0.45)", "rgba(10,15,10,0.7)"]}
+        style={StyleSheet.absoluteFillObject}
+      />
       <SafeAreaView style={styles.safeArea} edges={["top"]}>
         <View style={styles.overlay}>
           {/* Spacer to push buttons to bottom */}
@@ -951,7 +960,7 @@ const styles = StyleSheet.create({
   titleText: {
     fontFamily: "Raleway_700Bold",
     fontSize: 32,
-    color: "#485952", // Deep Forest Green
+    color: "#F4EBD0",
     textAlign: "center",
   },
 

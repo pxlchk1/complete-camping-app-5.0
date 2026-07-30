@@ -547,7 +547,7 @@ export default function EditProfileScreen() {
                 />
                 <Text
                   className="mt-1 text-sm"
-                  style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED }}
+                  style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}
                 >
                   Lowercase letters, numbers, hyphens, and underscores only
                 </Text>
@@ -768,7 +768,7 @@ export default function EditProfileScreen() {
             </Text>
             <Text
               className="mb-3 text-sm"
-              style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED }}
+              style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}
             >
               Tell us about your favorite gear for each category
             </Text>
@@ -1272,7 +1272,7 @@ export default function EditProfileScreen() {
                 />
                 <Text
                   className="mt-2 text-sm"
-                  style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED }}
+                  style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}
                 >
                   Must be at least 8 characters long
                 </Text>

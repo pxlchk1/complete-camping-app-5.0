@@ -365,7 +365,7 @@ export default function AdminUsersScreen() {
                 {/* Row 3: Dates */}
                 <View className="flex-row">
                   <View className="flex-1">
-                    <Text style={{ fontFamily: "SourceSans3_400Regular", fontSize: 11, color: TEXT_MUTED }}>
+                    <Text style={{ fontFamily: "SourceSans3_400Regular", fontSize: 11, color: TEXT_SECONDARY }}>
                       Signed up
                     </Text>
                     <Text style={{ fontFamily: "SourceSans3_500Medium", fontSize: 12, color: TEXT_SECONDARY }}>
@@ -373,7 +373,7 @@ export default function AdminUsersScreen() {
                     </Text>
                   </View>
                   <View className="flex-1">
-                    <Text style={{ fontFamily: "SourceSans3_400Regular", fontSize: 11, color: TEXT_MUTED }}>
+                    <Text style={{ fontFamily: "SourceSans3_400Regular", fontSize: 11, color: TEXT_SECONDARY }}>
                       Last active
                     </Text>
                     <Text style={{ fontFamily: "SourceSans3_500Medium", fontSize: 12, color: TEXT_SECONDARY }}>
@@ -396,7 +396,7 @@ export default function AdminUsersScreen() {
           {!hasMore && displayUsers.length > 0 && !searchMode && (
             <Text
               className="text-center py-4"
-              style={{ fontFamily: "SourceSans3_400Regular", fontSize: 13, color: TEXT_MUTED }}
+              style={{ fontFamily: "SourceSans3_400Regular", fontSize: 13, color: TEXT_SECONDARY }}
             >
               End of users list
             </Text>

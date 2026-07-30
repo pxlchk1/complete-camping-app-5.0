@@ -302,11 +302,11 @@ export default function GearReviewsListScreen() {
       )}
 
       <View style={{ flexDirection: "row", alignItems: "center" }}>
-        <Text style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 12, color: TEXT_MUTED }}>
+        <Text style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 12, color: TEXT_SECONDARY }}>
           @{getConnectDisplayHandle(item.authorHandle, item.authorId)}
         </Text>
-        <Text style={{ marginHorizontal: 6, opacity: 0.7, color: TEXT_MUTED }}>•</Text>
-        <Text style={{ fontFamily: "SourceSans3_400Regular", fontSize: 12, color: TEXT_MUTED }}>
+        <Text style={{ marginHorizontal: 6, opacity: 0.7, color: TEXT_SECONDARY }}>•</Text>
+        <Text style={{ fontFamily: "SourceSans3_400Regular", fontSize: 12, color: TEXT_SECONDARY }}>
           {formatTimeAgo(toDateString(item.createdAt))}
         </Text>
       </View>

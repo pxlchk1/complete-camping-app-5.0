@@ -48,7 +48,7 @@ export default function ConfirmationModal({
           </View>
 
           {message ? (
-            <Text className="text-earthGreen mb-4" style={{ fontFamily: "SourceSans3_400Regular" }}>{message}</Text>
+            <Text className="text-forest mb-4" style={{ fontFamily: "SourceSans3_400Regular" }}>{message}</Text>
           ) : null}
 
           {/* Actions */}

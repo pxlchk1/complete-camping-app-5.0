@@ -216,17 +216,17 @@ export default function FeedbackListScreen() {
         {/* Footer: author, date, and comments count */}
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: 12, borderTopWidth: 1, borderColor: BORDER_SOFT }}>
           <View style={{ flexDirection: "row", alignItems: "center", flexShrink: 1 }}>
-            <Text style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 12, color: TEXT_MUTED }}>
+            <Text style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 12, color: TEXT_SECONDARY }}>
               {item.authorName || "Anonymous"}
             </Text>
-            <Text style={{ marginHorizontal: 6, opacity: 0.7, color: TEXT_MUTED }}>•</Text>
-            <Text style={{ fontFamily: "SourceSans3_400Regular", fontSize: 12, color: TEXT_MUTED }}>
+            <Text style={{ marginHorizontal: 6, opacity: 0.7, color: TEXT_SECONDARY }}>•</Text>
+            <Text style={{ fontFamily: "SourceSans3_400Regular", fontSize: 12, color: TEXT_SECONDARY }}>
               {formatTimeAgo(item.createdAt)}
             </Text>
           </View>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <Ionicons name="chatbubble-outline" size={16} color={TEXT_MUTED} />
-            <Text style={{ marginLeft: 4, fontSize: 12, fontFamily: "SourceSans3_600SemiBold", color: TEXT_MUTED }}>
+            <Text style={{ marginLeft: 4, fontSize: 12, fontFamily: "SourceSans3_600SemiBold", color: TEXT_SECONDARY }}>
               {item.commentCount ?? 0}
             </Text>
           </View>

@@ -47,7 +47,7 @@ export default function ParkCard({ park, onPress }: ParkCardProps) {
           <Text className="text-lg font-semibold text-forest mb-1" style={{ fontFamily: "Raleway_600SemiBold" }}>{park.name}</Text>
           <View className="flex-row items-center">
             <Ionicons name={getTypeIcon(park.filter)} size={16} color={TEXT_SECONDARY} />
-            <Text className="text-riverRock text-sm font-medium ml-1" style={{ fontFamily: "SourceSans3_600SemiBold" }}>
+            <Text className="text-forest text-sm font-medium ml-1" style={{ fontFamily: "SourceSans3_600SemiBold" }}>
               {getTypeLabel(park.filter)}
             </Text>
           </View>
@@ -57,13 +57,13 @@ export default function ParkCard({ park, onPress }: ParkCardProps) {
       {/* Location */}
       <View className="flex-row items-center mb-3">
         <Ionicons name="location-outline" size={16} color={EARTH_GREEN} />
-        <Text className="text-earthGreen text-sm ml-1" style={{ fontFamily: "SourceSans3_400Regular" }}>
+        <Text className="text-forest text-sm ml-1" style={{ fontFamily: "SourceSans3_400Regular" }}>
           {park.state}
         </Text>
       </View>
 
       {/* Address */}
-      <Text className="text-earthGreen text-sm leading-5" style={{ fontFamily: "SourceSans3_400Regular" }} numberOfLines={2}>
+      <Text className="text-forest text-sm leading-5" style={{ fontFamily: "SourceSans3_400Regular" }} numberOfLines={2}>
         {park.address}
       </Text>
     </Pressable>

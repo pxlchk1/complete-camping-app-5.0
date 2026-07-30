@@ -24,7 +24,7 @@ export function XPBar({ currentXP, level, nextLevelXP }: XPBarProps) {
           <Ionicons name="star" size={20} color={GRANITE_GOLD} />
           <Text className="text-forest font-semibold ml-2" style={{ fontFamily: "SourceSans3_600SemiBold" }}>Level {level}</Text>
         </View>
-        <Text className="text-earthGreen text-sm" style={{ fontFamily: "SourceSans3_400Regular" }}>{currentXP} XP</Text>
+        <Text className="text-forest text-sm" style={{ fontFamily: "SourceSans3_400Regular" }}>{currentXP} XP</Text>
       </View>
       <View className="bg-parchmentDark/30 rounded-full h-3 mb-2">
         <View
@@ -33,7 +33,7 @@ export function XPBar({ currentXP, level, nextLevelXP }: XPBarProps) {
         />
       </View>
       {nextLevelXP && (
-        <Text className="text-earthGreen text-xs text-center" style={{ fontFamily: "SourceSans3_400Regular" }}>
+        <Text className="text-forest text-xs text-center" style={{ fontFamily: "SourceSans3_400Regular" }}>
           {xpNeededForNextLevel} XP to unlock next track
         </Text>
       )}

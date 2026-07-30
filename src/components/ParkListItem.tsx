@@ -3,7 +3,7 @@ import { View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Park } from "../types/camping";
 import { fonts, fontSizes, spacing } from "../theme/theme";
-import { DEEP_FOREST, LIST_ROW_DEFAULT, LIST_ROW_ALT } from "../constants/colors";
+import { DEEP_FOREST, LIST_ROW_DEFAULT, LIST_ROW_ALT, TEXT_SECONDARY } from "../constants/colors";
 
 interface ParkListItemProps {
   park: Park;
@@ -74,7 +74,7 @@ export default function ParkListItem({ park, onPress, index = 0 }: ParkListItemP
                   style={{
                     fontFamily: fonts.bodyRegular,
                     fontSize: 11,
-                    color: "#5A7856",
+                    color: TEXT_SECONDARY,
                   }}
                 >
                   {park.state}
@@ -85,7 +85,7 @@ export default function ParkListItem({ park, onPress, index = 0 }: ParkListItemP
               style={{
                 fontFamily: fonts.bodyRegular,
                 fontSize: 11,
-                color: "#5A7856",
+                color: TEXT_SECONDARY,
               }}
             >
               {getParkTypeLabel(park.filter)}
@@ -105,7 +105,7 @@ export default function ParkListItem({ park, onPress, index = 0 }: ParkListItemP
                 style={{
                   fontFamily: fonts.bodyRegular,
                   fontSize: 11,
-                  color: "#8A9580",
+                  color: TEXT_SECONDARY,
                   marginLeft: 3,
                   lineHeight: 14,
                   flex: 1,

@@ -273,7 +273,7 @@ export default function WitnessRequestsScreen() {
                   the evidence photo they were asked to approve or deny. */}
               {claim.photoUrl && (
                 <View className="p-4">
-                  <Text className="text-sm font-medium mb-2" style={{ color: TEXT_MUTED }}>
+                  <Text className="text-sm font-medium mb-2" style={{ color: TEXT_SECONDARY }}>
                     PHOTO EVIDENCE
                   </Text>
                   <Pressable

@@ -21,7 +21,7 @@ import { genericVotesService } from "../services/firestore/genericVotesService";
 import { useCurrentUser, useUserStore } from "../state/userStore";
 import { useSubscriptionStore } from "../state/subscriptionStore";
 import { getPaywallVariantAndTrack, type PaywallVariant } from "../services/proAttemptService";
-import { TEXT_MUTED } from "../constants/colors";
+import { TEXT_SECONDARY } from "../constants/colors";
 
 interface VotePillProps {
   collectionPath: string;
@@ -136,9 +136,9 @@ export default function VotePill({
   const paddingV = size === "small" ? 2 : 4;
   const gap = size === "small" ? 2 : 4;
 
-  const upColor = userVote === "up" ? "#16a34a" : TEXT_MUTED;
-  const downColor = userVote === "down" ? "#dc2626" : TEXT_MUTED;
-  const scoreColor = score > 0 ? "#16a34a" : score < 0 ? "#dc2626" : TEXT_MUTED;
+  const upColor = userVote === "up" ? "#16a34a" : TEXT_SECONDARY;
+  const downColor = userVote === "down" ? "#dc2626" : TEXT_SECONDARY;
+  const scoreColor = score > 0 ? "#16a34a" : score < 0 ? "#dc2626" : TEXT_SECONDARY;
 
   return (
     <View style={[styles.container, { paddingHorizontal: paddingH, paddingVertical: paddingV }]}>

@@ -50,6 +50,7 @@ import {
   TEXT_PRIMARY_STRONG,
   TEXT_SECONDARY,
   TEXT_MUTED,
+  DISABLED_BG,
 } from "../constants/colors";
 import { getLearningTrackBadgeImage } from "../assets/images/merit_badges/learningTrackBadgeImages";
 import { useSubscriptionStore } from "../state/subscriptionStore";
@@ -583,7 +584,7 @@ export default function ModuleDetailScreen() {
                 style={{
                   marginTop: 8,
                   paddingVertical: 16,
-                  backgroundColor: allQuestionsAnswered ? DEEP_FOREST : TEXT_MUTED,
+                  backgroundColor: allQuestionsAnswered ? DEEP_FOREST : DISABLED_BG,
                   borderRadius: 12,
                   alignItems: "center",
                   opacity: submittingQuiz ? 0.7 : 1,
@@ -592,7 +593,13 @@ export default function ModuleDetailScreen() {
                 {submittingQuiz ? (
                   <ActivityIndicator color={PARCHMENT} />
                 ) : (
-                  <Text style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 16, color: PARCHMENT }}>
+                  <Text
+                    style={{
+                      fontFamily: "SourceSans3_600SemiBold",
+                      fontSize: 16,
+                      color: allQuestionsAnswered ? PARCHMENT : TEXT_SECONDARY,
+                    }}
+                  >
                     Submit Answers
                   </Text>
                 )}

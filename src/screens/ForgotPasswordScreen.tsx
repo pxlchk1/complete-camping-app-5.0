@@ -12,6 +12,7 @@ import {
   Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "../config/firebase";
 import { Ionicons } from "@expo/vector-icons";
@@ -86,6 +87,10 @@ export default function ForgotPasswordScreen({ navigation }: { navigation: any }
       style={styles.background}
       resizeMode="cover"
     >
+      <LinearGradient
+        colors={["rgba(16,24,16,0.45)", "rgba(10,15,10,0.7)"]}
+        style={StyleSheet.absoluteFillObject}
+      />
       <SafeAreaView style={styles.safeArea} edges={["top"]}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -186,7 +191,7 @@ const styles = StyleSheet.create({
   titleText: {
     fontFamily: "Raleway_700Bold",
     fontSize: 32,
-    color: "#485952",
+    color: "#F4EBD0",
     textAlign: "center",
   },
 

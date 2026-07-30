@@ -272,11 +272,11 @@ export default function TipsListScreen() {
       </Text>
 
       <View style={{ flexDirection: "row", alignItems: "center", marginTop: 8 }}>
-        <Text style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 12, color: TEXT_MUTED }}>
+        <Text style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 12, color: TEXT_SECONDARY }}>
           @{authorHandles[item.userId || item.authorId || ''] || getConnectDisplayHandle(item.userName, item.userId || item.authorId)}
         </Text>
-        <Text style={{ marginHorizontal: 6, opacity: 0.7, color: TEXT_MUTED }}>•</Text>
-        <Text style={{ fontFamily: "SourceSans3_400Regular", fontSize: 12, color: TEXT_MUTED }}>
+        <Text style={{ marginHorizontal: 6, opacity: 0.7, color: TEXT_SECONDARY }}>•</Text>
+        <Text style={{ fontFamily: "SourceSans3_400Regular", fontSize: 12, color: TEXT_SECONDARY }}>
           {formatTimeAgo(item.createdAt)}
         </Text>
       </View>

@@ -30,6 +30,7 @@ import {
   PARCHMENT,
   SIERRA_SKY,
   LODGE_FOREST,
+  RUST_DEEP,
 } from "../constants/colors";
 
 type AccountScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, "Account">;
@@ -100,7 +101,7 @@ export default function AccountScreen() {
     }
     if (currentUser?.membershipTier === "isModerator" || isModerator) {
       return (
-        <View className="flex-row items-center px-3 py-1 rounded-full ml-2" style={{ backgroundColor: SIERRA_SKY }}>
+        <View className="flex-row items-center px-3 py-1 rounded-full ml-2" style={{ backgroundColor: DEEP_FOREST }}>
           <Ionicons name="shield" size={14} color={PARCHMENT} />
           <Text
             className="text-xs ml-1"
@@ -113,7 +114,7 @@ export default function AccountScreen() {
     }
     if (isPro) {
       return (
-        <View className="flex-row items-center px-3 py-1 rounded-full ml-2" style={{ backgroundColor: GRANITE_GOLD }}>
+        <View className="flex-row items-center px-3 py-1 rounded-full ml-2" style={{ backgroundColor: RUST_DEEP }}>
           <Ionicons name="star" size={14} color={PARCHMENT} />
           <Text
             className="text-xs ml-1"
@@ -152,7 +153,7 @@ export default function AccountScreen() {
     }
     if (currentUser.role === "moderator") {
       return (
-        <View className="flex-row items-center px-3 py-1 rounded-full ml-2" style={{ backgroundColor: SIERRA_SKY }}>
+        <View className="flex-row items-center px-3 py-1 rounded-full ml-2" style={{ backgroundColor: DEEP_FOREST }}>
           <Ionicons name="shield" size={14} color={PARCHMENT} />
           <Text
             className="text-xs ml-1"
@@ -357,7 +358,7 @@ export default function AccountScreen() {
                   }}
                   className="mb-4 p-4 rounded-xl active:opacity-95"
                   style={{
-                    backgroundColor: GRANITE_GOLD,
+                    backgroundColor: RUST_DEEP,
                   }}
                 >
                   <View className="flex-row items-center">
