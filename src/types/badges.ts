@@ -71,7 +71,7 @@ export interface BadgeClaim {
   createdAt: Timestamp | Date;
   updatedAt: Timestamp | Date;
   status: BadgeClaimStatus;
-  witnessUserId: string;
+  witnessUserId?: string;
   photoUrl?: string;
   caption?: string;
   approvedAt?: Timestamp | Date;
@@ -86,7 +86,7 @@ export interface CreateBadgeClaimData {
 }
 
 export interface UpdateBadgeClaimData {
-  photoUrl?: string;
+  photoUrl?: string | null;
   caption?: string;
 }
 

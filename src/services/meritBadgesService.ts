@@ -16,6 +16,8 @@ import {
   getDocs,
   addDoc,
   updateDoc,
+  deleteDoc,
+  deleteField,
   query,
   where,
   orderBy,
@@ -233,11 +235,14 @@ export async function createUserBadge(data: CreateUserBadgeData): Promise<UserBa
  */
 export async function updateUserBadge(
   badgeRecordId: string,
-  updates: { visibility?: "PRIVATE" | "PUBLIC"; photoUrl?: string; caption?: string }
+  updates: { visibility?: "PRIVATE" | "PUBLIC"; photoUrl?: string | null; caption?: string }
 ): Promise<void> {
   const badgeRef = doc(db, "userBadges", badgeRecordId);
   await updateDoc(badgeRef, {
     ...updates,
+    // Firestore's updateDoc rejects explicit `undefined`; null means "remove
+    // this field" and must become the deleteField() sentinel instead.
+    ...(updates.photoUrl === null ? { photoUrl: deleteField() } : {}),
     updatedAt: serverTimestamp(),
   });
 }
@@ -320,15 +325,35 @@ export async function createBadgeClaim(data: CreateBadgeClaimData): Promise<Badg
     throw new Error("Badge already earned");
   }
   
-  // Check for existing pending claim
+  // Check for existing claim - a draft may already exist from when the photo
+  // was uploaded (see saveBadgePhotoDraft), in which case we promote it to a
+  // real stamp request instead of creating a second, duplicate claim doc.
   const existingClaim = await getClaimForBadge(user.uid, data.badgeId);
   if (existingClaim && existingClaim.status === "PENDING_STAMP") {
     throw new Error("Already have a pending stamp request for this badge");
   }
-  
-  const claimsRef = collection(db, "badgeClaims");
+
   const now = serverTimestamp();
-  
+
+  if (existingClaim && existingClaim.status === "DRAFT") {
+    const claimRef = doc(db, "badgeClaims", existingClaim.id);
+    const claimData = {
+      status: "PENDING_STAMP" as BadgeClaimStatus,
+      witnessUserId: data.witnessUserId,
+      photoUrl: data.photoUrl || existingClaim.photoUrl || null,
+      caption: data.caption || null,
+      updatedAt: now,
+    };
+    await updateDoc(claimRef, claimData);
+    return {
+      ...existingClaim,
+      ...claimData,
+      updatedAt: new Date(),
+    } as BadgeClaim;
+  }
+
+  const claimsRef = collection(db, "badgeClaims");
+
   const claimData = {
     badgeId: data.badgeId,
     claimantUserId: user.uid,
@@ -339,15 +364,55 @@ export async function createBadgeClaim(data: CreateBadgeClaimData): Promise<Badg
     photoUrl: data.photoUrl || null,
     caption: data.caption || null,
   };
-  
+
   const docRef = await addDoc(claimsRef, claimData);
-  
+
   return {
     id: docRef.id,
     ...claimData,
     createdAt: new Date(),
     updatedAt: new Date(),
   } as BadgeClaim;
+}
+
+/**
+ * Persist an uploaded photo as a draft claim immediately, so it survives the
+ * user leaving the screen before tapping "Submit Proof" or "Choose Witness".
+ * Promotes an existing draft's photo in place; never touches a claim that's
+ * already pending/approved/declined.
+ */
+export async function saveBadgePhotoDraft(badgeId: string, photoUrl: string): Promise<void> {
+  const user = auth.currentUser;
+  if (!user) throw new Error("Must be signed in");
+
+  const existingClaim = await getClaimForBadge(user.uid, badgeId);
+
+  if (existingClaim) {
+    if (existingClaim.status !== "DRAFT") return;
+    await updateDoc(doc(db, "badgeClaims", existingClaim.id), {
+      photoUrl,
+      updatedAt: serverTimestamp(),
+    });
+    return;
+  }
+
+  const claimsRef = collection(db, "badgeClaims");
+  await addDoc(claimsRef, {
+    badgeId,
+    claimantUserId: user.uid,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    status: "DRAFT" as BadgeClaimStatus,
+    photoUrl,
+  });
+}
+
+/**
+ * Delete a claim outright (used to clean up a draft once its photo has been
+ * submitted directly - via createUserBadge - rather than through a witness).
+ */
+export async function deleteBadgeClaim(claimId: string): Promise<void> {
+  await deleteDoc(doc(db, "badgeClaims", claimId));
 }
 
 /**
@@ -360,6 +425,9 @@ export async function updateBadgeClaim(
   const claimRef = doc(db, "badgeClaims", claimId);
   await updateDoc(claimRef, {
     ...updates,
+    // Firestore's updateDoc rejects explicit `undefined`; null means "remove
+    // this field" and must become the deleteField() sentinel instead.
+    ...(updates.photoUrl === null ? { photoUrl: deleteField() } : {}),
     updatedAt: serverTimestamp(),
   });
 }
@@ -691,6 +759,39 @@ async function syncBadgeToProfile(userId: string, badgeId: string): Promise<void
     });
   } catch (error) {
     console.error("[MeritBadges] Error syncing to profile:", error);
+  }
+}
+
+/**
+ * Safety net for the My Campsite badge display: syncBadgeToProfile is
+ * best-effort and swallows its own errors (so a sync hiccup never blocks
+ * badge-earning itself), which means profile.meritBadges can occasionally
+ * miss a badge that's actually earned in the authoritative userBadges
+ * collection. Call this after loading a profile to catch up any gaps.
+ * Returns true if anything was repaired, so the caller knows to re-read
+ * the profile doc.
+ */
+export async function reconcileMeritBadgesToProfile(userId: string): Promise<boolean> {
+  try {
+    const [earnedBadges, profileSnap] = await Promise.all([
+      getUserBadges(userId),
+      getDoc(doc(db, "profiles", userId)),
+    ]);
+
+    if (!profileSnap.exists()) return false;
+
+    const currentIds = new Set((profileSnap.data()?.meritBadges || []).map((b: any) => b.id));
+    const missing = earnedBadges.filter((b) => !currentIds.has(b.badgeId));
+
+    if (missing.length === 0) return false;
+
+    for (const badge of missing) {
+      await syncBadgeToProfile(userId, badge.badgeId);
+    }
+    return true;
+  } catch (error) {
+    console.error("[MeritBadges] Error reconciling badges to profile:", error);
+    return false;
   }
 }
 

@@ -57,6 +57,10 @@ export default function SelectWitnessScreen() {
 
   const [badge, setBadge] = useState<BadgeDefinition | null>(null);
   const [contacts, setContacts] = useState<CampgroundContact[]>([]);
+  // Contacts that exist but haven't linked a Tent & Lantern account yet, so
+  // they can't be chosen as a witness - tracked separately so the empty
+  // state can explain why they're missing instead of looking like a bug.
+  const [unlinkedContactsCount, setUnlinkedContactsCount] = useState(0);
   const [filteredContacts, setFilteredContacts] = useState<CampgroundContact[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
@@ -106,6 +110,7 @@ export default function SelectWitnessScreen() {
       const linkedContacts = contactsData.filter((c) => c.contactUserId);
       setContacts(linkedContacts);
       setFilteredContacts(linkedContacts);
+      setUnlinkedContactsCount(contactsData.length - linkedContacts.length);
       setExistingClaim(claimData);
 
       // Pre-select if there's an existing claim
@@ -264,9 +269,18 @@ export default function SelectWitnessScreen() {
             <Text className="text-center mt-4 text-lg font-medium" style={{ color: TEXT_PRIMARY_STRONG }}>
               No Linked Campers
             </Text>
-            <Text className="text-center mt-2" style={{ color: TEXT_SECONDARY }}>
-              To request a stamp, you need campers in your campground who have linked their accounts.
-            </Text>
+            {unlinkedContactsCount > 0 ? (
+              <Text className="text-center mt-2" style={{ color: TEXT_SECONDARY }}>
+                {unlinkedContactsCount === 1
+                  ? "You have 1 camper added, but they haven't linked a Tent & Lantern account yet."
+                  : `You have ${unlinkedContactsCount} campers added, but none of them have linked a Tent & Lantern account yet.`}
+                {" "}Send them an invite so they can verify your badge.
+              </Text>
+            ) : (
+              <Text className="text-center mt-2" style={{ color: TEXT_SECONDARY }}>
+                To request a stamp, you need campers in your campground who have linked their accounts.
+              </Text>
+            )}
             <Pressable
               className="mt-4 px-4 py-2 rounded-lg"
               style={{ backgroundColor: EARTH_GREEN }}

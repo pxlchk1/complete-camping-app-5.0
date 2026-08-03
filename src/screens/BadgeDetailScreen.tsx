@@ -39,6 +39,8 @@ import {
   deleteBadgePhoto,
   updateUserBadge,
   updateBadgeClaim,
+  saveBadgePhotoDraft,
+  deleteBadgeClaim,
 } from "../services/meritBadgesService";
 import { resolveBadgeImage, deriveImageKey } from "../assets/images/merit_badges/resolveBadgeImage";
 import {
@@ -182,6 +184,14 @@ export default function BadgeDetailScreen() {
 
       const photoUrl = await uploadBadgePhoto(user.uid, badge.id, result.assets[0].uri);
       setLocalPhotoUrl(photoUrl);
+
+      // Persist as a draft claim so the photo survives leaving this screen
+      // before "Submit Proof"/"Choose Witness" is tapped. Refetch the claim
+      // afterward so pendingClaim.id is available for later cleanup.
+      await saveBadgePhotoDraft(badge.id, photoUrl);
+      const claim = await getClaimForBadge(user.uid, badge.id);
+      setPendingClaim(claim);
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error: any) {
       console.error("[BadgeDetailScreen] Photo upload error:", error);
@@ -232,7 +242,7 @@ export default function BadgeDetailScreen() {
 
   // Submit proof (no witness needed)
   const handleSubmitProof = async () => {
-    if (!badge || !localPhotoUrl) return;
+    if (!badge || !currentPhotoUrl) return;
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setActionLoading(true);
@@ -244,15 +254,22 @@ export default function BadgeDetailScreen() {
       const newBadge = await createUserBadge({
         badgeId: badge.id,
         earnedVia: "PHOTO",
-        photoUrl: localPhotoUrl,
+        photoUrl: currentPhotoUrl,
       });
+
+      // The draft claim (if any) is now redundant - the badge was earned
+      // directly, not through the witness flow it was drafted for.
+      if (pendingClaim) {
+        await deleteBadgeClaim(pendingClaim.id);
+      }
 
       // Update state directly to avoid loading spinner flash
       setEarnedBadge(newBadge);
       setDisplayState("earned");
       setLocalPhotoUrl(null);
+      setPendingClaim(null);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      
+
       // Show upsell nudge for non-Pro users
       if (!isPro) {
         trackUpsellModalViewed("badge_earned");
@@ -272,9 +289,9 @@ export default function BadgeDetailScreen() {
 
   // Choose witness (witness required)
   const handleChooseWitness = () => {
-    if (!badge || !localPhotoUrl) return;
+    if (!badge || !currentPhotoUrl) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    navigation.navigate("SelectWitness", { badgeId: badge.id, photoUrl: localPhotoUrl });
+    navigation.navigate("SelectWitness", { badgeId: badge.id, photoUrl: currentPhotoUrl });
   };
 
   // Delete photo
@@ -292,10 +309,17 @@ export default function BadgeDetailScreen() {
 
       if (earnedBadge?.photoUrl) {
         await deleteBadgePhoto(user.uid, badge.id);
-        await updateUserBadge(earnedBadge.id, { photoUrl: undefined });
+        await updateUserBadge(earnedBadge.id, { photoUrl: null });
       } else if (pendingClaim?.photoUrl) {
         await deleteBadgePhoto(user.uid, badge.id);
-        await updateBadgeClaim(pendingClaim.id, { photoUrl: undefined });
+        // The "Remove Photo" action only ever shows while not pending
+        // witness review, so this is always a draft claim at this point -
+        // delete it outright rather than leaving an empty draft shell behind.
+        if (pendingClaim.status === "DRAFT") {
+          await deleteBadgeClaim(pendingClaim.id);
+        } else {
+          await updateBadgeClaim(pendingClaim.id, { photoUrl: null });
+        }
       }
 
       setLocalPhotoUrl(null);

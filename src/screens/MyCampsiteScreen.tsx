@@ -47,6 +47,7 @@ import {
 import { PrefillLocation, RootStackParamList } from "../navigation/types";
 import { isLearningTrackBadge, getLearningTrackBadgeImage, LEARNING_TRACK_BADGE_IDS } from "../assets/images/merit_badges/learningTrackBadgeImages";
 import { resolveBadgeImage } from "../assets/images/merit_badges/resolveBadgeImage";
+import { reconcileMeritBadgesToProfile } from "../services/meritBadgesService";
 import type { BadgeId } from "../types/learning";
 import { LEARNING_BADGES } from "../types/learning";
 
@@ -145,7 +146,21 @@ export default function MyCampsiteScreen({ navigation }: any) {
       const profileSnap = await getDoc(profileRef);
 
       if (profileSnap.exists()) {
-        const data = profileSnap.data() as UserProfile;
+        let data = profileSnap.data() as UserProfile;
+
+        // Safety net: profile.meritBadges is a denormalized copy that's
+        // synced best-effort when a badge is earned, so it can occasionally
+        // miss one. Only worth checking (and only safe to write) when this
+        // is the signed-in user's own profile.
+        if (!isViewingOtherUser) {
+          const repaired = await reconcileMeritBadgesToProfile(userId);
+          if (repaired) {
+            const refreshedSnap = await getDoc(profileRef);
+            if (refreshedSnap.exists()) {
+              data = refreshedSnap.data() as UserProfile;
+            }
+          }
+        }
 
         // Normalize handle - remove any "@" prefix if it exists
         const normalizedHandle = data.handle?.replace(/^@+/, "") || "";
@@ -168,7 +183,7 @@ export default function MyCampsiteScreen({ navigation }: any) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isViewingOtherUser]);
 
   // Load user's latest 9 photos
   const loadUserPhotos = useCallback(async (userId: string) => {

@@ -524,6 +524,44 @@ service cloud.firestore {
       allow update, delete: if canModerateContent();
     }
 
+    // ============================================
+    // MERIT BADGES COLLECTIONS
+    // ============================================
+
+    // Badge Definitions - fixed catalog, publicly readable, admin-managed/seeded
+    match /badgeDefinitions/{badgeId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // User Badges - earned badge records, publicly readable (profile display),
+    // created either by the earner themself (SELF/PHOTO) or by the witness on
+    // approval (STAMP - the witness writes a record naming the claimant, but
+    // the resource's own witnessUserId field equals the caller's own uid)
+    match /userBadges/{badgeRecordId} {
+      allow read: if true;
+      allow create: if isSignedIn() && (
+        request.auth.uid == request.resource.data.userId ||
+        (request.resource.data.earnedVia == "STAMP" && request.auth.uid == request.resource.data.witnessUserId)
+      );
+      allow update, delete: if isSignedIn() && request.auth.uid == resource.data.userId;
+    }
+
+    // Badge Claims - witness verification flow. Readable/writable by either
+    // the claimant (requester) or the assigned witness (approver/decliner).
+    match /badgeClaims/{claimId} {
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.claimantUserId ||
+        request.auth.uid == resource.data.witnessUserId
+      );
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.claimantUserId;
+      allow update: if isSignedIn() && (
+        request.auth.uid == resource.data.claimantUserId ||
+        request.auth.uid == resource.data.witnessUserId
+      );
+      allow delete: if isSignedIn() && request.auth.uid == resource.data.claimantUserId;
+    }
+
     // Default deny
     match /{document=**} {
       allow read, write: if false;
