@@ -64,6 +64,7 @@ type MeritBadge = {
   id: string;
   name: string;
   icon: string;
+  imageKey?: string;
   color: string;
   earnedAt?: any;
 };
@@ -984,7 +985,7 @@ export default function MyCampsiteScreen({ navigation }: any) {
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 16 }}>
                   <View style={{ flexDirection: "row", gap: 12 }}>
                     {meritBadgesOnly.map((badge) => {
-                      const badgeImage = resolveBadgeImage(badge.id);
+                      const badgeImage = resolveBadgeImage(badge.imageKey || badge.id);
                       return (
                         <View key={badge.id} style={{ alignItems: "center", width: 72 }}>
                           <View

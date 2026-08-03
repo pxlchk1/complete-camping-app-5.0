@@ -195,6 +195,41 @@ export default function BadgeDetailScreen() {
     }
   };
 
+  // Mark complete (SELF earn type - no photo or witness needed)
+  const handleMarkComplete = async () => {
+    if (!badge) return;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setActionLoading(true);
+
+    try {
+      const newBadge = await createUserBadge({
+        badgeId: badge.id,
+        earnedVia: "SELF",
+      });
+
+      // Update state directly to avoid loading spinner flash
+      setEarnedBadge(newBadge);
+      setDisplayState("earned");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      // Show upsell nudge for non-Pro users
+      if (!isPro) {
+        trackUpsellModalViewed("badge_earned");
+        setShowUpsellModal(true);
+      }
+    } catch (error: any) {
+      console.error("[BadgeDetailScreen] Mark complete error:", error);
+      setErrorModal({
+        title: "Submission Failed",
+        message: error.message || "Failed to mark this badge complete. Please try again.",
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // Submit proof (no witness needed)
   const handleSubmitProof = async () => {
     if (!badge || !localPhotoUrl) return;
@@ -351,6 +386,9 @@ export default function BadgeDetailScreen() {
     if (isEarned) return null;
     if (isPending) return { label: "Awaiting Approval", handler: () => {}, disabled: true };
     if (isSeasonalLocked) return null;
+    if (badge.earnType === "SELF") {
+      return { label: "Mark Complete", handler: handleMarkComplete, icon: "checkmark-done-outline" as const };
+    }
     if (!hasPhoto) return { label: "Add Photo", handler: handleAddPhoto, icon: "camera-outline" as const };
     if (requiresWitness) return { label: "Choose Witness", handler: handleChooseWitness, icon: "people-outline" as const };
     return { label: "Submit Proof", handler: handleSubmitProof, icon: "checkmark-circle-outline" as const };

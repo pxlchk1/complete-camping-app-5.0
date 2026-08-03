@@ -48,13 +48,42 @@ const db = getFirestore(firebaseApp);
 // BADGE DEFINITIONS (Read-Only Catalog)
 // ============================================
 
+// Guards against re-running the empty-catalog seed check more than once per
+// app session (e.g. if several screens call getAllBadgeDefinitions at once).
+let catalogSeedCheckPromise: Promise<void> | null = null;
+
+/**
+ * If the badgeDefinitions collection is empty (a fresh environment where
+ * nobody has run the dev seed screen), seed it automatically so the catalog
+ * isn't silently empty. seedBadgeDefinitions() itself is idempotent (skips
+ * names that already exist), so this is safe to race across callers.
+ */
+function ensureBadgeCatalogSeeded(): Promise<void> {
+  if (!catalogSeedCheckPromise) {
+    catalogSeedCheckPromise = (async () => {
+      try {
+        const defsRef = collection(db, "badgeDefinitions");
+        const existing = await getDocs(query(defsRef, where("isActive", "==", true)));
+        if (existing.empty) {
+          await seedBadgeDefinitions();
+        }
+      } catch (error) {
+        console.error("[MeritBadges] Error auto-seeding badge catalog:", error);
+      }
+    })();
+  }
+  return catalogSeedCheckPromise;
+}
+
 /**
  * Get all active badge definitions
  */
 export async function getAllBadgeDefinitions(): Promise<BadgeDefinition[]> {
+  await ensureBadgeCatalogSeeded();
+
   const badgesRef = collection(db, "badgeDefinitions");
   const q = query(badgesRef, where("isActive", "==", true), orderBy("sortOrder", "asc"));
-  
+
   try {
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({
@@ -652,6 +681,7 @@ async function syncBadgeToProfile(userId: string, badgeId: string): Promise<void
       id: badge.id,
       name: badge.name,
       icon: badge.iconAssetKey,
+      imageKey: badge.imageKey,
       color: badge.borderColorKey,
       earnedAt: new Date(),
     };
