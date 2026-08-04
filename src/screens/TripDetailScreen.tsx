@@ -37,6 +37,8 @@ import WeatherForecastSection from "../components/WeatherForecastSection";
 import ItineraryPromptPanel from "../components/ItineraryPromptPanel";
 import AddItineraryLinkModal from "../components/AddItineraryLinkModal";
 import ParkDetailModal from "../components/ParkDetailModal";
+import SubscriptionPromoCard from "../components/SubscriptionPromoCard";
+import { isDismissedThisSession } from "../services/sessionService";
 import { CreateItineraryLinkData } from "../types/itinerary";
 import { createItineraryLink } from "../services/itineraryLinksService";
 import { Park } from "../types/camping";
@@ -55,7 +57,8 @@ import AccountRequiredModal from "../components/AccountRequiredModal";
 import UpsellModal from "../components/UpsellModal";
 import { useUpsellStore, UPSELL_COPY } from "../state/upsellStore";
 import { useUserStore } from "../state/userStore";
-import { trackUpsellModalViewed, trackUpsellCtaClicked, trackUpsellModalDismissed } from "../services/analyticsService";
+import { trackUpsellModalViewed, trackUpsellCtaClicked, trackUpsellModalDismissed, trackTripOpened } from "../services/analyticsService";
+import { PaywallPlacement } from "../config/paywallPlacements";
 import {
   DEEP_FOREST,
   EARTH_GREEN,
@@ -82,7 +85,10 @@ export default function TripDetailScreen() {
   const navigation = useNavigation<TripDetailScreenNavigationProp>();
   const route = useRoute<TripDetailScreenRouteProp>();
   const { tripId, showItineraryPrompt } = route.params;
-  const { isGuest } = useUserStatus();
+  const { isGuest, isPro } = useUserStatus();
+  const [dashboardCardDismissed, setDashboardCardDismissed] = useState(() =>
+    isDismissedThisSession(PaywallPlacement.TripDashboard)
+  );
 
   // Select trip from trips array directly to ensure reactivity on updates
   const trips = useTripsStore((s) => s.trips);
@@ -165,6 +171,25 @@ export default function TripDetailScreen() {
 
   const startDate = useMemo(() => (trip ? new Date(trip.startDate) : null), [trip]);
   const endDate = useMemo(() => (trip ? new Date(trip.endDate) : null), [trip]);
+
+  // Whole days between today and departure - only meaningful (and only
+  // shown) for a trip that hasn't started yet.
+  const daysUntilTrip = useMemo(() => {
+    if (!startDate) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    return Math.round((start.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  }, [startDate]);
+
+  useEffect(() => {
+    if (trip) {
+      trackTripOpened(trip.id, daysUntilTrip ?? undefined);
+    }
+    // Only refire when the viewed trip changes, not on every recompute of daysUntilTrip.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trip?.id]);
 
   const nights = useMemo(() => {
     if (!startDate || !endDate) return 1;
@@ -296,7 +321,7 @@ export default function TripDetailScreen() {
       const freeTripId = await ensureFreePremiumTripId(userId, trips);
       if (tripId !== freeTripId) {
         // Not the free trip - show paywall
-        navigation.navigate("Paywall", { triggerKey: "packing_list" });
+        navigation.navigate("Paywall", { triggerKey: PaywallPlacement.AdditionalChecklist });
         return;
       }
     }
@@ -450,7 +475,7 @@ export default function TripDetailScreen() {
     // Gate: PRO required to share trip with campground (sender must be Pro)
     if (!requirePro({
       openAccountModal: () => setShowAccountModal(true),
-      openPaywallModal: (variant) => navigation.navigate("Paywall", { triggerKey: "campground_sharing", variant }),
+      openPaywallModal: (variant) => navigation.navigate("Paywall", { triggerKey: PaywallPlacement.ShareTrip, variant }),
     })) {
       return;
     }
@@ -647,6 +672,21 @@ export default function TripDetailScreen() {
       <ScrollView className="flex-1 px-5 bg-parchment" showsVerticalScrollIndicator={false}>
         {/* Trip Overview */}
         <View className="py-6">
+          {/* Subscription card - free users only, only for a trip that hasn't
+              started yet, dismissible for this session, never blocks anything below */}
+          {!isPro && !dashboardCardDismissed && daysUntilTrip !== null && daysUntilTrip >= 0 && (
+            <SubscriptionPromoCard
+              placement={PaywallPlacement.TripDashboard}
+              title={
+                daysUntilTrip === 0
+                  ? `Your ${trip.name} trip is today`
+                  : `Your ${trip.name} trip is ${daysUntilTrip} ${daysUntilTrip === 1 ? "day" : "days"} away`
+              }
+              body="Unlock extended weather, packing reminders, and shared trip planning."
+              onDismiss={() => setDashboardCardDismissed(true)}
+            />
+          )}
+
           {/* Dates */}
           <View className="mb-4">
             <View className="flex-row items-center mb-2">

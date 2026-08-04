@@ -42,10 +42,17 @@ import { useGearStore } from "../state/gearStore";
 import { useUserStore, createTestUser } from "../state/userStore";
 import { usePlanTabStore } from "../state/planTabStore";
 import { useSubscriptionStore } from "../state/subscriptionStore";
-import { useUpsellStore, UPSELL_COPY, UPSELL_MODALS_ENABLED } from "../state/upsellStore";
+import { useUpsellStore, UPSELL_MODALS_ENABLED } from "../state/upsellStore";
 import UpsellModal from "../components/UpsellModal";
 import { trackUpsellModalViewed, trackUpsellCtaClicked, trackUpsellModalDismissed } from "../services/analyticsService";
 import { PAYWALL_ENABLED } from "../config/subscriptions";
+import { PaywallPlacement, PAYWALL_PLACEMENT_CONTENT } from "../config/paywallPlacements";
+import {
+  getCurrentSessionNumber,
+  canShowReturningUserPrompt,
+  recordReturningUserPromptShown,
+  hasShownFullScreenPaywallThisSession,
+} from "../services/sessionService";
 
 // Utils
 import { getWelcomeTitle, getWelcomeSubtext } from "../utils/welcomeCopy";
@@ -492,7 +499,12 @@ export default function HomeScreen() {
     checkEmailOptIn();
   }, [isGuest]);
 
-  // Check session nudge eligibility (for modal priority gating)
+  // Check session nudge (= returning-user prompt) eligibility, for modal
+  // priority gating. Layers the brief's specific returning-user rules
+  // (3rd+ session, 7-day cooldown, not after another full-screen paywall
+  // this session) on top of the existing shared soft-nudge eligibility
+  // (Pro/admin/guest exclusion, once per session, 24h general cooldown)
+  // without changing that shared logic, which other nudge types still rely on.
   useEffect(() => {
     if (sessionNudgeChecked.current) return;
     if (!isAuthenticated || isGuest) return;
@@ -500,11 +512,17 @@ export default function HomeScreen() {
 
     sessionNudgeChecked.current = true;
 
-    // Check eligibility - priority gate will handle timing
-    if (canShowSessionNudge()) {
-      console.log("[HomeScreen] Session nudge eligible, waiting for modal priority gate");
+    (async () => {
+      if (!canShowSessionNudge()) return;
+
+      const sessionNumber = getCurrentSessionNumber() ?? 1;
+      if (sessionNumber < 3) return;
+      if (hasShownFullScreenPaywallThisSession()) return;
+      if (!(await canShowReturningUserPrompt())) return;
+
+      console.log("[HomeScreen] Returning-user nudge eligible, waiting for modal priority gate");
       setSessionNudgeEligible(true);
-    }
+    })();
   }, [isAuthenticated, isGuest, canShowSessionNudge]);
 
   // ============================================================================
@@ -568,9 +586,10 @@ export default function HomeScreen() {
       AsyncStorage.setItem("email_optin_last_shown", new Date().toISOString());
     }
     if (activeModal === "sessionNudge" && sessionNudgeEligible && !showSessionNudge) {
-      console.log("[HomeScreen] Session nudge now active, showing modal");
+      console.log("[HomeScreen] Returning-user nudge now active, showing modal");
       markSessionUpsellShown();
-      trackUpsellModalViewed("learning_complete");
+      recordReturningUserPromptShown();
+      trackUpsellModalViewed("returning_user");
       setShowSessionNudge(true);
     }
     if (activeModal === "stayInLoop" && showStayInLoopModal && notificationCohort) {
@@ -1504,31 +1523,31 @@ export default function HomeScreen() {
         cohort={notificationCohort}
       />
 
-      {/* Session Soft Upsell Nudge - lowest priority, gated by modal priority system */}
+      {/* Returning-user soft nudge - lowest priority, gated by modal priority system */}
       <UpsellModal
         visible={activeModal === "sessionNudge" && showSessionNudge}
-        title={UPSELL_COPY.session_browse.title}
-        body={UPSELL_COPY.session_browse.body}
-        primaryCtaText={UPSELL_COPY.session_browse.primaryCta}
-        secondaryCtaText={UPSELL_COPY.session_browse.secondaryCta}
-        finePrint={UPSELL_COPY.session_browse.finePrint}
+        title={PAYWALL_PLACEMENT_CONTENT[PaywallPlacement.ReturningUser].title}
+        body={PAYWALL_PLACEMENT_CONTENT[PaywallPlacement.ReturningUser].body}
+        primaryCtaText="See Premium Plans"
+        secondaryCtaText="Maybe later"
+        finePrint="Cancel anytime."
         onPrimaryPress={() => {
           setShowSessionNudge(false);
           setSessionNudgeEligible(false);
-          trackUpsellCtaClicked("learning_complete");
-          navigation.navigate("Paywall" as any, { triggerKey: "session_browse_nudge" });
+          trackUpsellCtaClicked("returning_user");
+          navigation.navigate("Paywall" as any, { triggerKey: PaywallPlacement.ReturningUser });
         }}
         onSecondaryPress={() => {
           setShowSessionNudge(false);
           setSessionNudgeEligible(false);
           recordUpsellDismissal();
-          trackUpsellModalDismissed("learning_complete");
+          trackUpsellModalDismissed("returning_user");
         }}
         onDismiss={() => {
           setShowSessionNudge(false);
           setSessionNudgeEligible(false);
           recordUpsellDismissal();
-          trackUpsellModalDismissed("learning_complete");
+          trackUpsellModalDismissed("returning_user");
         }}
       />
     </View>

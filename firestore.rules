@@ -562,6 +562,20 @@ service cloud.firestore {
       allow delete: if isSignedIn() && request.auth.uid == resource.data.claimantUserId;
     }
 
+    // ============================================
+    // ANALYTICS
+    // ============================================
+
+    // Analytics Events - lightweight native event log (see analyticsService.ts).
+    // Write-only append log: clients only ever create new event docs, never
+    // read/update/delete them. Read access is admin-only, for internal
+    // reporting; events are immutable once written.
+    match /analyticsEvents/{eventId} {
+      allow create: if isSignedIn();
+      allow read: if isAdmin();
+      allow update, delete: if false;
+    }
+
     // Default deny
     match /{document=**} {
       allow read, write: if false;

@@ -8,6 +8,7 @@ import Purchases, {
   PurchasesPackage,
   PurchasesOffering,
   LOG_LEVEL,
+  INTRO_ELIGIBILITY_STATUS,
 } from "react-native-purchases";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
@@ -258,6 +259,36 @@ export const purchasePackage = async (
     }
     console.error("[RevenueCat] Purchase failed:", error);
     throw error;
+  }
+};
+
+/**
+ * Ask StoreKit/Play Billing whether THIS user is actually eligible for the
+ * intro/trial offer on each given product - not just whether the product
+ * has one configured. A product can have an intro price configured in App
+ * Store Connect while a specific user is ineligible (e.g. they've already
+ * redeemed it before). Returns a map of productId -> eligible boolean;
+ * missing/unknown entries are treated as ineligible so the UI never shows
+ * trial copy it can't back up.
+ */
+export const checkIntroEligibility = async (
+  productIdentifiers: string[]
+): Promise<Record<string, boolean>> => {
+  if (!isRevenueCatReady() || productIdentifiers.length === 0) {
+    return {};
+  }
+
+  try {
+    const result = await Purchases.checkTrialOrIntroductoryPriceEligibility(productIdentifiers);
+    const eligibility: Record<string, boolean> = {};
+    for (const productId of productIdentifiers) {
+      eligibility[productId] = result[productId]?.status === INTRO_ELIGIBILITY_STATUS.INTRO_ELIGIBILITY_STATUS_ELIGIBLE;
+    }
+    return eligibility;
+  } catch (error) {
+    console.error("[RevenueCat] Failed to check intro eligibility:", error);
+    // Fail closed: never claim eligibility we couldn't confirm.
+    return Object.fromEntries(productIdentifiers.map((id) => [id, false]));
   }
 };
 

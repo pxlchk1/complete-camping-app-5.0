@@ -3,13 +3,64 @@
  * High-level service for managing subscriptions throughout the app
  */
 
-import Purchases from "react-native-purchases";
+import Purchases, { PurchasesPackage } from "react-native-purchases";
 import * as RevenueCat from "../lib/revenuecatClient";
 import { useSubscriptionStore } from "../state/subscriptionStore";
 import { useAuthStore } from "../state/authStore";
 import { auth, db } from "../config/firebase";
 import { doc, updateDoc, getDoc, serverTimestamp } from "firebase/firestore";
 import { SUBSCRIPTIONS_ENABLED } from "../config/subscriptions";
+import { trackSubscriptionStatusChecked } from "./analyticsService";
+import { getCurrentSessionNumber } from "./sessionService";
+
+export interface IntroOfferInfo {
+  /** Whether StoreKit confirms THIS user can still redeem it (not just that the product has one configured). */
+  eligible: boolean;
+  /** True when the intro price is $0 (a genuine free trial) rather than a discounted intro price. */
+  isFreeTrial: boolean;
+  /** Human-readable intro duration, e.g. "3 days", "1 week", "1 month". */
+  durationLabel: string;
+  /** Human-readable intro price, e.g. "Free" or "$1.99". */
+  priceLabel: string;
+  /** The regular price the plan renews at after the intro period ends. */
+  renewalPriceLabel: string;
+}
+
+const PERIOD_UNIT_LABELS: Record<string, string> = {
+  DAY: "day",
+  WEEK: "week",
+  MONTH: "month",
+  YEAR: "year",
+};
+
+function formatIntroPeriod(periodNumberOfUnits: number, periodUnit: string, cycles: number): string {
+  const unitLabel = PERIOD_UNIT_LABELS[periodUnit] || periodUnit.toLowerCase();
+  const totalUnits = Math.max(1, periodNumberOfUnits) * Math.max(1, cycles);
+  return `${totalUnits} ${unitLabel}${totalUnits === 1 ? "" : "s"}`;
+}
+
+/**
+ * Real (not hard-coded) introductory-offer info for a package: whether one
+ * exists at all, whether StoreKit confirms this specific user is eligible
+ * for it, and its actual duration/price as configured in App Store Connect.
+ * Returns null when the product has no intro offer configured - callers
+ * must never invent trial copy in that case.
+ */
+export async function getIntroOfferInfo(pkg: PurchasesPackage): Promise<IntroOfferInfo | null> {
+  const introPrice = pkg.product.introPrice;
+  if (!introPrice) return null;
+
+  const eligibilityMap = await RevenueCat.checkIntroEligibility([pkg.product.identifier]);
+  const eligible = eligibilityMap[pkg.product.identifier] ?? false;
+
+  return {
+    eligible,
+    isFreeTrial: introPrice.price === 0,
+    durationLabel: formatIntroPeriod(introPrice.periodNumberOfUnits, introPrice.periodUnit, introPrice.cycles),
+    priceLabel: introPrice.price === 0 ? "Free" : introPrice.priceString,
+    renewalPriceLabel: pkg.product.priceString,
+  };
+}
 
 /**
  * Safely fetch offerings with proper error handling
@@ -231,6 +282,7 @@ export const refreshEntitlements = async (): Promise<void> => {
 
     const customerInfo = await RevenueCat.getCustomerInfo();
     setSubscriptionInfo(customerInfo);
+    trackSubscriptionStatusChecked({ session_number: getCurrentSessionNumber() ?? undefined });
   } catch (error) {
     console.error("[SubscriptionService] Failed to refresh entitlements:", error);
   } finally {

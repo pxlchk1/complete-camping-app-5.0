@@ -15,12 +15,20 @@ import AccountButton from "../components/AccountButton";
 import { RootStackParamList, PrefillLocation } from "../navigation/types";
 import { CampingStyle, TripDestination } from "../types/camping";
 import { requireAccount } from "../utils/gating";
-import { isPremiumUser, setFreePremiumTripId, getFreePremiumTripId } from "../utils/entitlements";
+import {
+  isPremiumUser,
+  setFreePremiumTripId,
+  getFreePremiumTripId,
+  hasShownFirstTripPrompt,
+  markFirstTripPromptShown,
+} from "../utils/entitlements";
 import AccountRequiredModal from "../components/AccountRequiredModal";
 import { DEEP_FOREST, EARTH_GREEN, GRANITE_GOLD, RIVER_ROCK, SIERRA_SKY, PARCHMENT, PARCHMENT_BORDER } from "../constants/colors";
 import { trackTripCreated } from "../services/analyticsService";
 import { trackCoreAction } from "../services/userActionTrackerService";
 import { useAuthStore } from "../state/authStore";
+import { PaywallPlacement } from "../config/paywallPlacements";
+import { hasShownFullScreenPaywallThisSession } from "../services/sessionService";
 
 type CreateTripScreenNavigationProp = NativeStackNavigationProp<
   RootStackParamList,
@@ -89,7 +97,7 @@ export default function CreateTripScreen() {
         const existingTripId = await getFreePremiumTripId(currentUser.id);
         if (existingTripId) {
           // Free user already has a trip - redirect to paywall
-          navigation.replace("Paywall", { triggerKey: "second_trip" });
+          navigation.replace("Paywall", { triggerKey: PaywallPlacement.AdditionalTrip });
         }
       }
     };
@@ -134,7 +142,7 @@ export default function CreateTripScreen() {
       const freeTripId = await getFreePremiumTripId(currentUser.id);
       if (freeTripId) {
         // Free user already has a trip - show paywall
-        navigation.navigate("Paywall", { triggerKey: "second_trip" });
+        navigation.navigate("Paywall", { triggerKey: PaywallPlacement.AdditionalTrip });
         return;
       }
     }
@@ -180,8 +188,21 @@ export default function CreateTripScreen() {
         trackCoreAction(currentUser.id, "trip_created");
       }
 
-      // Navigate to trip detail
+      // Navigate to trip detail - the trip is fully saved and visible
+      // before anything else happens.
       navigation.replace("TripDetail", { tripId });
+
+      // One-time, post-save subscription prompt for free users completing
+      // their very first trip. Never blocks the save itself (already
+      // happened above), never repeats, and respects the app-wide rule of
+      // at most one full-screen paywall per session.
+      if (!isPremiumUser() && currentUser?.id) {
+        const alreadyShown = await hasShownFirstTripPrompt(currentUser.id);
+        if (!alreadyShown && !hasShownFullScreenPaywallThisSession()) {
+          await markFirstTripPromptShown(currentUser.id);
+          navigation.navigate("Paywall", { triggerKey: PaywallPlacement.FirstTripCompleted });
+        }
+      }
     } catch (error) {
       console.error("[CreateTripScreen] Failed to create trip:", error);
       notifyError(toast, "Failed to create trip. Please try again.");

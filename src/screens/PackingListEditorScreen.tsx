@@ -49,6 +49,7 @@ import UpsellModal from "../components/UpsellModal";
 import { useUpsellStore, UPSELL_COPY } from "../state/upsellStore";
 import { useUserStore } from "../state/userStore";
 import { trackUpsellModalViewed, trackUpsellCtaClicked } from "../services/analyticsService";
+import { PaywallPlacement } from "../config/paywallPlacements";
 
 type PackingListEditorRouteProp = RouteProp<{ PackingListEditor: { listId: string } }, "PackingListEditor">;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -889,7 +890,7 @@ export default function PackingListEditorScreen() {
           onPrimaryPress={() => {
             setShowPackingModal(false);
             trackUpsellCtaClicked("packing");
-            navigation.navigate("Paywall", { triggerKey: "packing_upsell" });
+            navigation.navigate("Paywall", { triggerKey: PaywallPlacement.AdditionalChecklist });
           }}
           onSecondaryPress={() => {
             setShowPackingModal(false);

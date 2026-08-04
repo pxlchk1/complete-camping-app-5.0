@@ -23,6 +23,8 @@ import { OnboardingProvider } from "./src/context/OnboardingContext";
 import { View, ImageBackground } from "react-native";
 import { useEffect, useState } from "react";
 import { initSubscriptions, identifyUser } from "./src/services/subscriptionService";
+import { recordAppOpen } from "./src/services/sessionService";
+import { trackAppOpen, trackSessionStarted } from "./src/services/analyticsService";
 import { useAuthStore } from "./src/state/authStore";
 import { useTripsStore } from "./src/state/tripsStore";
 import { auth } from "./src/config/firebase";
@@ -107,6 +109,17 @@ export default function App() {
       logUpdateDiagnostics();
     }
   }, [fontsLoaded]);
+
+  // Record this cold start as a new session (once, on mount) - independent
+  // of fonts/auth/subscription readiness, since it's just a local counter.
+  // Several other pieces (returning-user prompt, analytics session_number)
+  // depend on this having run before they read the session count.
+  useEffect(() => {
+    recordAppOpen().then(({ sessionNumber }) => {
+      trackAppOpen();
+      trackSessionStarted(sessionNumber);
+    });
+  }, []);
 
   const [appReady, setAppReady] = useState(false);
   const [subscriptionsInitialized, setSubscriptionsInitialized] = useState(false);

@@ -16,6 +16,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -24,12 +25,35 @@ import * as Haptics from "expo-haptics";
 import Purchases, { PurchasesPackage, PACKAGE_TYPE } from "react-native-purchases";
 
 // Services
-import { fetchOfferingsSafe, subscribeToPlan, restorePurchases, syncSubscriptionToFirestore } from "../services/subscriptionService";
+import {
+  fetchOfferingsSafe,
+  subscribeToPlan,
+  restorePurchases,
+  syncSubscriptionToFirestore,
+  getIntroOfferInfo,
+  IntroOfferInfo,
+} from "../services/subscriptionService";
 import { useSubscriptionStore } from "../state/subscriptionStore";
 import { useUserStatus } from "../utils/authHelper";
 import { getProAttemptState } from "../services/proAttemptService";
-import { trackTrip2GateViewed, trackTrip2GateDismissed, trackUpsellCtaClicked, trackPurchaseCompleted } from "../services/analyticsService";
+import {
+  trackTrip2GateViewed,
+  trackTrip2GateDismissed,
+  trackUpsellCtaClicked,
+  trackPurchaseCompleted,
+  trackPaywallViewed,
+  trackPaywallDismissed,
+  trackSubscriptionPlanSelected,
+  trackSubscriptionPurchaseStarted,
+  trackSubscriptionPurchaseCompleted,
+  trackSubscriptionPurchaseFailed,
+  trackSubscriptionRestored,
+  trackIntroOfferDisplayed,
+  trackIntroOfferStarted,
+} from "../services/analyticsService";
 import { trackGateImpression, trackGateConversion } from "../services/gateAnalyticsService";
+import { markFullScreenPaywallShown, getCurrentSessionNumber } from "../services/sessionService";
+import { PaywallPlacement, PAYWALL_PLACEMENT_CONTENT } from "../config/paywallPlacements";
 import { RootStackParamList } from "../navigation/types";
 
 // Constants
@@ -135,13 +159,18 @@ export default function PaywallScreen() {
   const subscriptionLoading = useSubscriptionStore((s) => s.subscriptionLoading);
   const { isLoggedIn, isGuest } = useUserStatus();
   
-  // Get triggerKey and variant from route params
+  // Get triggerKey and variant from route params. New call sites should pass
+  // a PaywallPlacement value; older ones pass their own ad-hoc string, which
+  // still resolves via the legacy PAYWALL_CONTENT map below.
   const triggerKey = route.params?.triggerKey || "default";
   const variant = route.params?.variant || "standard";
   const isNudgeVariant = variant === "nudge_trial";
-  
+
   // For standard variant, use trigger-specific content; for nudge, use nudge content
-  const standardContent = PAYWALL_CONTENT[triggerKey] || PAYWALL_CONTENT.default;
+  const standardContent =
+    PAYWALL_PLACEMENT_CONTENT[triggerKey as PaywallPlacement] ||
+    PAYWALL_CONTENT[triggerKey] ||
+    PAYWALL_CONTENT.default;
 
   const [monthlyPackage, setMonthlyPackage] = useState<PurchasesPackage | null>(null);
   const [annualPackage, setAnnualPackage] = useState<PurchasesPackage | null>(null);
@@ -150,22 +179,37 @@ export default function PaywallScreen() {
   const [purchasing, setPurchasing] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [hasTrialEligibility, setHasTrialEligibility] = useState(false);
+  const [annualIntroOffer, setAnnualIntroOffer] = useState<IntroOfferInfo | null>(null);
+  const [monthlyIntroOffer, setMonthlyIntroOffer] = useState<IntroOfferInfo | null>(null);
   const [proAttemptCount, setProAttemptCount] = useState(0);
 
-  // Determine display content based on variant
+  const activeIntroOffer = selectedPlan === "annual" ? annualIntroOffer : monthlyIntroOffer;
+  const hasTrialEligibility = !!activeIntroOffer?.eligible;
+
+  // Determine display content based on variant. Trial wording is only ever
+  // built from real StoreKit data (activeIntroOffer) - never hard-coded,
+  // since whether a trial exists (and its length) is entirely a function of
+  // App Store Connect configuration and this user's eligibility.
   const displayTitle = isNudgeVariant ? NUDGE_TRIAL_CONTENT.title : standardContent.title;
-  const displayBody = isNudgeVariant 
-    ? (hasTrialEligibility ? NUDGE_TRIAL_CONTENT.bodyWithTrial : NUDGE_TRIAL_CONTENT.bodyWithoutTrial)
+  const displayBody = isNudgeVariant
+    ? hasTrialEligibility && activeIntroOffer
+      ? `Unlock the full camping toolkit with a ${activeIntroOffer.durationLabel} ${activeIntroOffer.isFreeTrial ? "free trial" : "intro offer"}!`
+      : NUDGE_TRIAL_CONTENT.bodyWithoutTrial
     : standardContent.body;
   const primaryCtaText = isNudgeVariant
-    ? (hasTrialEligibility ? NUDGE_TRIAL_CONTENT.ctaWithTrial : NUDGE_TRIAL_CONTENT.ctaWithoutTrial)
+    ? hasTrialEligibility && activeIntroOffer
+      ? `Start ${activeIntroOffer.durationLabel} ${activeIntroOffer.isFreeTrial ? "Free Trial" : "Intro Offer"}`
+      : NUDGE_TRIAL_CONTENT.ctaWithoutTrial
     : null; // null means use default plan-based text
 
   useEffect(() => {
     loadOfferings();
     loadProAttemptCount();
-    
+
+    // This screen counts as "a full-screen paywall shown" for the rest of
+    // the session, regardless of which placement triggered it.
+    markFullScreenPaywallShown();
+
     // Log paywall shown analytics
     logPaywallShown();
   }, []);
@@ -180,14 +224,8 @@ export default function PaywallScreen() {
   };
 
   const logPaywallShown = () => {
-    // Analytics: paywall_shown
-    console.log("[Paywall Analytics] paywall_shown", {
-      triggerKey,
-      userState: isGuest ? "GUEST" : (isLoggedIn ? "FREE" : "GUEST"),
-      variant,
-      proAttemptCount,
-    });
-    
+    trackPaywallViewed({ placement: triggerKey, session_number: getCurrentSessionNumber() ?? undefined });
+
     // Track gate impression for admin analytics
     if (triggerKey && triggerKey !== "default") {
       trackGateImpression(triggerKey);
@@ -250,17 +288,25 @@ export default function PaywallScreen() {
 
       setMonthlyPackage(monthly || null);
       setAnnualPackage(annual || null);
-      
-      // Check for trial eligibility on the selected package
-      // RevenueCat: check if product has intro pricing (trial) configured
-      const selectedPkg = annual || monthly;
-      if (selectedPkg) {
-        const introPrice = selectedPkg.product.introPrice;
-        const hasTrial = introPrice && introPrice.price === 0;
-        setHasTrialEligibility(!!hasTrial);
-        console.log("[Paywall] Trial eligibility:", hasTrial, introPrice);
+
+      // Real, per-user intro-offer eligibility - not just "does the product
+      // have one configured". getIntroOfferInfo returns null when there's
+      // no intro offer at all, so UI never invents trial copy.
+      if (annual) {
+        const info = await getIntroOfferInfo(annual);
+        setAnnualIntroOffer(info);
+        if (info?.eligible) {
+          trackIntroOfferDisplayed({ placement: triggerKey, product_id: annual.product.identifier, plan_type: "annual", intro_offer_eligible: true });
+        }
       }
-      
+      if (monthly) {
+        const info = await getIntroOfferInfo(monthly);
+        setMonthlyIntroOffer(info);
+        if (info?.eligible) {
+          trackIntroOfferDisplayed({ placement: triggerKey, product_id: monthly.product.identifier, plan_type: "monthly", intro_offer_eligible: true });
+        }
+      }
+
       console.log("[Paywall] Loaded packages:", {
         monthly: monthly ? {
           identifier: monthly.identifier,
@@ -286,20 +332,37 @@ export default function PaywallScreen() {
   };
 
   const handlePurchase = async (pkg: PurchasesPackage) => {
+    const planType: "annual" | "monthly" = pkg.identifier.includes("annual") || pkg.identifier.includes("yearly") ? "annual" : "monthly";
+    const usingIntroOffer = planType === "annual" ? annualIntroOffer?.eligible : monthlyIntroOffer?.eligible;
+
     try {
       setPurchasing(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      trackSubscriptionPurchaseStarted({
+        placement: triggerKey,
+        product_id: pkg.product.identifier,
+        plan_type: planType,
+        intro_offer_eligible: !!usingIntroOffer,
+      });
 
       const success = await subscribeToPlan(pkg.identifier);
 
       if (success) {
         // Sync subscription status to Firestore
         await syncSubscriptionToFirestore();
-        
-        // Track purchase completion
-        const planType = pkg.identifier.includes("annual") || pkg.identifier.includes("yearly") ? "annual" : "monthly";
+
+        trackSubscriptionPurchaseCompleted({
+          placement: triggerKey,
+          product_id: pkg.product.identifier,
+          plan_type: planType,
+          intro_offer_eligible: !!usingIntroOffer,
+        });
+        if (usingIntroOffer) {
+          trackIntroOfferStarted({ placement: triggerKey, product_id: pkg.product.identifier, plan_type: planType });
+        }
+        // Legacy purchase-completed event, kept for continuity
         trackPurchaseCompleted(planType);
-        
+
         // Track gate conversion for admin analytics
         if (triggerKey && triggerKey !== "default") {
           trackGateConversion(triggerKey);
@@ -315,6 +378,12 @@ export default function PaywallScreen() {
     } catch (error: any) {
       console.error("[Paywall] Purchase error:", error);
       if (!error.userCancelled) {
+        trackSubscriptionPurchaseFailed({
+          placement: triggerKey,
+          product_id: pkg.product.identifier,
+          plan_type: planType,
+          purchase_error: error?.code || error?.message || "unknown_error",
+        });
         Alert.alert("Purchase Failed", "Please try again or contact support.");
       }
     } finally {
@@ -332,6 +401,7 @@ export default function PaywallScreen() {
       if (restored) {
         // Sync subscription status to Firestore
         await syncSubscriptionToFirestore();
+        trackSubscriptionRestored({ placement: triggerKey });
 
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         Alert.alert(
@@ -351,18 +421,13 @@ export default function PaywallScreen() {
   };
 
   const handleDismiss = () => {
-    // Analytics: paywall_dismissed
-    console.log("[Paywall Analytics] paywall_dismissed", {
-      triggerKey,
-      variant,
-      proAttemptCount,
-    });
-    
+    trackPaywallDismissed({ placement: triggerKey });
+
     // Track Trip #2 gate dismissal specifically
     if (triggerKey === "second_trip") {
       trackTrip2GateDismissed();
     }
-    
+
     navigation.goBack();
   };
 
@@ -512,13 +577,19 @@ export default function PaywallScreen() {
             {/* Annual Plan Card */}
             {annualPackage && (
               <Pressable
-                onPress={() => setSelectedPlan("annual")}
+                onPress={() => {
+                  setSelectedPlan("annual");
+                  trackSubscriptionPlanSelected({ placement: triggerKey, product_id: annualPackage.product.identifier, plan_type: "annual", intro_offer_eligible: !!annualIntroOffer?.eligible });
+                }}
                 disabled={purchasing}
                 className="mb-3 p-5 rounded-xl border-2 active:opacity-90 relative"
                 style={{
                   backgroundColor: selectedPlan === "annual" ? DEEP_FOREST + "15" : CARD_BACKGROUND_LIGHT,
                   borderColor: selectedPlan === "annual" ? DEEP_FOREST : BORDER_SOFT,
                 }}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: selectedPlan === "annual", disabled: purchasing }}
+                accessibilityLabel={`Annual plan, ${annualPackage.product.priceString} per year${annualIntroOffer?.eligible ? `, ${annualIntroOffer.durationLabel} ${annualIntroOffer.isFreeTrial ? "free trial" : "introductory price"} included` : ""}`}
               >
                 {/* Best Value Badge */}
                 <View
@@ -567,6 +638,20 @@ export default function PaywallScreen() {
                     >
                       per year
                     </Text>
+                    {annualIntroOffer?.eligible && (
+                      <Text
+                        style={{
+                          fontFamily: "SourceSans3_600SemiBold",
+                          fontSize: 13,
+                          color: DEEP_FOREST,
+                          marginTop: 6,
+                        }}
+                      >
+                        {annualIntroOffer.isFreeTrial
+                          ? `${annualIntroOffer.durationLabel} free, then ${annualIntroOffer.renewalPriceLabel}/year`
+                          : `${annualIntroOffer.priceLabel} for ${annualIntroOffer.durationLabel}, then ${annualIntroOffer.renewalPriceLabel}/year`}
+                      </Text>
+                    )}
                   </View>
 
                   {/* Radio Button */}
@@ -588,13 +673,19 @@ export default function PaywallScreen() {
             {/* Monthly Plan Card */}
             {monthlyPackage && (
               <Pressable
-                onPress={() => setSelectedPlan("monthly")}
+                onPress={() => {
+                  setSelectedPlan("monthly");
+                  trackSubscriptionPlanSelected({ placement: triggerKey, product_id: monthlyPackage.product.identifier, plan_type: "monthly", intro_offer_eligible: !!monthlyIntroOffer?.eligible });
+                }}
                 disabled={purchasing}
                 className="mb-3 p-5 rounded-xl border-2 active:opacity-90"
                 style={{
                   backgroundColor: selectedPlan === "monthly" ? DEEP_FOREST + "15" : CARD_BACKGROUND_LIGHT,
                   borderColor: selectedPlan === "monthly" ? DEEP_FOREST : BORDER_SOFT,
                 }}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: selectedPlan === "monthly", disabled: purchasing }}
+                accessibilityLabel={`Monthly plan, ${monthlyPackage.product.priceString} per month${monthlyIntroOffer?.eligible ? `, ${monthlyIntroOffer.durationLabel} ${monthlyIntroOffer.isFreeTrial ? "free trial" : "introductory price"} included` : ""}`}
               >
                 <View className="flex-row items-center justify-between">
                   <View className="flex-1">
@@ -627,6 +718,20 @@ export default function PaywallScreen() {
                     >
                       per month
                     </Text>
+                    {monthlyIntroOffer?.eligible && (
+                      <Text
+                        style={{
+                          fontFamily: "SourceSans3_600SemiBold",
+                          fontSize: 13,
+                          color: DEEP_FOREST,
+                          marginTop: 6,
+                        }}
+                      >
+                        {monthlyIntroOffer.isFreeTrial
+                          ? `${monthlyIntroOffer.durationLabel} free, then ${monthlyIntroOffer.renewalPriceLabel}/month`
+                          : `${monthlyIntroOffer.priceLabel} for ${monthlyIntroOffer.durationLabel}, then ${monthlyIntroOffer.renewalPriceLabel}/month`}
+                      </Text>
+                    )}
                   </View>
 
                   {/* Radio Button */}
@@ -648,19 +753,11 @@ export default function PaywallScreen() {
             {/* Primary CTA */}
             <Pressable
               onPress={() => {
-                // Analytics: paywall_primary_cta_tapped
-                console.log("[Paywall Analytics] paywall_primary_cta_tapped", {
-                  triggerKey,
-                  variant,
-                  proAttemptCount,
-                  selectedPlan,
-                });
-                
                 // Track Trip #2 gate CTA click specifically
                 if (triggerKey === "second_trip") {
                   trackUpsellCtaClicked("trip2_gate");
                 }
-                
+
                 const pkg = selectedPlan === "annual" ? annualPackage : monthlyPackage;
                 if (pkg) handlePurchase(pkg);
               }}
@@ -670,6 +767,9 @@ export default function PaywallScreen() {
                 backgroundColor: DEEP_FOREST,
                 opacity: purchasing ? 0.6 : 1,
               }}
+              accessibilityRole="button"
+              accessibilityLabel={primaryCtaText || (selectedPlan === "annual" ? "Start Annual plan" : "Start Monthly plan")}
+              accessibilityState={{ disabled: purchasing || (!annualPackage && !monthlyPackage), busy: purchasing }}
             >
               {purchasing ? (
                 <ActivityIndicator size="small" color={PARCHMENT} />
@@ -692,14 +792,9 @@ export default function PaywallScreen() {
         {/* Restore Purchases */}
         <View className="px-6 pb-2">
           <Pressable
-            onPress={() => {
-              // Analytics: restore_purchases_tapped
-              console.log("[Paywall Analytics] restore_purchases_tapped", {
-                triggerKey,
-                variant,
-              });
-              handleRestore();
-            }}
+            onPress={handleRestore}
+            accessibilityRole="button"
+            accessibilityLabel="Restore purchases"
             disabled={restoring}
             className="py-3 active:opacity-70"
           >
@@ -727,9 +822,11 @@ export default function PaywallScreen() {
               lineHeight: 18,
             }}
           >
-            After your 3-day free trial ends, your subscription will automatically begin at the selected plan rate. Cancel anytime in Settings.
+            {activeIntroOffer?.eligible
+              ? `After your ${activeIntroOffer.durationLabel} ${activeIntroOffer.isFreeTrial ? "free trial" : "introductory offer"} ends, your subscription renews at ${activeIntroOffer.renewalPriceLabel}${selectedPlan === "annual" ? "/year" : "/month"}. Cancel anytime in Settings.`
+              : "Your subscription renews automatically at the selected plan rate. Cancel anytime in Settings."}
           </Text>
-          
+
           {/* Guest-only footer message */}
           {!isLoggedIn && (
             <Text
@@ -744,6 +841,42 @@ export default function PaywallScreen() {
               Create a free account to save your trips and favorites. Upgrade anytime for Pro tools.
             </Text>
           )}
+
+          {/* Subscription terms and privacy links */}
+          <View className="flex-row justify-center mt-4" style={{ gap: 16 }}>
+            <Pressable
+              onPress={() => Linking.openURL("https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")}
+              accessibilityRole="link"
+              accessibilityLabel="Terms of use"
+            >
+              <Text
+                style={{
+                  fontFamily: "SourceSans3_600SemiBold",
+                  fontSize: 12,
+                  color: TEXT_SECONDARY,
+                  textDecorationLine: "underline",
+                }}
+              >
+                Terms of Use
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => Linking.openURL("https://tentandlantern.com/privacy/")}
+              accessibilityRole="link"
+              accessibilityLabel="Privacy policy"
+            >
+              <Text
+                style={{
+                  fontFamily: "SourceSans3_600SemiBold",
+                  fontSize: 12,
+                  color: TEXT_SECONDARY,
+                  textDecorationLine: "underline",
+                }}
+              >
+                Privacy Policy
+              </Text>
+            </Pressable>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>

@@ -28,6 +28,7 @@ import UpsellModal from "../components/UpsellModal";
 import { useUpsellStore, UPSELL_COPY } from "../state/upsellStore";
 import { useUserStore } from "../state/userStore";
 import { trackUpsellModalViewed, trackUpsellCtaClicked } from "../services/analyticsService";
+import { PaywallPlacement } from "../config/paywallPlacements";
 import {
   DEEP_FOREST,
   EARTH_GREEN,
@@ -111,7 +112,7 @@ export default function AddPeopleToTripScreen() {
     // Gate: PRO required to add people to trips
     if (!requirePro({
       openAccountModal: () => setShowAccountModal(true),
-      openPaywallModal: (variant) => navigation.navigate("Paywall", { triggerKey: "trip_add_people", variant }),
+      openPaywallModal: (variant) => navigation.navigate("Paywall", { triggerKey: PaywallPlacement.ShareTrip, variant }),
     })) {
       return;
     }
@@ -307,7 +308,7 @@ export default function AddPeopleToTripScreen() {
           setShowInviteModal(false);
           trackUpsellCtaClicked("invite");
           navigation.goBack();
-          navigation.navigate("Paywall", { triggerKey: "invite_upsell" });
+          navigation.navigate("Paywall", { triggerKey: PaywallPlacement.ShareTrip });
         }}
         onSecondaryPress={() => {
           setShowInviteModal(false);

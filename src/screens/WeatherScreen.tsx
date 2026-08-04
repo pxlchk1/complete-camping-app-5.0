@@ -22,6 +22,10 @@ import { usePlanTabStore } from "../state/planTabStore";
 import { requireAccount, requirePro } from "../utils/gating";
 import AccountRequiredModal from "../components/AccountRequiredModal";
 import { RootStackParamList } from "../navigation/types";
+import { useUserStatus } from "../utils/authHelper";
+import SubscriptionPromoCard from "../components/SubscriptionPromoCard";
+import { PaywallPlacement, PAYWALL_PLACEMENT_CONTENT } from "../config/paywallPlacements";
+import { isDismissedThisSession } from "../services/sessionService";
 import { useTrips, useTripsStore } from "../state/tripsStore";
 import { fetchWeather, WeatherData } from "../api/weather-service";
 import { WeatherDestination } from "../types/camping";
@@ -108,7 +112,11 @@ export default function WeatherScreen({ onTabChange }: WeatherScreenProps = {}) 
   const [locationPermission, setLocationPermission] = useState<"unknown" | "granted" | "denied">("unknown");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showAccountModal, setShowAccountModal] = useState(false);
+  const [promoCardDismissed, setPromoCardDismissed] = useState(() =>
+    isDismissedThisSession(PaywallPlacement.ExtendedWeather)
+  );
 
+  const { isPro } = useUserStatus();
   const { updateTrip } = useTripsStore();
 
   // Prevent out-of-order weather responses from overwriting newer results.
@@ -1002,6 +1010,16 @@ export default function WeatherScreen({ onTabChange }: WeatherScreenProps = {}) 
                   </Text>
                 </Pressable>
               </View>
+            )}
+
+            {/* Non-blocking subscription promo - weather itself stays fully free */}
+            {!isPro && !promoCardDismissed && (
+              <SubscriptionPromoCard
+                placement={PaywallPlacement.ExtendedWeather}
+                title={PAYWALL_PLACEMENT_CONTENT[PaywallPlacement.ExtendedWeather].title}
+                body={PAYWALL_PLACEMENT_CONTENT[PaywallPlacement.ExtendedWeather].body}
+                onDismiss={() => setPromoCardDismissed(true)}
+              />
             )}
 
             {/* 5-day forecast */}

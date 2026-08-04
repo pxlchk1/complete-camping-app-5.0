@@ -18,6 +18,32 @@ import { Trip } from "../types/camping";
 // Storage key for free premium trip ID
 const getFreePremiumTripKey = (userId: string) => `freePremiumTripId:${userId}`;
 
+// Storage key for the one-time first-trip-completion subscription prompt
+const getFirstTripPromptShownKey = (userId: string) => `firstTripPromptShown:${userId}`;
+
+/**
+ * Whether the first-trip-completion subscription prompt has already been
+ * shown to this user. Checked once, right after a trip is created - never
+ * on every subsequent open of that trip.
+ */
+export async function hasShownFirstTripPrompt(userId: string): Promise<boolean> {
+  try {
+    const value = await AsyncStorage.getItem(getFirstTripPromptShownKey(userId));
+    return value === "true";
+  } catch (error) {
+    console.error("[Entitlements] Failed to check first-trip prompt flag:", error);
+    return true; // fail closed - never show it again if we can't confirm we haven't
+  }
+}
+
+export async function markFirstTripPromptShown(userId: string): Promise<void> {
+  try {
+    await AsyncStorage.setItem(getFirstTripPromptShownKey(userId), "true");
+  } catch (error) {
+    console.error("[Entitlements] Failed to record first-trip prompt shown:", error);
+  }
+}
+
 /**
  * Check if user is premium (has Pro subscription, or is admin/moderator)
  */
