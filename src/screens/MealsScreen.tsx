@@ -33,6 +33,7 @@ import * as Haptics from "expo-haptics";
 import { collection, getDocs, query, orderBy } from "firebase/firestore";
 import { db } from "../config/firebase";
 import * as LocalMealService from "../services/localMealService";
+import * as MealService from "../services/mealsService";
 import { requirePro } from "../utils/gating";
 import { canAccessPackingAndMeals, isPremiumUser } from "../utils/entitlements";
 import AccountRequiredModal from "../components/AccountRequiredModal";
@@ -264,7 +265,27 @@ export default function MealsScreen({ onTabChange }: MealsScreenProps) {
         notes: selectedRecipe.instructions || undefined,
       };
 
-      await LocalMealService.addMeal(selectedTripForAdd, mealData);
+      // Signed-in users write to Firestore (same collection MealPlanningScreen
+      // reads from) so the meal actually shows up there, falling back to
+      // local-only storage for guests or if the write is permission-denied.
+      // Previously this always wrote local-only, so meals added here were
+      // invisible in Meal Planning for any signed-in user.
+      if (!currentUser) {
+        await LocalMealService.addMeal(selectedTripForAdd, mealData);
+      } else {
+        try {
+          await MealService.addMeal(currentUser.id, selectedTripForAdd, mealData);
+        } catch (fbError: any) {
+          if (
+            fbError?.code === "permission-denied" ||
+            fbError?.message?.toLowerCase?.().includes("permission")
+          ) {
+            await LocalMealService.addMeal(selectedTripForAdd, mealData);
+          } else {
+            throw fbError;
+          }
+        }
+      }
 
       const trip = trips.find((t) => t.id === selectedTripForAdd);
       const tripName = trip?.name || "trip";
@@ -284,6 +305,9 @@ export default function MealsScreen({ onTabChange }: MealsScreenProps) {
       }
     } catch (error) {
       console.error("Failed to add meal to trip:", error);
+      setToastMessage("Failed to add meal. Please try again.");
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
     }
   };
 

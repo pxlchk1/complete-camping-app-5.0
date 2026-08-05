@@ -102,6 +102,15 @@ interface PackingState {
 
   // Item Operations
   addItem: (listId: string, sectionId: string, name: string, essential?: boolean) => string | null;
+  // Add a Gear Closet item directly to a list's matching (or newly created)
+  // section, deduplicating by name — used by "Add to Packing List" from
+  // Gear Detail so the item lands in the same store PackingListEditorScreen
+  // reads from, instead of a separate Firestore/AsyncStorage silo.
+  addGearItemToList: (
+    listId: string,
+    gearItem: { id: string; name: string },
+    sectionTitle: string
+  ) => { added: boolean; alreadyExists: boolean };
   updateItem: (listId: string, sectionId: string, itemId: string, updates: Partial<PackingItem>) => void;
   deleteItem: (listId: string, sectionId: string, itemId: string) => void;
   toggleItemChecked: (listId: string, sectionId: string, itemId: string) => void;
@@ -375,6 +384,51 @@ export const usePackingStore = create<PackingState>()(
         }));
 
         return itemId;
+      },
+
+      addGearItemToList: (listId, gearItem, sectionTitle) => {
+        const list = get().packingLists.find((l) => l.id === listId);
+        if (!list) return { added: false, alreadyExists: false };
+
+        const normalizedName = gearItem.name.toLowerCase().trim().replace(/\s+/g, " ");
+        const alreadyExists = list.sections.some((section) =>
+          section.items.some(
+            (item) =>
+              item.gearItemId === gearItem.id ||
+              item.name.toLowerCase().trim().replace(/\s+/g, " ") === normalizedName
+          )
+        );
+        if (alreadyExists) return { added: false, alreadyExists: true };
+
+        set((state) => ({
+          packingLists: state.packingLists.map((l) => {
+            if (l.id !== listId) return l;
+
+            const existingSection = l.sections.find(
+              (s) => s.title.toLowerCase() === sectionTitle.toLowerCase()
+            );
+            const newItem: PackingItem = {
+              id: generateId(),
+              name: gearItem.name,
+              checked: false,
+              source: "gearCloset",
+              gearItemId: gearItem.id,
+            };
+
+            const sections = existingSection
+              ? l.sections.map((s) =>
+                  s.id === existingSection.id ? { ...s, items: [...s.items, newItem] } : s
+                )
+              : [
+                  ...l.sections,
+                  { id: generateId(), title: sectionTitle, items: [newItem], collapsed: false },
+                ];
+
+            return { ...l, sections, updatedAt: new Date().toISOString() };
+          }),
+        }));
+
+        return { added: true, alreadyExists: false };
       },
 
       updateItem: (listId, sectionId, itemId, updates) => {

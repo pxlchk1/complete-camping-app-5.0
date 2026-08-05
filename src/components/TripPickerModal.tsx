@@ -18,10 +18,9 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 
 import { Trip, useTripsStore } from "../state/tripsStore";
-import { GearItem, GearCategory } from "../types/gear";
-import { PackingCategory, PackingItemV2 } from "../types/packingV2";
-import { savePackingItem, getTripPackingItems } from "../services/packingServiceV2";
-import { useAuthStore } from "../state/authStore";
+import { GearItem } from "../types/gear";
+import { usePackingStore } from "../state/packingStore";
+import { getPackingSectionForGear } from "../utils/gearToPackingCategory";
 import {
   DEEP_FOREST,
   EARTH_GREEN,
@@ -31,29 +30,6 @@ import {
   TEXT_SECONDARY,
   CARD_BACKGROUND_LIGHT,
 } from "../constants/colors";
-
-// Map Gear Closet categories to Packing List categories
-const GEAR_TO_PACKING_CATEGORY: Record<GearCategory, PackingCategory> = {
-  camp_comfort: "camp_comfort",
-  campFurniture: "camp_comfort",
-  clothing: "clothing",
-  documents_essentials: "documents_essentials",
-  electronics: "electronics",
-  entertainment: "optional_extras",
-  food: "food",
-  hygiene: "hygiene",
-  kitchen: "kitchen",
-  lighting: "lighting",
-  meal_prep: "kitchen",
-  optional_extras: "optional_extras",
-  pet_supplies: "optional_extras",
-  safety: "navigation_safety",
-  seating: "camp_comfort",
-  shelter: "shelter",
-  sleep: "sleep",
-  tools: "tools_repairs",
-  water: "water",
-};
 
 interface TripPickerModalProps {
   visible: boolean;
@@ -68,8 +44,9 @@ export default function TripPickerModal({
   gearItem,
   onSuccess,
 }: TripPickerModalProps) {
-  const user = useAuthStore((state) => state.user);
   const trips = useTripsStore((state) => state.trips);
+  const packingLists = usePackingStore((state) => state.packingLists);
+  const addGearItemToList = usePackingStore((state) => state.addGearItemToList);
   const [adding, setAdding] = useState(false);
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
 
@@ -82,64 +59,42 @@ export default function TripPickerModal({
     }).sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
   }, [trips]);
 
-  const handleSelectTrip = async (tripId: string) => {
-    if (!user?.id || !gearItem) return;
+  const handleSelectTrip = (tripId: string) => {
+    if (!gearItem) return;
 
     setSelectedTripId(tripId);
     setAdding(true);
     Haptics.selectionAsync();
 
-    try {
-      // Check if item already exists in the trip's packing list
-      const existingItems = await getTripPackingItems(user.id, tripId);
-      
-      // Check by gearClosetId
-      const existsById = existingItems.some(
-        (item) => item.gearClosetId === gearItem.id
+    // Gear goes into the same local packingStore that PackingListEditorScreen
+    // reads from — previously this wrote to a Firestore collection with no
+    // matching security rule, silently fell back to an AsyncStorage bucket
+    // nothing else ever read, and the item never actually showed up anywhere.
+    const targetList = packingLists.find((list) => list.tripId === tripId && !list.isTemplate);
+
+    if (!targetList) {
+      Alert.alert(
+        "No packing list yet",
+        "Create a packing list for this trip first, then you can add gear to it from here."
       );
-      
-      // Check by normalized name
-      const normalizedName = gearItem.name.toLowerCase().trim().replace(/[^\w\s]/g, "");
-      const existsByName = existingItems.some(
-        (item) => item.name.toLowerCase().trim().replace(/[^\w\s]/g, "") === normalizedName
-      );
+      setAdding(false);
+      setSelectedTripId(null);
+      return;
+    }
 
-      if (existsById || existsByName) {
-        Alert.alert(
-          "Already in packing list",
-          `${gearItem.name} is already on this trip's list`
-        );
-        setAdding(false);
-        setSelectedTripId(null);
-        return;
-      }
+    const sectionTitle = getPackingSectionForGear(gearItem.category);
+    const result = addGearItemToList(targetList.id, { id: gearItem.id, name: gearItem.name }, sectionTitle);
 
-      // Add the gear to the trip's packing list
-      const packingCategory = GEAR_TO_PACKING_CATEGORY[gearItem.category] || "optional_extras";
-
-      const itemData: Partial<PackingItemV2> = {
-        name: gearItem.name,
-        category: packingCategory,
-        quantity: 1,
-        notes: [gearItem.brand, gearItem.model].filter(Boolean).join(" ") || undefined,
-        isEssential: false,
-        isPacked: false,
-        isFromGearCloset: true,
-        gearClosetId: gearItem.id,
-      };
-
-      await savePackingItem(user.id, tripId, itemData);
-
+    if (result.alreadyExists) {
+      Alert.alert("Already in packing list", `${gearItem.name} is already on this trip's list`);
+    } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onSuccess?.();
       onClose();
-    } catch (error) {
-      console.error("[TripPickerModal] Error adding to packing list:", error);
-      Alert.alert("Error adding item", "Please try again");
-    } finally {
-      setAdding(false);
-      setSelectedTripId(null);
     }
+
+    setAdding(false);
+    setSelectedTripId(null);
   };
 
   const formatDate = (dateString: string): string => {
