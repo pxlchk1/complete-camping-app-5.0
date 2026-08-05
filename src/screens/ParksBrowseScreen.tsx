@@ -625,7 +625,7 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
         : [newItem];
 
       // Update trip with new tripDestination and legacy customCampgrounds
-      updateTrip((trip as any).id, { 
+      await updateTrip((trip as any).id, {
         tripDestination,
         customCampgrounds: updatedCampgrounds,
       } as any);
@@ -1134,18 +1134,23 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
               );
             }
           }}
-          onAddToTrip={(park, tripId) => {
+          onAddToTrip={async (park, tripId) => {
             if (tripId) {
               // Add park as structured tripDestination to existing trip
               console.log("[ParksBrowse] Setting tripDestination for trip:", tripId, "Park:", park.name);
               const tripDestination = createTripDestinationFromPark(park);
-              updateTrip(tripId, { 
-                tripDestination,
-                parkId: park.id, // Keep for legacy compatibility
-              });
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              setSelectedPark(null);
-              onParkDetailClosed?.();
+              try {
+                await updateTrip(tripId, {
+                  tripDestination,
+                  parkId: park.id, // Keep for legacy compatibility
+                });
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                setSelectedPark(null);
+                onParkDetailClosed?.();
+              } catch (error: any) {
+                console.error("[ParksBrowse] Failed to add park to trip:", error);
+                Alert.alert("Error", error?.message || "Failed to add this park to the trip. Please try again.");
+              }
             } else {
               // Create new trip flow - user will set destination after trip creation
               console.log("[ParksBrowse] Create new trip for park:", park.name);

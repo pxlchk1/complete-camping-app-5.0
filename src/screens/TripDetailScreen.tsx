@@ -93,7 +93,11 @@ export default function TripDetailScreen() {
   // Select trip from trips array directly to ensure reactivity on updates
   const trips = useTripsStore((s) => s.trips);
   const trip = useMemo(() => trips.find((t) => t.id === tripId), [trips, tripId]);
-  
+  // Only the trip owner can edit — shared-trip members previously saw the
+  // same Edit Trip / Add People controls and got a false "success" because
+  // the write was silently rejected server-side.
+  const canEditTrip = trip?.userId === auth.currentUser?.uid;
+
   const setActivePlanTab = usePlanTabStore((s) => s.setActiveTab);
   const setDestinationPickerTripId = usePlanTabStore((s) => s.setDestinationPickerTripId);
   const setWeatherPickerTripId = usePlanTabStore((s) => s.setWeatherPickerTripId);
@@ -634,31 +638,33 @@ export default function TripDetailScreen() {
             </Text>
           </Pressable>
 
-          <Pressable
-            onPress={async () => {
-              try {
-                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              } catch {
-                // ignore
-              }
+          {canEditTrip && (
+            <Pressable
+              onPress={async () => {
+                try {
+                  await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                } catch {
+                  // ignore
+                }
 
-              if (isGuest) {
-                navigation.navigate("Auth" as any);
-                return;
-              }
-              setShowEditTripModal(true);
-            }}
-            className="px-3 py-1.5 rounded-lg active:opacity-70 flex-row items-center"
-            style={{ backgroundColor: "rgba(255,255,255,0.15)", gap: 6 }}
-          >
-            <Ionicons name="create-outline" size={16} color={PARCHMENT} />
-            <Text
-              className="text-sm"
-              style={{ fontFamily: "SourceSans3_600SemiBold", color: PARCHMENT }}
+                if (isGuest) {
+                  navigation.navigate("Auth" as any);
+                  return;
+                }
+                setShowEditTripModal(true);
+              }}
+              className="px-3 py-1.5 rounded-lg active:opacity-70 flex-row items-center"
+              style={{ backgroundColor: "rgba(255,255,255,0.15)", gap: 6 }}
             >
-              Edit Trip
-            </Text>
-          </Pressable>
+              <Ionicons name="create-outline" size={16} color={PARCHMENT} />
+              <Text
+                className="text-sm"
+                style={{ fontFamily: "SourceSans3_600SemiBold", color: PARCHMENT }}
+              >
+                Edit Trip
+              </Text>
+            </Pressable>
+          )}
         </View>
 
         <Text

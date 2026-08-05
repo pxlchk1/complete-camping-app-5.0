@@ -4,12 +4,23 @@ import { auth, db } from "../config/firebase";
 
 export type AdminCheckStatus = "checking" | "admin" | "not-admin";
 
+function isAdminData(data: Record<string, any> | undefined): boolean {
+  return (
+    data?.isAdmin === true ||
+    data?.role === "admin" ||
+    data?.role === "administrator" ||
+    data?.membershipTier === "isAdmin"
+  );
+}
+
 /**
- * Checks whether the signed-in user is an admin, using the same
- * users/{uid}.isAdmin / role fields AdminPhotosScreen already checked
- * locally. Used by AdminGate to gate every admin screen — previously none
- * of the 8 admin routes had any check above the Firestore/Cloud Function
- * layer, so anyone who guessed or found a route name could open them.
+ * Checks whether the signed-in user is an admin. Mirrors firestore.rules'
+ * isAdmin(), which checks both profiles/{uid} and users/{uid} for
+ * isAdmin/role/membershipTier — this previously only checked users/{uid}
+ * and skipped membershipTier, which is the documented way to grant admin
+ * (src/scripts/updateMembershipTiers.ts), locking out admins provisioned
+ * that way even though the rules would have allowed them through.
+ * Used by AdminGate to gate every admin screen.
  */
 export function useIsAdmin(): AdminCheckStatus {
   const [status, setStatus] = useState<AdminCheckStatus>("checking");
@@ -23,12 +34,10 @@ export function useIsAdmin(): AdminCheckStatus {
       return;
     }
 
-    getDoc(doc(db, "users", uid))
-      .then((userDoc) => {
+    Promise.all([getDoc(doc(db, "profiles", uid)), getDoc(doc(db, "users", uid))])
+      .then(([profileDoc, userDoc]) => {
         if (cancelled) return;
-        const data = userDoc.data();
-        const isAdmin =
-          data?.isAdmin === true || data?.role === "admin" || data?.role === "administrator";
+        const isAdmin = isAdminData(profileDoc.data()) || isAdminData(userDoc.data());
         setStatus(isAdmin ? "admin" : "not-admin");
       })
       .catch((error) => {

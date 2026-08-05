@@ -134,14 +134,14 @@ export const useTripsStore = create<TripsState>()((set, get) => ({
   updateTrip: async (id, updates) => {
     const userId = auth.currentUser?.uid;
     if (!userId) {
-      console.error("[TripsStore] Cannot update trip: user not authenticated");
-      return;
+      throw new Error("You must be signed in to update a trip.");
     }
 
-    // Check if user can edit this trip
+    // Check if user can edit this trip. This must throw rather than return
+    // silently — callers rely on try/catch to know whether the update
+    // actually happened, and previously got a false "success" here.
     if (!get().canEditTrip(id)) {
-      console.warn("[TripsStore] Cannot edit shared trip:", id);
-      return;
+      throw new Error("Only the trip owner can make changes to this trip.");
     }
 
     try {

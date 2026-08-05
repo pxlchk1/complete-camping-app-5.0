@@ -47,8 +47,8 @@ import {
 } from "../constants/colors";
 import { getContrastTextColor } from "../utils/contrastText";
 
-// FREE user gear limit
-const FREE_GEAR_LIMIT = 5;
+// FREE user gear limit — must match gatingRegistry.ts's "gear_closet_limit" (freeLimit: 15)
+const FREE_GEAR_LIMIT = 15;
 
 type FilterOption = "all" | GearCategory;
 

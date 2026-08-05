@@ -156,7 +156,9 @@ export default function PackingListCreateScreen() {
     
     // Persist the override to the trip if we have a tripId
     if (tripId) {
-      updateTrip(tripId, { packingSeasonOverride: newSeason });
+      updateTrip(tripId, { packingSeasonOverride: newSeason }).catch((err) => {
+        console.error("[PackingListCreate] Failed to persist season override:", err);
+      });
     }
   }, [tripId, updateTrip]);
 
@@ -168,7 +170,9 @@ export default function PackingListCreateScreen() {
     
     // Clear the override from the trip
     if (tripId) {
-      updateTrip(tripId, { packingSeasonOverride: undefined });
+      updateTrip(tripId, { packingSeasonOverride: undefined }).catch((err) => {
+        console.error("[PackingListCreate] Failed to clear season override:", err);
+      });
     }
   }, [tripId, updateTrip]);
 

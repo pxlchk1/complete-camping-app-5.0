@@ -53,14 +53,16 @@ service cloud.firestore {
           (exists(/databases/$(database)/documents/profiles/$(request.auth.uid))
             && (
               get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.isModerator == true ||
-              get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == "moderator"
+              get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == "moderator" ||
+              get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.membershipTier == "isModerator"
             )
           ) ||
           // Check users collection
           (exists(/databases/$(database)/documents/users/$(request.auth.uid))
             && (
               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isModerator == true ||
-              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "moderator"
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "moderator" ||
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.membershipTier == "isModerator"
             )
           )
         );
@@ -124,7 +126,10 @@ service cloud.firestore {
       // Allow anyone to read profiles (public profiles)
       allow read: if true;
       allow create: if request.auth != null && request.auth.uid == userId;
-      allow update, delete: if isSignedIn() && request.auth.uid == userId;
+      // Admins need to update other users' profiles for ban/unban, grant
+      // membership, and role changes (Admin Panel actions).
+      allow update: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow delete: if isSignedIn() && request.auth.uid == userId;
     }
 
     // Trips collection
@@ -366,6 +371,28 @@ service cloud.firestore {
       allow update, delete: if false; // Immutable audit log
     }
 
+    // Membership grant records (Admin Panel "Grant Membership") - admin-only
+    match /membershipGrants/{id} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update, delete: if false; // Immutable grant record
+    }
+
+    // Admin/moderator action audit trail - written by both roles, read by admins
+    match /auditLogs/{id} {
+      allow read: if isAdmin();
+      allow create: if canModerateContent();
+      allow update, delete: if false; // Immutable audit log
+    }
+
+    // Content moderation records (hide/unhide) - admins and moderators only
+    match /contentModeration/{id} {
+      allow read: if canModerateContent();
+      allow create: if canModerateContent();
+      allow update: if canModerateContent();
+      allow delete: if false;
+    }
+
     match /storyComments/{id} {
       allow read: if true; // Public read
       allow create: if isSignedIn();
@@ -380,18 +407,20 @@ service cloud.firestore {
       allow update, delete: if isOwner() || canModerateContent();
     }
 
-    // Feedback - READ is public, WRITE requires Pro subscription
+    // Feedback - free for all signed-in users (see src/utils/gating.ts,
+    // which explicitly documents Feedback as free and guards against
+    // regressing this with assertFeedbackNotGated).
     match /feedbackPosts/{id} {
       allow read: if true; // Public read - all users can view feedback
-      allow create: if isSubscribed() || isAdmin(); // Only Pro users can create feedback
-      allow update: if isSubscribed() || isAdmin(); // Only Pro users can update (for voting)
+      allow create: if isSignedIn();
+      allow update: if isSignedIn(); // includes voting
       // Owner, admin, or moderator can delete
       allow delete: if isOwner() || canModerateContent();
-      
-      // Votes subcollection - requires Pro subscription
+
+      // Votes subcollection
       match /votes/{voterId} {
         allow read: if true;
-        allow create, update: if (isSubscribed() || isAdmin()) && request.auth.uid == voterId;
+        allow create, update: if isSignedIn() && request.auth.uid == voterId;
         allow delete: if isSignedIn() && request.auth.uid == voterId;
       }
     }
@@ -399,22 +428,22 @@ service cloud.firestore {
     // Feedback collection (alternate name used by some services)
     match /feedback/{id} {
       allow read: if true; // Public read
-      allow create: if isSubscribed() || isAdmin();
-      allow update: if isSubscribed() || isAdmin();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
       // Owner, admin, or moderator can delete
       allow delete: if isOwner() || canModerateContent();
-      
-      // Votes subcollection - requires Pro subscription
+
+      // Votes subcollection
       match /votes/{voterId} {
         allow read: if true;
-        allow create, update: if (isSubscribed() || isAdmin()) && request.auth.uid == voterId;
+        allow create, update: if isSignedIn() && request.auth.uid == voterId;
         allow delete: if isSignedIn() && request.auth.uid == voterId;
       }
     }
 
     match /feedbackComments/{id} {
       allow read: if true; // Public read - all users can view comments
-      allow create: if isSubscribed() || isAdmin(); // Only subscribed users can comment
+      allow create: if isSignedIn();
       // Owner, admin, or moderator can update/delete
       allow update, delete: if isOwner() || canModerateContent();
     }

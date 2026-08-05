@@ -363,11 +363,14 @@ export default function EditProfileScreen() {
     try {
       setDeleting(true);
 
-      // Delete user profile from Firestore
-      await deleteDoc(doc(db, "profiles", user.uid));
-
-      // Delete the user account
+      // Delete the Auth account FIRST. This is the step most likely to
+      // throw (auth/requires-recent-login) — if it fails, we must not have
+      // already destroyed the Firestore profile, or the user is left with a
+      // live account and permanently lost profile data.
       await deleteUser(user);
+
+      // Auth deletion succeeded — safe to remove the Firestore profile.
+      await deleteDoc(doc(db, "profiles", user.uid));
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setShowDeleteConfirm(false);
@@ -413,10 +416,14 @@ export default function EditProfileScreen() {
     if (!user) return;
 
     setOptOutNewsletter(value);
-    
+
     try {
-      await updateDoc(doc(db, "profiles", user.uid), {
+      // Written to users/{uid} — the doc SettingsScreen, NotificationsScreen,
+      // and the notification/email services actually read. profiles/{uid}
+      // is a different document that nothing else consults for this field.
+      await updateDoc(doc(db, "users", user.uid), {
         emailSubscribed: !value,
+        emailMarketingEnabled: !value,
         updatedAt: serverTimestamp(),
       });
     } catch (error) {
@@ -430,9 +437,10 @@ export default function EditProfileScreen() {
     if (!user) return;
 
     setOptOutNotifications(value);
-    
+
     try {
-      await updateDoc(doc(db, "profiles", user.uid), {
+      // Written to users/{uid} — see note in handleToggleNewsletter above.
+      await updateDoc(doc(db, "users", user.uid), {
         notificationsEnabled: !value,
         updatedAt: serverTimestamp(),
       });
@@ -1133,7 +1141,7 @@ export default function EditProfileScreen() {
                     className="mt-3"
                     style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY, fontSize: 13, lineHeight: 18 }}
                   >
-                    Look for a confirmation email at this address and follow instructions from there.
+                    Your account and data are deleted immediately once you confirm below — no email confirmation is sent.
                   </Text>
                 </View>
 
