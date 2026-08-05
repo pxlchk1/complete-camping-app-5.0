@@ -47,16 +47,12 @@ const linking: LinkingOptions<RootStackParamList> = {
       Paywall: {
         path: 'paywall',
       },
-      // New campground invite format: /join?token=<token>
+      // Campground invite format: /join?token=<token>
       AcceptInvite: {
         path: 'join',
         parse: {
           token: (token: string) => token,
         },
-      },
-      // Old invitation format: /invite/<token>
-      AcceptInvitation: {
-        path: 'invite/:invitationToken',
       },
     },
   },

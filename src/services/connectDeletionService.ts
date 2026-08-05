@@ -8,12 +8,14 @@
 import {
   doc,
   getDoc,
+  updateDoc,
   deleteDoc,
   collection,
   query,
   where,
   getDocs,
   writeBatch,
+  increment,
 } from "firebase/firestore";
 import { ref, deleteObject } from "firebase/storage";
 import { db, storage, auth } from "../config/firebase";
@@ -405,6 +407,15 @@ export async function deletePhotoPost(photoId: string): Promise<DeleteResult> {
   }
 }
 
+// Comment collection -> the parent post it belongs to, and the field on
+// the comment doc that names the parent. Used to keep the parent's
+// commentCount accurate when a comment is deleted (mirrors the increment()
+// each addXComment() does on create).
+const COMMENT_PARENT_CONFIG: Record<string, { parentCollection: string; parentField: string }> = {
+  feedbackComments: { parentCollection: "feedbackPosts", parentField: "feedbackId" },
+  tipComments: { parentCollection: "tips", parentField: "tipId" },
+};
+
 /**
  * Delete a comment from any collection
  */
@@ -412,7 +423,33 @@ export async function deleteComment(
   commentId: string,
   commentCollection: string = "tipComments"
 ): Promise<DeleteResult> {
-  return deleteConnectContent(commentCollection, commentId, "userId");
+  const parentConfig = COMMENT_PARENT_CONFIG[commentCollection];
+  let parentId: string | null = null;
+
+  if (parentConfig) {
+    try {
+      const commentSnap = await getDoc(doc(db, commentCollection, commentId));
+      parentId = commentSnap.exists() ? (commentSnap.data()[parentConfig.parentField] ?? null) : null;
+    } catch (err) {
+      console.error(`[deleteComment] Failed to read parent reference for ${commentCollection}/${commentId}:`, err);
+    }
+  }
+
+  const result = await deleteConnectContent(commentCollection, commentId, "userId");
+
+  if (result.success && parentConfig && parentId) {
+    try {
+      await updateDoc(doc(db, parentConfig.parentCollection, parentId), {
+        commentCount: increment(-1),
+      });
+    } catch (err) {
+      // Non-fatal — the comment is already gone, the count just drifts by
+      // one until the parent doc is next written.
+      console.error(`[deleteComment] Failed to decrement commentCount on ${parentConfig.parentCollection}/${parentId}:`, err);
+    }
+  }
+
+  return result;
 }
 
 /**
@@ -470,6 +507,14 @@ export async function deleteAnswer(questionId: string, answerId: string): Promis
     }
 
     await deleteDoc(answerRef);
+
+    try {
+      await updateDoc(doc(db, "questions", questionId), {
+        answerCount: increment(-1),
+      });
+    } catch (err) {
+      console.error(`${logPrefix} Failed to decrement answerCount:`, err);
+    }
 
     console.log(`${logPrefix} Successfully deleted`);
     return {

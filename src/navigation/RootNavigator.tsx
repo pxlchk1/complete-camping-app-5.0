@@ -102,7 +102,6 @@ const GatedAdminCommunicationsScreen = withAdminGate(AdminCommunicationsScreen);
 
 // Invite screens
 import AcceptInviteScreen from "../screens/AcceptInviteScreen";
-import AcceptInvitationScreen from "../screens/AcceptInvitationScreen";
 
 // Merit Badges screens
 import MeritBadgesScreen from "../screens/MeritBadgesScreen";
@@ -199,18 +198,11 @@ export default function RootNavigator() {
           so gate the route the same way as MeritBadgeAssetCheck below. */}
       {__DEV__ && <Stack.Screen name="SeedData" component={SeedDataScreen} />}
 
-      {/* Accept Invite (from deep link - new format: /join?token=...) */}
-      <Stack.Screen 
-        name="AcceptInvite" 
-        component={AcceptInviteScreen} 
-        options={{ headerShown: false, presentation: 'modal' }} 
-      />
-
-      {/* Accept Invitation (from deep link - old format: /invite/...) */}
-      <Stack.Screen 
-        name="AcceptInvitation" 
-        component={AcceptInvitationScreen} 
-        options={{ headerShown: false, presentation: 'modal' }} 
+      {/* Accept Invite (from deep link: /join?token=...) */}
+      <Stack.Screen
+        name="AcceptInvite"
+        component={AcceptInviteScreen}
+        options={{ headerShown: false, presentation: 'modal' }}
       />
 
       {/* Learning */}

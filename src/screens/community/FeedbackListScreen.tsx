@@ -62,7 +62,6 @@ export default function FeedbackListScreen() {
       const visiblePosts = allPosts.filter(post => 
         shouldShowInFeed(post, currentUser?.uid)
       );
-      // TODO: Replace with actual comment count fetch if available
       const postsWithVotes = await Promise.all(
         visiblePosts.map(async (post) => {
           let voteScore = post.karmaScore || 0;
@@ -71,7 +70,9 @@ export default function FeedbackListScreen() {
             const summary = await feedbackVoteService.getUserVote(post.id);
             if (summary) userVote = summary.value === 1 ? "up" : summary.value === -1 ? "down" : null;
           } catch {}
-          // Placeholder: commentCount is not implemented, set to 0
+          // commentCount is a real denormalized field, kept in sync by
+          // addFeedbackComment (increment) and deleteComment (decrement).
+          // ?? 0 only covers posts created before the field existed.
           return { ...post, voteScore, userVote, commentCount: post.commentCount ?? 0 };
         })
       );

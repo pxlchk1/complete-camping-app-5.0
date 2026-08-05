@@ -279,24 +279,6 @@ export default function AccountScreen() {
               </Text>
             )}
 
-            {/* Stats Row */}
-            <View className="flex-row items-center mb-4">
-              <Pressable className="mr-6 active:opacity-70">
-                <Text style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 15, color: DEEP_FOREST }}>
-                  <Text style={{ fontFamily: "SourceSans3_700Bold" }}>24</Text> Posts
-                </Text>
-              </Pressable>
-              <Pressable className="mr-6 active:opacity-70">
-                <Text style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 15, color: DEEP_FOREST }}>
-                  <Text style={{ fontFamily: "SourceSans3_700Bold" }}>156</Text> Friends
-                </Text>
-              </Pressable>
-              <Pressable className="active:opacity-70">
-                <Text style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 15, color: DEEP_FOREST }}>
-                  <Text style={{ fontFamily: "SourceSans3_700Bold" }}>89</Text> Followers
-                </Text>
-              </Pressable>
-            </View>
           </View>
         </View>
 
