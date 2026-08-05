@@ -617,7 +617,10 @@ export const usePackingStore = create<PackingState>()(
         const templateId = generateId();
         const now = new Date().toISOString();
 
-        // Clone sections with fresh IDs and unchecked items
+        // Clone sections with fresh IDs and unchecked items. Preserve
+        // source/gearItemId/group so "FROM GEAR CLOSET" tagging and
+        // shelter/tent-style dedup still work on lists copied from this
+        // template — previously dropped silently.
         const clonedSections = list.sections.map((section) => ({
           id: generateId(),
           title: section.title,
@@ -627,6 +630,9 @@ export const usePackingStore = create<PackingState>()(
             checked: false,
             note: item.note,
             essential: item.essential,
+            source: item.source,
+            gearItemId: item.gearItemId,
+            group: item.group,
           })),
           collapsed: false,
         }));
@@ -656,7 +662,8 @@ export const usePackingStore = create<PackingState>()(
         const listId = generateId();
         const now = new Date().toISOString();
 
-        // Clone sections with fresh IDs
+        // Clone sections with fresh IDs (see saveAsTemplate above for why
+        // source/gearItemId/group are preserved here too)
         const clonedSections = template.sections.map((section) => ({
           id: generateId(),
           title: section.title,
@@ -666,6 +673,9 @@ export const usePackingStore = create<PackingState>()(
             checked: false,
             note: item.note,
             essential: item.essential,
+            source: item.source,
+            gearItemId: item.gearItemId,
+            group: item.group,
           })),
           collapsed: false,
         }));

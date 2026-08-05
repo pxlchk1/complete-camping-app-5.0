@@ -383,11 +383,14 @@ export async function createUserProfile(data: {
 // ==================== Permission Checks ====================
 
 export function isAdmin(user: User): boolean {
-  return user.membershipTier === "isAdmin" || 
+  // Matches firestore.rules' isAdmin() exactly. A hardcoded email/handle
+  // bypass used to live here too — firestore.rules has no knowledge of it,
+  // so it was a pure client/rules drift risk with no corresponding
+  // server-side enforcement. Admin status should only ever come from
+  // membershipTier/role, the one path the rules actually recognize.
+  return user.membershipTier === "isAdmin" ||
          user.role === "administrator" ||
-         (user.role as string) === "admin" ||
-         user.email?.toLowerCase() === "alana@tentandlantern.com" ||
-         user.handle?.toLowerCase() === "tentandlantern";
+         (user.role as string) === "admin";
 }
 
 export function isModerator(user: User): boolean {

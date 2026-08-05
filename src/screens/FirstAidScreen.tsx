@@ -12,6 +12,8 @@ import { useScreenOnboarding } from "../hooks/useScreenOnboarding";
 import { DEEP_FOREST, PARCHMENT, PARCHMENT_BACKGROUND, CARD_BACKGROUND_LIGHT, BORDER_SOFT, TEXT_PRIMARY_STRONG, TEXT_SECONDARY, TEXT_ON_DARK, TEXT_MUTED, LODGE_FOREST } from "../constants/colors";
 import { HERO_IMAGES } from "../constants/images";
 import { RootStackParamList } from "../navigation/types";
+import { useToast } from "../components/ToastManager";
+import { notifyError } from "../ui/notify";
 
 type FirstAidScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -30,6 +32,7 @@ const FIRST_AID_CATEGORIES = [
 
 export default function FirstAidScreen() {
   const navigation = useNavigation<FirstAidScreenNavigationProp>();
+  const toast = useToast();
   const insets = useSafeAreaInsets();
   const bottomSpacer = 50 + Math.max(insets.bottom, 18) + 12;
   const scrollViewRef = useRef<ScrollView>(null);
@@ -46,7 +49,10 @@ export default function FirstAidScreen() {
   };
 
   const openUrl = (url: string) => {
-    Linking.openURL(url);
+    Linking.openURL(url).catch((err) => {
+      console.error("[FirstAid] Failed to open link:", err);
+      notifyError(toast, "Couldn't open that link. Please try again.");
+    });
   };
 
   return (

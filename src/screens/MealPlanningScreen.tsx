@@ -29,6 +29,8 @@ import { auth } from "../config/firebase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import AccountButton from "../components/AccountButton";
 import { RootStackParamList } from "../navigation/types";
+import { useToast } from "../components/ToastManager";
+import { notifyError } from "../ui/notify";
 import { Meal, MealCategory, MealLibraryItem, PrepType, SuggestibleMealCategory } from "../types/meal";
 import * as MealService from "../services/mealsService";
 import * as LocalMealService from "../services/localMealService";
@@ -93,6 +95,7 @@ type ViewMode = "plan" | "recipes";
 export default function MealPlanningScreen() {
   const navigation = useNavigation<MealPlanningScreenNavigationProp>();
   const route = useRoute<MealPlanningScreenRouteProp>();
+  const toast = useToast();
   const { tripId } = route.params;
 
   const trip = useTripsStore((s) => s.getTripById(tripId));
@@ -298,6 +301,7 @@ export default function MealPlanningScreen() {
       }
     } catch (error) {
       console.error("Failed to add meal:", error);
+      notifyError(toast, "Failed to add meal. Please try again.");
     }
   };
 
@@ -360,6 +364,7 @@ export default function MealPlanningScreen() {
       }
     } catch (error) {
       console.error("Failed to add custom meal:", error);
+      notifyError(toast, "Failed to add meal. Please try again.");
     }
   };
 
@@ -404,6 +409,7 @@ export default function MealPlanningScreen() {
       }
     } catch (error) {
       console.error("Failed to delete meal:", error);
+      notifyError(toast, "Failed to delete meal. Please try again.");
     }
   };
 
@@ -436,6 +442,7 @@ export default function MealPlanningScreen() {
       showToast(`Added to ${MEAL_CATEGORIES.find(c => c.key === suggestion.category)?.label || 'meal'}`);
     } catch (error) {
       console.error("Failed to add suggestion:", error);
+      notifyError(toast, "Failed to add meal. Please try again.");
     }
   };
 
@@ -461,6 +468,7 @@ export default function MealPlanningScreen() {
       setLastAddedMealIds(existingMeals.map(m => m.id));
     } catch (error) {
       console.error("Failed to replace with suggestion:", error);
+      notifyError(toast, "Failed to replace meal. Please try again.");
     }
   };
 
@@ -557,6 +565,7 @@ export default function MealPlanningScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
       console.error("Failed to add meal from suggestion:", error);
+      notifyError(toast, "Failed to add meal. Please try again.");
     }
   };
 
@@ -639,6 +648,7 @@ export default function MealPlanningScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
       console.error("Failed to add custom meal from sheet:", error);
+      notifyError(toast, "Failed to add meal. Please try again.");
     }
   };
 
@@ -746,6 +756,7 @@ export default function MealPlanningScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
       console.error("Failed to auto-fill day:", error);
+      notifyError(toast, "Failed to auto-fill meals. Please try again.");
     } finally {
       setAutoFilling(false);
     }
@@ -809,6 +820,7 @@ export default function MealPlanningScreen() {
       showToast(`Added to ${MEAL_CATEGORIES.find(c => c.key === targetCategory)?.label || 'meal'}`);
     } catch (error) {
       console.error("Failed to add recipe to meal:", error);
+      notifyError(toast, "Failed to add recipe. Please try again.");
     }
   };
 
