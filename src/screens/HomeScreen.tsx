@@ -1037,7 +1037,7 @@ export default function HomeScreen() {
                     style={{
                       fontFamily: "SourceSans3_400Regular",
                       fontSize: 13,
-                      color: EARTH_GREEN,
+                      color: "rgba(238, 231, 217, 0.8)",
                       marginTop: 2,
                     }}
                   >

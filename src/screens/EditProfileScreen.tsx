@@ -64,6 +64,28 @@ const CAMPING_STYLES: { value: CampingStyle; label: string; icon: keyof typeof I
   { value: "DISPERSED", label: "Dispersed camping", icon: "map-outline" },
 ];
 
+const GEAR_PLACEHOLDER_EXAMPLES: Record<GearCategory, string> = {
+  camp_comfort: "Camp hammock",
+  campFurniture: "Camp table",
+  clothing: "Patagonia Down Sweater",
+  documents_essentials: "Waterproof document pouch",
+  electronics: "Portable power bank",
+  entertainment: "Deck of cards",
+  food: "Trail mix",
+  hygiene: "Biodegradable soap",
+  kitchen: "Tent and Lantern BaseCamp Box",
+  lighting: "Black Diamond Spot 400",
+  meal_prep: "Camp stove",
+  optional_extras: "Camp hatchet",
+  pet_supplies: "Dog leash",
+  safety: "First aid kit",
+  seating: "Camp chair",
+  shelter: "REI Co-op Half Dome SL 2+",
+  sleep: "Therm-a-Rest NeoAir XLite",
+  tools: "Multi-tool",
+  water: "Nalgene 32oz Bottle",
+};
+
 const GEAR_ICONS: Partial<Record<GearCategory, keyof typeof Ionicons.glyphMap>> = {
   shelter: "home-outline",
   sleep: "bed-outline",
@@ -792,15 +814,7 @@ export default function EditProfileScreen() {
                   <TextInput
                     value={favoriteGear[category.value] || ""}
                     onChangeText={(text) => setFavoriteGear({ ...favoriteGear, [category.value]: text })}
-                    placeholder={`e.g., ${
-                      category.value === "shelter" ? "REI Co-op Half Dome SL 2+" :
-                      category.value === "sleep" ? "Therm-a-Rest NeoAir XLite" :
-                      category.value === "kitchen" ? "Tent and Lantern BaseCamp Box" :
-                      category.value === "clothing" ? "Patagonia Down Sweater" :
-                      (category.value as string) === "bags" ? "Osprey Atmos AG 65" :
-                      category.value === "lighting" ? "Black Diamond Spot 400" :
-                      "Nalgene 32oz Bottle"
-                    }`}
+                    placeholder={`e.g., ${GEAR_PLACEHOLDER_EXAMPLES[category.value]}`}
                     placeholderTextColor={TEXT_MUTED}
                     className="px-4 py-3 rounded-xl border"
                     style={{

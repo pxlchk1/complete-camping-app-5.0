@@ -73,7 +73,24 @@ function SwipeableItem({ item, listId, sectionId, onToggle, onDelete, onEdit }: 
 
   const handleDelete = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    onDelete();
+    Alert.alert(
+      "Delete Item?",
+      `Remove "${item.name}" from this list?`,
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+          onPress: () => {
+            translateX.value = withSpring(0);
+          },
+        },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: onDelete,
+        },
+      ]
+    );
   };
 
   const panGesture = Gesture.Pan()
@@ -240,6 +257,10 @@ export default function PackingListEditorScreen() {
   const [editingItem, setEditingItem] = useState<{ sectionId: string; item: PackingItem } | null>(null);
   const [showPackingModal, setShowPackingModal] = useState(false);
 
+  // Bulk selection state
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+
   // Upsell state
   const { hasUsedFreeTrip, setHasUsedFreeTrip } = useUserStore();
   const { canShowSoftModal, markPackingModalShown, recordModalDismissal } = useUpsellStore();
@@ -281,6 +302,52 @@ export default function PackingListEditorScreen() {
   const handleDeleteItem = useCallback((sectionId: string, itemId: string) => {
     deleteItem(listId, sectionId, itemId);
   }, [listId, deleteItem]);
+
+  // Bulk selection handlers
+  const toggleSelected = useCallback((sectionId: string, itemId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const key = `${sectionId}:${itemId}`;
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleCancelSelection = useCallback(() => {
+    setSelectionMode(false);
+    setSelectedKeys(new Set());
+  }, []);
+
+  const handleDeleteSelected = useCallback(() => {
+    const count = selectedKeys.size;
+    if (count === 0) return;
+
+    Alert.alert(
+      "Delete Items",
+      `Remove ${count} selected item${count === 1 ? "" : "s"} from this list?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            selectedKeys.forEach((key) => {
+              const [sectionId, itemId] = key.split(":");
+              deleteItem(listId, sectionId, itemId);
+            });
+            setSelectedKeys(new Set());
+            setSelectionMode(false);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          },
+        },
+      ]
+    );
+  }, [selectedKeys, listId, deleteItem]);
 
   // Handle edit item
   const handleEditItem = useCallback((sectionId: string, item: PackingItem) => {
@@ -423,18 +490,19 @@ export default function PackingListEditorScreen() {
     const isTemplate = list?.isTemplate;
     
     const options: any[] = [
+      { text: "Select Items to Delete", onPress: () => setSelectionMode(true) },
       { text: "Add Section", onPress: () => setShowAddSection(true) },
       { text: "Reset All Items", onPress: handleResetList },
       { text: "Share List", onPress: handleShare },
     ];
-    
+
     if (isTemplate) {
       // Template-specific options
       options.push({ text: "Create List from Template", onPress: handleUseAsNewList });
     }
-    
+
     options.push({ text: "Cancel", style: "cancel" });
-    
+
     Alert.alert(
       isTemplate ? "Template Options" : "Options",
       undefined,
@@ -516,13 +584,27 @@ export default function PackingListEditorScreen() {
                 </Text>
               </View>
 
-              <Pressable
-                onPress={handleMoreMenu}
-                className="w-9 h-9 rounded-full items-center justify-center"
-                style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
-              >
-                <Ionicons name="ellipsis-horizontal" size={20} color={PARCHMENT} />
-              </Pressable>
+              {selectionMode ? (
+                <Pressable
+                  onPress={handleCancelSelection}
+                  className="px-3 h-9 rounded-full items-center justify-center"
+                  style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
+                >
+                  <Text
+                    style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 14, color: PARCHMENT }}
+                  >
+                    Cancel
+                  </Text>
+                </Pressable>
+              ) : (
+                <Pressable
+                  onPress={handleMoreMenu}
+                  className="w-9 h-9 rounded-full items-center justify-center"
+                  style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
+                >
+                  <Ionicons name="ellipsis-horizontal" size={20} color={PARCHMENT} />
+                </Pressable>
+              )}
             </View>
 
             {/* Progress Bar */}
@@ -596,16 +678,18 @@ export default function PackingListEditorScreen() {
                   </Text>
                 </View>
 
-                <Pressable
-                  onPress={() => {
-                    setActiveSectionId(section.id);
-                    setShowAddItem(true);
-                  }}
-                  className="w-8 h-8 rounded-full items-center justify-center"
-                  style={{ backgroundColor: DEEP_FOREST }}
-                >
-                  <Ionicons name="add" size={18} color={PARCHMENT} />
-                </Pressable>
+                {!selectionMode && (
+                  <Pressable
+                    onPress={() => {
+                      setActiveSectionId(section.id);
+                      setShowAddItem(true);
+                    }}
+                    className="w-8 h-8 rounded-full items-center justify-center"
+                    style={{ backgroundColor: DEEP_FOREST }}
+                  >
+                    <Ionicons name="add" size={18} color={PARCHMENT} />
+                  </Pressable>
+                )}
               </Pressable>
 
               {/* Items */}
@@ -620,17 +704,52 @@ export default function PackingListEditorScreen() {
                       </Text>
                     </View>
                   ) : (
-                    section.items.map((item) => (
-                      <SwipeableItem
-                        key={item.id}
-                        item={item}
-                        listId={listId}
-                        sectionId={section.id}
-                        onToggle={() => handleToggleItem(section.id, item.id)}
-                        onDelete={() => handleDeleteItem(section.id, item.id)}
-                        onEdit={() => handleEditItem(section.id, item)}
-                      />
-                    ))
+                    section.items.map((item) => {
+                      const key = `${section.id}:${item.id}`;
+                      const isSelected = selectedKeys.has(key);
+
+                      if (selectionMode) {
+                        return (
+                          <Pressable
+                            key={item.id}
+                            onPress={() => toggleSelected(section.id, item.id)}
+                            className="flex-row items-center py-3 px-4 border-b"
+                            style={{
+                              borderColor: BORDER_SOFT,
+                              backgroundColor: isSelected ? "rgba(181, 89, 29, 0.08)" : "#FFF",
+                            }}
+                          >
+                            <View
+                              className="w-6 h-6 rounded-full border-2 items-center justify-center mr-3"
+                              style={{
+                                backgroundColor: isSelected ? RUST : "transparent",
+                                borderColor: isSelected ? RUST : BORDER_SOFT,
+                              }}
+                            >
+                              {isSelected && <Ionicons name="checkmark" size={16} color="#FFF" />}
+                            </View>
+                            <Text
+                              className="flex-1"
+                              style={{ fontFamily: "SourceSans3_400Regular", fontSize: 16, color: DEEP_FOREST }}
+                            >
+                              {item.name}
+                            </Text>
+                          </Pressable>
+                        );
+                      }
+
+                      return (
+                        <SwipeableItem
+                          key={item.id}
+                          item={item}
+                          listId={listId}
+                          sectionId={section.id}
+                          onToggle={() => handleToggleItem(section.id, item.id)}
+                          onDelete={() => handleDeleteItem(section.id, item.id)}
+                          onEdit={() => handleEditItem(section.id, item)}
+                        />
+                      );
+                    })
                   )}
                 </View>
               )}
@@ -638,22 +757,62 @@ export default function PackingListEditorScreen() {
           ))}
 
           {/* Add Section Button */}
-          <View className="px-4 mt-6">
-            <Pressable
-              onPress={() => setShowAddSection(true)}
-              className="flex-row items-center justify-center py-3 rounded-xl border-2 border-dashed"
-              style={{ borderColor: BORDER_SOFT }}
+          {!selectionMode && (
+            <View className="px-4 mt-6">
+              <Pressable
+                onPress={() => setShowAddSection(true)}
+                className="flex-row items-center justify-center py-3 rounded-xl border-2 border-dashed"
+                style={{ borderColor: BORDER_SOFT }}
+              >
+                <Ionicons name="add-circle-outline" size={20} color={EARTH_GREEN} />
+                <Text
+                  className="ml-2"
+                  style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 14, color: EARTH_GREEN }}
+                >
+                  Add New Section
+                </Text>
+              </Pressable>
+            </View>
+          )}
+        </ScrollView>
+
+        {/* Bulk Selection Action Bar */}
+        {selectionMode && (
+          <View
+            className="flex-row items-center justify-between px-5"
+            style={{
+              backgroundColor: "#FFF",
+              borderTopWidth: 1,
+              borderColor: BORDER_SOFT,
+              paddingTop: 12,
+              paddingBottom: insets.bottom + 12,
+            }}
+          >
+            <Text
+              style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 15, color: DEEP_FOREST }}
             >
-              <Ionicons name="add-circle-outline" size={20} color={EARTH_GREEN} />
+              {selectedKeys.size} selected
+            </Text>
+            <Pressable
+              onPress={handleDeleteSelected}
+              disabled={selectedKeys.size === 0}
+              className="flex-row items-center px-4 py-3 rounded-xl"
+              style={{ backgroundColor: selectedKeys.size === 0 ? "#E6E1D6" : RUST }}
+            >
+              <Ionicons name="trash" size={16} color={selectedKeys.size === 0 ? "#999" : "#FFF"} />
               <Text
                 className="ml-2"
-                style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 14, color: EARTH_GREEN }}
+                style={{
+                  fontFamily: "SourceSans3_700Bold",
+                  fontSize: 14,
+                  color: selectedKeys.size === 0 ? "#999" : "#FFF",
+                }}
               >
-                Add New Section
+                Delete
               </Text>
             </Pressable>
           </View>
-        </ScrollView>
+        )}
 
         {/* Add Item Modal */}
         <Modal visible={showAddItem} animationType="slide" transparent>

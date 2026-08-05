@@ -529,9 +529,14 @@ service cloud.firestore {
     // ============================================
 
     // Badge Definitions - fixed catalog, publicly readable, admin-managed/seeded
+    // `create` is open to any signed-in user because the client auto-seeds this
+    // collection on first load when empty; `create` only ever applies to a
+    // not-yet-existing badgeId, so an already-seeded badge can't be overwritten
+    // this way. Modifying/removing existing badges stays admin-only.
     match /badgeDefinitions/{badgeId} {
       allow read: if true;
-      allow create, update, delete: if isAdmin();
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
     }
 
     // User Badges - earned badge records, publicly readable (profile display),

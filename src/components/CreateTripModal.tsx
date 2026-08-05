@@ -5,7 +5,7 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Haptics from "expo-haptics";
 import { useCreateTrip } from "../state/tripsStore";
 import { CampingStyle } from "../types/camping";
-import { DEEP_FOREST, EARTH_GREEN, GRANITE_GOLD, RIVER_ROCK, SIERRA_SKY, PARCHMENT, PARCHMENT_BORDER } from "../constants/colors";
+import { DEEP_FOREST, EARTH_GREEN, GRANITE_GOLD, RIVER_ROCK, SIERRA_SKY, PARCHMENT, PARCHMENT_BORDER, RUST } from "../constants/colors";
 
 interface CreateTripModalProps {
   visible: boolean;
@@ -38,6 +38,8 @@ export default function CreateTripModal({ visible, onClose, onTripCreated }: Cre
   const [partySize, setPartySize] = useState("4");
   const [description, setDescription] = useState("");
   const [campingStyle, setCampingStyle] = useState<CampingStyle | undefined>(undefined);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const getDuration = () => {
     const diff = endDate.getTime() - startDate.getTime();
@@ -56,22 +58,28 @@ export default function CreateTripModal({ visible, onClose, onTripCreated }: Cre
 
   const handleCreateTrip = async () => {
     if (!tripName.trim()) {
+      setFormError("Give your trip a name to continue.");
       return;
     }
 
     if (endDate <= startDate) {
+      setFormError("Trip end date must be after the start date.");
       return;
     }
 
     const size = parseInt(partySize);
     if (isNaN(size) || size < 1 || size > 50) {
+      setFormError("Party size must be a number between 1 and 50.");
       return;
     }
+
+    setFormError(null);
 
     // Derive season from start date
     const season = getSeason(startDate);
 
     try {
+      setIsSubmitting(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
       // NOTE: No destination set here - users set destination via Plan > Parks after trip creation
@@ -97,6 +105,9 @@ export default function CreateTripModal({ visible, onClose, onTripCreated }: Cre
       onTripCreated(tripId);
     } catch (error) {
       console.error("Error creating trip:", error);
+      setFormError("Something went wrong creating your trip. Please try again.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -265,11 +276,23 @@ export default function CreateTripModal({ visible, onClose, onTripCreated }: Cre
 
           {/* Footer */}
           <View className="px-5 pb-5 pt-3 border-t border-parchmentDark">
+            {formError && (
+              <Text
+                className="text-sm mb-3 text-center"
+                style={{ fontFamily: "SourceSans3_600SemiBold", color: RUST }}
+              >
+                {formError}
+              </Text>
+            )}
             <Pressable
               onPress={handleCreateTrip}
+              disabled={isSubmitting}
               className="bg-forest rounded-2xl px-4 py-4 items-center justify-center active:bg-[#374543]"
+              style={{ opacity: isSubmitting ? 0.7 : 1 }}
             >
-              <Text className="text-parchment font-semibold text-base" style={{ fontFamily: "SourceSans3_600SemiBold" }}>Create Trip</Text>
+              <Text className="text-parchment font-semibold text-base" style={{ fontFamily: "SourceSans3_600SemiBold" }}>
+                {isSubmitting ? "Creating..." : "Create Trip"}
+              </Text>
             </Pressable>
           </View>
         </View>
