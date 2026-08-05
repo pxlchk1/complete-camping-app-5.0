@@ -26,6 +26,53 @@ type NotificationData = {
 type NavigateFunction = (screen: string, params?: Record<string, any>) => void;
 
 /**
+ * Onboarding-nudge notifications (functions/src/index.ts) carry a `deepLink`
+ * in the custom "cta://path/subpath" scheme rather than a real screen name.
+ * Map each known path to an actual navigable route. Screens that only make
+ * sense with a tripId we don't have (packing list, meal planning) fall back
+ * to the Plan tab so the user can pick a trip themselves.
+ */
+function navigateToCtaDeepLink(navigateFn: NavigateFunction, deepLink: string) {
+  const path = deepLink.replace(/^cta:\/\//, "").replace(/\/$/, "");
+
+  switch (path) {
+    case "plan/new":
+      navigateFn("CreateTrip");
+      break;
+    case "parks":
+      navigateFn("ParksBrowse");
+      break;
+    case "gearcloset":
+      navigateFn("MyGearCloset");
+      break;
+    case "weather":
+      navigateFn("HomeTabs", {
+        screen: "Plan",
+        params: { screen: "MyTrips", params: { screen: "Weather" } },
+      });
+      break;
+    case "profile/edit":
+      navigateFn("EditProfile");
+      break;
+    case "campground/invite":
+      navigateFn("MyCampground");
+      break;
+    case "community":
+      navigateFn("HomeTabs", { screen: "Connect" });
+      break;
+    case "plan":
+    case "packinglist/start":
+    case "packinglist/categories":
+    case "packinglist/save-template":
+    case "meals":
+      navigateFn("HomeTabs", { screen: "Plan" });
+      break;
+    default:
+      navigateFn("HomeTabs");
+  }
+}
+
+/**
  * Hook to manage notification listeners and handle notification responses
  * Should be used in the root App component
  */
@@ -65,55 +112,52 @@ export function useNotificationListeners(
         break;
 
       case "weather_alert":
-        if (data.tripId) {
-          navigateFn("PlanTab", { 
-            screen: "Weather",
-            params: { tripId: data.tripId }
-          });
-        }
+        // WeatherScreen doesn't accept a tripId route param — it's a nested
+        // top-tab under HomeTabs > Plan > MyTrips, not a top-level route.
+        navigateFn("HomeTabs", {
+          screen: "Plan",
+          params: { screen: "MyTrips", params: { screen: "Weather" } },
+        });
         break;
 
       case "park_advisory":
-        if (data.parkId) {
-          navigateFn("ParkDetail", { parkId: data.parkId });
-        }
+        // There is no standalone ParkDetail route — ParksBrowseScreen opens
+        // a park's detail via the selectedParkId param instead.
+        navigateFn("ParksBrowse", data.parkId ? { selectedParkId: data.parkId } : undefined);
         break;
 
       case "community_answer":
       case "community_reply":
-        if (data.contentId) {
-          navigateFn("CommunityStack", {
-            screen: "ContentDetail",
-            params: { contentId: data.contentId }
-          });
-        }
-        break;
-
       case "community_upvote":
       case "community_featured":
-        navigateFn("CommunityTab");
+        // No content-type-specific detail route is addressable from a bare
+        // contentId (could be a tip, question, or photo) — land on Connect.
+        navigateFn("HomeTabs", { screen: "Connect" });
         break;
 
       case "subscription":
       case "payment_issue":
-        navigateFn("ManageSubscription");
+        navigateFn("Settings");
         break;
 
       case "badge_earned":
       case "module_progress":
-        navigateFn("LearnTab");
+        navigateFn("HomeTabs", { screen: "Learn" });
         break;
 
       default:
         // Handle onboarding_day_* and inactive_* types → route to Home
         if (data.type?.startsWith("onboarding_day_") || data.type?.startsWith("inactive_")) {
-          navigateFn("HomeTabs");
+          if (data.deepLink) {
+            navigateToCtaDeepLink(navigateFn, data.deepLink as string);
+          } else {
+            navigateFn("HomeTabs");
+          }
           break;
         }
         // If there's a deepLink in the payload, try to navigate to it
         if (data.deepLink) {
-          // deepLink format: "HomeTabs", "CreateTrip", "LearnTab", etc.
-          navigateFn(data.deepLink as string);
+          navigateToCtaDeepLink(navigateFn, data.deepLink as string);
           break;
         }
         console.log("[Notifications] Unhandled notification type:", data.type);

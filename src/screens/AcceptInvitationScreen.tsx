@@ -168,7 +168,11 @@ export default function AcceptInvitationScreen() {
             {error}
           </Text>
           <Pressable
-            onPress={() => navigation.goBack()}
+            onPress={() =>
+              navigation.canGoBack()
+                ? navigation.goBack()
+                : navigation.reset({ index: 0, routes: [{ name: "HomeTabs" }] })
+            }
             className="px-6 py-3 rounded-xl active:opacity-70"
             style={{ backgroundColor: DEEP_FOREST }}
           >

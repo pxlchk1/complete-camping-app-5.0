@@ -640,7 +640,7 @@ export default function MyCampsiteScreen({ navigation }: any) {
             if (navigation.canGoBack()) {
               navigation.goBack();
             } else {
-              navigation.navigate("Explore" as never);
+              navigation.navigate("HomeTabs" as never);
             }
           }}
         />
@@ -1561,7 +1561,7 @@ export default function MyCampsiteScreen({ navigation }: any) {
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     // Navigate to Plan tab with Parks selected and park ID
-                    navigation.navigate("MainTabs", {
+                    navigation.navigate("HomeTabs", {
                       screen: "Plan",
                       params: {
                         screen: "MyTrips",

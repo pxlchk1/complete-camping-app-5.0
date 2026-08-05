@@ -129,7 +129,11 @@ export default function AcceptInviteScreen() {
 
   const handleClose = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    navigation.goBack();
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.reset({ index: 0, routes: [{ name: "HomeTabs" }] });
+    }
   };
 
   const handleAccountModalClose = () => {
