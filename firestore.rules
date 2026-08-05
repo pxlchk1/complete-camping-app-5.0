@@ -121,6 +121,16 @@ service cloud.firestore {
       }
     }
 
+    // Handle uniqueness index (handleService.ts) - handle -> userId lookup.
+    // Public read so an availability check can run before an account even
+    // exists (pre-signup). Only the claiming user can create/update/delete
+    // their own reservation.
+    match /userHandlesIndex/{handle} {
+      allow read: if true;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
     // Profiles collection
     match /profiles/{userId} {
       // Allow anyone to read profiles (public profiles)

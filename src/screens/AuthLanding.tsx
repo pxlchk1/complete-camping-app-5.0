@@ -12,6 +12,8 @@ import { useUserStore } from "../state/userStore";
 import { Ionicons } from "@expo/vector-icons";
 import { bootstrapNewAccount, getOnboardingErrorMessage, isPermissionDeniedError, isEmailInUseError } from "../onboarding";
 import { identifyUser } from "../services/subscriptionService";
+import { validateHandle, isAdminEmail } from "../constants/reservedHandles";
+import { reserveHandle, normalizeHandle } from "../services/handleService";
 
 export default function AuthLanding({ navigation, route }: { navigation: any; route?: any }) {
   const returnTo = Boolean(route?.params?.returnTo);
@@ -416,6 +418,31 @@ export default function AuthLanding({ navigation, route }: { navigation: any; ro
           return;
         }
 
+        // Normalize handle - remove any @ prefix before saving
+        const normalizedHandle = normalizeHandle(handle.trim().replace(/^@+/, ""));
+        const handleValidationError = validateHandle(normalizedHandle, isAdminEmail(email.trim()));
+        if (handleValidationError) {
+          setError(handleValidationError);
+          return;
+        }
+
+        // Availability pre-check, before creating the account — if we
+        // checked uniqueness only after account creation and it turned out
+        // to be taken, retrying would fail at the auth step instead
+        // (the email would now already be registered to the account we
+        // just created for them).
+        try {
+          const existingHandleDoc = await getDoc(doc(db, "userHandlesIndex", normalizedHandle));
+          if (existingHandleDoc.exists()) {
+            setError("This handle is already taken. Please choose a different one.");
+            return;
+          }
+        } catch (checkError) {
+          console.error("[AuthLanding] Handle availability check failed:", checkError);
+          // Fail open — the transactional reserveHandle() after account
+          // creation is still the source of truth for uniqueness.
+        }
+
         // TEMP LOGGING: Auth phase
         try {
           userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
@@ -428,9 +455,16 @@ export default function AuthLanding({ navigation, route }: { navigation: any; ro
         // Force token refresh to ensure Firestore rules see the new auth state
         await userCredential.user.getIdToken(true);
 
+        // Atomically claim the handle now that we're authenticated (handles
+        // the rare race where two signups grab the same handle between the
+        // pre-check above and here). If it lost the race, proceed anyway —
+        // the account still works and the handle can be changed in Settings.
+        const handleReserved = await reserveHandle(userCredential.user.uid, normalizedHandle);
+        if (!handleReserved) {
+          console.warn("[AuthLanding] Handle reservation lost a race, proceeding with account creation:", normalizedHandle);
+        }
+
         // Create user profile using protected onboarding layer
-        // Normalize handle - remove any @ prefix before saving
-        const normalizedHandle = handle.trim().replace(/^@+/, "");
         const onboardingParams = {
           userId: userCredential.user.uid,
           email: email.trim(),
