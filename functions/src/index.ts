@@ -799,6 +799,52 @@ export const onUserDeleted = functions.auth.user().onDelete(async (user) => {
       cleanupLog.errors.push(`Failed to delete pushTokens: ${err instanceof Error ? err.message : String(err)}`);
     }
 
+    // Step 5: Delete owned trips and gear closet items (query-based, chunked).
+    // Previously left behind indefinitely under a uid that can never log in
+    // again — the client can't safely do this itself since Firestore rules
+    // require an authenticated match on userId/ownerId, and by the time this
+    // trigger fires the Auth account (and its session) is already gone.
+    const ownedCollections: { name: string; field: string }[] = [
+      { name: "trips", field: "userId" },
+      { name: "userGear", field: "ownerId" },
+    ];
+
+    for (const { name, field } of ownedCollections) {
+      try {
+        const ownedQuery = db.collection(name).where(field, "==", uid);
+        let deletedCount = 0;
+        let hasMore = true;
+
+        while (hasMore) {
+          const snapshot = await ownedQuery.limit(450).get();
+
+          if (snapshot.empty) {
+            hasMore = false;
+            break;
+          }
+
+          const batch = db.batch();
+          snapshot.docs.forEach((doc) => {
+            batch.delete(doc.ref);
+            deletedCount++;
+          });
+
+          await batch.commit();
+
+          if (snapshot.size < 450) {
+            hasMore = false;
+          }
+        }
+
+        if (deletedCount > 0) {
+          cleanupLog.deletedDocs.push(`${name} (${deletedCount} docs)`);
+          functions.logger.info(`Deleted ${name}`, { uid, count: deletedCount });
+        }
+      } catch (err) {
+        cleanupLog.errors.push(`Failed to delete ${name}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
     // Final summary log
     functions.logger.info("onUserDeleted cleanup complete", cleanupLog);
 

@@ -261,6 +261,7 @@ export default function PhotoDetailScreen() {
       // Revert on error
       setIsHelpful(wasHelpful);
       setHelpfulCount((prev) => prev + (wasHelpful ? 1 : -1));
+      notifyError(toast, "Failed to update. Please try again.");
     } finally {
       setHelpfulLoading(false);
     }
@@ -303,6 +304,7 @@ export default function PhotoDetailScreen() {
       // Revert on error
       setUserVote(currentVote);
       setVoteCount((prev) => prev - delta);
+      notifyError(toast, "Failed to update your vote. Please try again.");
     } finally {
       setVoteLoading(false);
     }
@@ -425,6 +427,7 @@ export default function PhotoDetailScreen() {
       // Revert on error
       setComments(comments);
       console.error("Error voting on comment:", err);
+      notifyError(toast, "Failed to update your vote. Please try again.");
     }
   };
 

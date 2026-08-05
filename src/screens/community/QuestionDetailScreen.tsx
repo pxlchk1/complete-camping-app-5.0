@@ -28,6 +28,8 @@ import { Question, Answer } from "../../types/community";
 import { User } from "../../types/user";
 import { useCurrentUser } from "../../state/userStore";
 import { RootStackScreenProps } from "../../navigation/types";
+import { useToast } from "../../components/ToastManager";
+import { notifyError } from "../../ui/notify";
 import {
   DEEP_FOREST,
   PARCHMENT,
@@ -49,6 +51,7 @@ export default function QuestionDetailScreen() {
   const navigation = useNavigation<RouteParams["navigation"]>();
   const { questionId } = route.params;
   const currentUser = useCurrentUser();
+  const toast = useToast();
   const scrollViewRef = useRef<ScrollView>(null);
 
   const [question, setQuestion] = useState<Question | null>(null);
@@ -204,7 +207,7 @@ export default function QuestionDetailScreen() {
         prev.map(a => (a.id === answerId ? { ...a, upvoteCount: a.upvoteCount + 1 } : a))
       );
     } catch (err) {
-      // Silently fail
+      notifyError(toast, "Failed to upvote. Please try again.");
     }
   };
 

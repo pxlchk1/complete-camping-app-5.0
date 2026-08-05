@@ -23,6 +23,8 @@ import { shouldShowInFeed } from "../../services/moderationService";
 import { isAdmin, isModerator, canModerateContent, getUser } from "../../services/userService";
 import { useCurrentUser } from "../../state/userStore";
 import { User } from "../../types/user";
+import { useToast } from "../../components/ToastManager";
+import { notifyError } from "../../ui/notify";
 import { ContentActionsAffordance } from "../../components/contentActions";
 import { RootStackNavigationProp } from "../../navigation/types";
 import CommunitySectionHeader from "../../components/CommunitySectionHeader";
@@ -50,6 +52,7 @@ export default function TipsListScreen() {
   const navigation = useNavigation<RootStackNavigationProp>();
   const currentAuthUser = auth.currentUser;
   const currentUser = useCurrentUser();
+  const toast = useToast();
   const [showLoginModal, setShowLoginModal] = useState(false);
 
   // Onboarding modal
@@ -214,7 +217,7 @@ export default function TipsListScreen() {
       // Optionally reload all votes for accuracy
       // await loadTips();
     } catch (e) {
-      // TODO: show error toast
+      notifyError(toast, "Failed to update your vote. Please try again.");
     }
   };
 

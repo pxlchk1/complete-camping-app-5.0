@@ -23,6 +23,8 @@ import { useCurrentUser } from "../../state/userStore";
 import { RootStackNavigationProp } from "../../navigation/types";
 import CommunitySectionHeader from "../../components/CommunitySectionHeader";
 import AccountRequiredModal from "../../components/AccountRequiredModal";
+import { useToast } from "../../components/ToastManager";
+import { notifyError } from "../../ui/notify";
 import PremiumFeatureModal from "../../components/PremiumFeatureModal";
 import OnboardingModal from "../../components/OnboardingModal";
 import { useScreenOnboarding } from "../../hooks/useScreenOnboarding";
@@ -74,6 +76,7 @@ const TAG_CHIPS: { key: string; label: string }[] = [
 export default function PhotosListScreen() {
   const navigation = useNavigation<RootStackNavigationProp>();
   const currentUser = useCurrentUser();
+  const toast = useToast();
 
   // Photo data
   const [photoPosts, setPhotoPosts] = useState<PhotoPost[]>([]);
@@ -251,9 +254,10 @@ export default function PhotosListScreen() {
       await toggleHelpful(postId, currentUser.id);
     } catch {
       setHelpfulStatuses(prev => ({ ...prev, [postId]: wasHelpful }));
-      setPhotoPosts(prev => 
+      setPhotoPosts(prev =>
         prev.map(p => p.id === postId ? { ...p, helpfulCount: p.helpfulCount + (wasHelpful ? 1 : -1) } : p)
       );
+      notifyError(toast, "Failed to update. Please try again.");
     }
   };
 
@@ -294,9 +298,10 @@ export default function PhotosListScreen() {
     } catch {
       // Rollback on error
       setUserVotes(prev => ({ ...prev, [postId]: currentVote }));
-      setPhotoPosts(prev => 
+      setPhotoPosts(prev =>
         prev.map(p => p.id === postId ? { ...p, voteCount: (p.voteCount || 0) - delta } : p)
       );
+      notifyError(toast, "Failed to update your vote. Please try again.");
     }
   };
 
