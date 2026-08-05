@@ -22,7 +22,13 @@ concurrency:
 jobs:
   build-and-submit:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # The iOS build itself typically finishes in under 10 minutes, but
+    # `--auto-submit` then waits on Apple's App Store Connect processing,
+    # which has been observed taking upwards of an hour. A 60-minute limit
+    # was killing the job mid-wait (build already succeeded and uploaded;
+    # only the CLI's polling got cut off) and reporting a misleading
+    # "cancelled" run instead of the real outcome.
+    timeout-minutes: 120
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
