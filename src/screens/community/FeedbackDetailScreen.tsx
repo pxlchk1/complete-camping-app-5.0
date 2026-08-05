@@ -13,7 +13,7 @@ import AccountRequiredModal from "../../components/AccountRequiredModal";
 import { ContentActionsAffordance } from "../../components/contentActions";
 import { useContentActions } from "../../hooks/useContentActions";
 import { isAdmin, isModerator, canModerateContent } from "../../services/userService";
-import { deleteFeedback } from "../../services/connectDeletionService";
+import { deleteFeedback, deleteComment } from "../../services/connectDeletionService";
 import { User } from "../../types/user";
 import { requireAccount } from "../../utils/gating";
 import { requireEmailVerification } from "../../utils/authHelper";
@@ -36,6 +36,7 @@ import {
   TEXT_SECONDARY,
   TEXT_MUTED,
   EARTH_GREEN,
+  RUST,
 } from "../../constants/colors";
 
 type RouteParams = RootStackScreenProps<"FeedbackDetail">;
@@ -50,6 +51,7 @@ export default function FeedbackDetailScreen() {
   const [comments, setComments] = useState<FeedbackComment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [commentError, setCommentError] = useState<string | null>(null);
   const [commentText, setCommentText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [authorName, setAuthorName] = useState<string | null>(null);
@@ -163,21 +165,25 @@ export default function FeedbackDetailScreen() {
   };
 
   const handleSubmitComment = async () => {
-    // Require email verification first
-    const isVerified = await requireEmailVerification("comment on feedback");
-    if (!isVerified) return;
-
-    // Gate commenting behind account (free for all logged-in users)
+    // Gate commenting behind account first (free for all logged-in users) —
+    // requireEmailVerification silently returns false with no UI for a
+    // guest (no auth.currentUser), so it must run AFTER we know someone is
+    // signed in, or a guest's tap produces no feedback at all.
     if (!requireAccount({
       openAccountModal: () => setShowAccountRequired(true),
     })) {
       return;
     }
-    
+
+    // Require email verification
+    const isVerified = await requireEmailVerification("comment on feedback");
+    if (!isVerified) return;
+
     if (!currentUser || !commentText.trim() || submitting) return;
 
     try {
       setSubmitting(true);
+      setCommentError(null);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
       await addFeedbackComment({
@@ -196,7 +202,11 @@ export default function FeedbackDetailScreen() {
         setPost({ ...post, commentCount: post.commentCount + 1 });
       }
     } catch (err: any) {
-      setError("Failed to submit comment");
+      // Use a dedicated error state here, not the whole-screen `error` —
+      // that one gates the entire post+comments view, so a failed comment
+      // submit was replacing the post the user was just looking at with a
+      // full-page "Post not found"-style error.
+      setCommentError("Failed to submit comment. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -401,10 +411,22 @@ export default function FeedbackDetailScreen() {
                         canModerate={canModerate}
                         roleLabel={roleLabel}
                         onRequestDelete={async () => {
-                          setComments(prev => prev.filter(c => c.id !== comment.id));
+                          const result = await deleteComment(comment.id, "feedbackComments");
+                          if (result.success) {
+                            setComments(prev => prev.filter(c => c.id !== comment.id));
+                          } else {
+                            console.error("[FeedbackDetail] Delete comment failed:", result.error);
+                            Alert.alert("Error", result.error?.message || "Failed to delete comment");
+                          }
                         }}
                         onRequestRemove={async () => {
-                          setComments(prev => prev.filter(c => c.id !== comment.id));
+                          const result = await deleteComment(comment.id, "feedbackComments");
+                          if (result.success) {
+                            setComments(prev => prev.filter(c => c.id !== comment.id));
+                          } else {
+                            console.error("[FeedbackDetail] Remove comment failed:", result.error);
+                            Alert.alert("Error", result.error?.message || "Failed to remove comment");
+                          }
                         }}
                         layout="commentRow"
                         iconSize={16}
@@ -429,7 +451,7 @@ export default function FeedbackDetailScreen() {
               <TextInput
                 value={commentText}
                 onChangeText={setCommentText}
-                placeholder={currentUser ? "Share your thoughts..." : "Upgrade to Pro to comment..."}
+                placeholder={currentUser ? "Share your thoughts..." : "Sign in to comment..."}
                 placeholderTextColor={TEXT_MUTED}
                 multiline
                 numberOfLines={4}
@@ -456,6 +478,14 @@ export default function FeedbackDetailScreen() {
                 </Pressable>
               </View>
             </View>
+            {commentError && (
+              <Text
+                className="text-sm mt-2"
+                style={{ fontFamily: "SourceSans3_600SemiBold", color: RUST }}
+              >
+                {commentError}
+              </Text>
+            )}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

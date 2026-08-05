@@ -22,7 +22,7 @@ import {
   upvoteAnswer,
   incrementQuestionViews,
 } from "../../services/questionsService";
-import { deleteQuestion } from "../../services/connectDeletionService";
+import { deleteQuestion, deleteAnswer } from "../../services/connectDeletionService";
 import { getUser, isAdmin, isModerator, canModerateContent } from "../../services/userService";
 import { Question, Answer } from "../../types/community";
 import { User } from "../../types/user";
@@ -37,6 +37,7 @@ import {
   TEXT_SECONDARY,
   TEXT_MUTED,
   EARTH_GREEN,
+  RUST,
 } from "../../constants/colors";
 import HandleLink from "../../components/HandleLink";
 import { getConnectDisplayHandle } from "../../services/handleService";
@@ -54,6 +55,7 @@ export default function QuestionDetailScreen() {
   const [answers, setAnswers] = useState<Answer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [answerError, setAnswerError] = useState<string | null>(null);
   const [answerText, setAnswerText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [authorName, setAuthorName] = useState<string | null>(null);
@@ -230,6 +232,7 @@ export default function QuestionDetailScreen() {
 
     try {
       setSubmitting(true);
+      setAnswerError(null);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
       const answerId = await createAnswer({
@@ -244,7 +247,10 @@ export default function QuestionDetailScreen() {
       setAnswers(updatedAnswers);
       setAnswerText("");
     } catch (err: any) {
-      setError("Failed to submit answer");
+      // Dedicated error state — `error` gates the entire question+answers
+      // view, so a failed answer submit was replacing the question the
+      // user was just looking at with a full-page error.
+      setAnswerError("Failed to submit answer. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -441,10 +447,22 @@ export default function QuestionDetailScreen() {
                         canModerate={canModerate}
                         roleLabel={roleLabel}
                         onRequestDelete={async () => {
-                          setAnswers(prev => prev.filter(a => a.id !== answer.id));
+                          const result = await deleteAnswer(questionId, answer.id);
+                          if (result.success) {
+                            setAnswers(prev => prev.filter(a => a.id !== answer.id));
+                          } else {
+                            console.error("[QuestionDetail] Delete answer failed:", result.error);
+                            Alert.alert("Error", result.error?.message || "Failed to delete answer");
+                          }
                         }}
                         onRequestRemove={async () => {
-                          setAnswers(prev => prev.filter(a => a.id !== answer.id));
+                          const result = await deleteAnswer(questionId, answer.id);
+                          if (result.success) {
+                            setAnswers(prev => prev.filter(a => a.id !== answer.id));
+                          } else {
+                            console.error("[QuestionDetail] Remove answer failed:", result.error);
+                            Alert.alert("Error", result.error?.message || "Failed to remove answer");
+                          }
                         }}
                         layout="commentRow"
                         iconSize={16}
@@ -533,6 +551,14 @@ export default function QuestionDetailScreen() {
                   </Pressable>
                 </View>
               </View>
+              {answerError && (
+                <Text
+                  className="text-sm mt-2"
+                  style={{ fontFamily: "SourceSans3_600SemiBold", color: RUST }}
+                >
+                  {answerError}
+                </Text>
+              )}
             </View>
           )}
         </ScrollView>

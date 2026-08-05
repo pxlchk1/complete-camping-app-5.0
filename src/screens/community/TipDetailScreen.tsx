@@ -22,7 +22,7 @@ import { useRoute, useNavigation, RouteProp } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { getTipById, getTipComments, addTipComment } from "../../services/tipsService";
-import { deleteTip } from "../../services/connectDeletionService";
+import { deleteTip, deleteComment } from "../../services/connectDeletionService";
 import { reportContent } from "../../services/contentReportsService";
 import { requireEmailVerification } from "../../utils/authHelper";
 import { Tip, TipComment } from "../../types/community";
@@ -411,10 +411,22 @@ export default function TipDetailScreen() {
                       canModerate={canModerate}
                       roleLabel={roleLabel}
                       onRequestDelete={async () => {
-                        setComments(prev => prev.filter(c => c.id !== comment.id));
+                        const result = await deleteComment(comment.id, "tipComments");
+                        if (result.success) {
+                          setComments(prev => prev.filter(c => c.id !== comment.id));
+                        } else {
+                          console.error("[TipDetail] Delete comment failed:", result.error);
+                          Alert.alert("Error", result.error?.message || "Failed to delete comment");
+                        }
                       }}
                       onRequestRemove={async () => {
-                        setComments(prev => prev.filter(c => c.id !== comment.id));
+                        const result = await deleteComment(comment.id, "tipComments");
+                        if (result.success) {
+                          setComments(prev => prev.filter(c => c.id !== comment.id));
+                        } else {
+                          console.error("[TipDetail] Remove comment failed:", result.error);
+                          Alert.alert("Error", result.error?.message || "Failed to remove comment");
+                        }
                       }}
                       layout="commentRow"
                       iconSize={16}
