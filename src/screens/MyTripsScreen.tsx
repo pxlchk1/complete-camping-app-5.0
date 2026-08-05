@@ -14,6 +14,9 @@ import { getTripsCreatedCount } from "../services/userActionTrackerService";
 import TripCard from "../components/TripCard";
 import UpcomingTripCard from "../components/UpcomingTripCard";
 import CreateTripModal from "../components/CreateTripModal";
+import FireflyLoader from "../components/common/FireflyLoader";
+import { useToast } from "../components/ToastManager";
+import { notifyError } from "../ui/notify";
 import ConfirmationModal from "../components/ConfirmationModal";
 import AccountRequiredModal from "../components/AccountRequiredModal";
 import { RootStackParamList } from "../navigation/types";
@@ -42,6 +45,7 @@ export default function MyTripsScreen() {
   const tripsInitialized = useTripsStore((s) => s.initialized);
   const currentUser = useAuthStore((s) => s.user);
   const { isPro, isFree, isGuest } = useUserStatus();
+  const toast = useToast();
   const insets = useSafeAreaInsets();
 
   // Load trips from Firebase when screen is focused
@@ -137,8 +141,12 @@ export default function MyTripsScreen() {
     nav.navigate("Auth");
   };
 
+  // Trips haven't loaded yet for a signed-in user — show a loader instead
+  // of letting the empty state flash over trips that are still in flight.
+  const stillLoadingTrips = !isGuest && !tripsInitialized && tripsLoading;
+
   // Show empty state if there are no trips at all
-  const showEmptyState = allUpcomingTrips.length === 0 && pastTrips.length === 0;
+  const showEmptyState = !stillLoadingTrips && allUpcomingTrips.length === 0 && pastTrips.length === 0;
 
   const bottomSpacer = 50 + Math.max(insets.bottom, 18) + 12;
 
@@ -234,6 +242,14 @@ export default function MyTripsScreen() {
       handleCreateTrip();
     }
   };
+
+  if (stillLoadingTrips) {
+    return (
+      <View className="flex-1 bg-parchment items-center justify-center">
+        <FireflyLoader />
+      </View>
+    );
+  }
 
   // Empty state - now uses consistent layout with header, button, and panel
   if (showEmptyState) {
@@ -481,9 +497,16 @@ export default function MyTripsScreen() {
           message={`Are you sure you want to delete "${pendingDelete?.name}"? This cannot be undone.`}
           primary={{
             label: "Delete",
-            onPress: () => {
-              if (pendingDelete) deleteTrip(pendingDelete.id);
+            onPress: async () => {
+              const trip = pendingDelete;
               setPendingDelete(null);
+              if (!trip) return;
+              try {
+                await deleteTrip(trip.id);
+              } catch (error) {
+                console.error("[MyTrips] Failed to delete trip:", error);
+                notifyError(toast, "Failed to delete trip. Please try again.");
+              }
             },
           }}
           secondary={{

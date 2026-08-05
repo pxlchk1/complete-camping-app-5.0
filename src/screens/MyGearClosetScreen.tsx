@@ -228,6 +228,38 @@ export default function MyGearClosetScreen() {
     );
   }
 
+  if (error && auth.currentUser) {
+    return (
+      <View className="flex-1" style={{ backgroundColor: PARCHMENT }}>
+        <ModalHeader title="My Gear Closet" showTitle />
+        <View className="flex-1 items-center justify-center px-5">
+          <Ionicons name="alert-circle-outline" size={64} color={EARTH_GREEN} />
+          <Text
+            className="mt-4 text-center text-lg"
+            style={{ fontFamily: "SourceSans3_600SemiBold", color: TEXT_PRIMARY_STRONG }}
+          >
+            Couldn't load your gear closet
+          </Text>
+          <Text
+            className="mt-2 text-center"
+            style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}
+          >
+            {error}
+          </Text>
+          <Pressable
+            onPress={loadGear}
+            className="mt-6 px-6 py-3 rounded-xl active:opacity-90"
+            style={{ backgroundColor: DEEP_FOREST }}
+          >
+            <Text style={{ fontFamily: "SourceSans3_600SemiBold", color: PARCHMENT }}>
+              Try Again
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View className="flex-1" style={{ backgroundColor: PARCHMENT }}>
       <ModalHeader

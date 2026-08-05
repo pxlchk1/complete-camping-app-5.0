@@ -22,13 +22,33 @@ function normalizeName(name: string): string {
 }
 
 /**
- * Map gear closet categories to functional groups for shelter/sleep dedup.
- * When a user's gear item matches a group, generic template items in that
- * group are replaced by the user's owned gear.
+ * Keyword -> functional group used to dedup a gear closet item against a
+ * generic template item (see packingTemplatesV2.ts's `group` field). A
+ * gear category alone isn't specific enough here — "sleep" covers both
+ * sleeping bags and pads, "kitchen"/"food" covers stoves, fuel, coolers,
+ * bear storage, and water filters — so this matches on the item's name.
+ * Falls back to category for "shelter", which is reliably tents.
  */
-const GEAR_CATEGORY_TO_GROUP: Record<string, string> = {
-  shelter: "tent",
-};
+const GROUP_KEYWORDS: [string, string[]][] = [
+  ["tent", ["tent"]],
+  ["sleepingBag", ["sleeping bag", "sleep sack", "quilt"]],
+  ["sleepingPad", ["sleeping pad", "sleep pad", "air mattress", "camp mattress", "foam pad"]],
+  ["stove", ["stove", "burner"]],
+  ["fuel", ["fuel", "propane", "butane", "isobutane", "canister fuel"]],
+  ["waterFilter", ["water filter", "purifier", "purification"]],
+  ["cooler", ["cooler", "ice chest"]],
+  ["bearStorage", ["bear canister", "bear vault", "bear box", "bear bag", "ursack", "hang bag"]],
+  ["medications", ["first aid", "medication", "med kit"]],
+];
+
+function inferFunctionalGroup(gear: GearItem): string | undefined {
+  const name = gear.name.toLowerCase();
+  for (const [group, keywords] of GROUP_KEYWORDS) {
+    if (keywords.some((keyword) => name.includes(keyword))) return group;
+  }
+  if (gear.category === "shelter") return "tent";
+  return undefined;
+}
 
 /**
  * Merge gear closet items into packing list sections
@@ -69,8 +89,8 @@ export function mergeGearIntoPacking(
       return;
     }
 
-    // Check if this gear category maps to a functional group
-    const gearGroup = GEAR_CATEGORY_TO_GROUP[gear.category];
+    // Check if this gear item matches a functional group
+    const gearGroup = inferFunctionalGroup(gear);
     if (gearGroup) {
       if (!groupsToReplace[sectionTitle]) {
         groupsToReplace[sectionTitle] = new Set();
