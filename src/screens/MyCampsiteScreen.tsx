@@ -289,9 +289,11 @@ export default function MyCampsiteScreen({ navigation }: any) {
           query(collection(db, "tips"), where("userId", "==", userId), orderBy("createdAt", "desc"), limit(9)),
           (data) => data.title || data.description?.substring(0, 50) || "Tip"
         ),
+        // gearReviewsService only ever writes authorId, never userId — the
+        // old userId-only query here always returned zero results.
         safeQuery(
           "review",
-          query(collection(db, "gearReviews"), where("userId", "==", userId), orderBy("createdAt", "desc"), limit(9)),
+          query(collection(db, "gearReviews"), where("authorId", "==", userId), orderBy("createdAt", "desc"), limit(9)),
           (data) => data.gearName || data.title || "Gear Review"
         ),
         // Questions check both authorId and userId since different services use different fields.
@@ -444,7 +446,7 @@ export default function MyCampsiteScreen({ navigation }: any) {
       const [tripsSnap, tipsSnap, gearSnap, questionsSnap, storiesSnap, photoPostsSnap] = await Promise.all([
         getDocs(query(collection(db, "trips"), where("userId", "==", userId))),
         getDocs(query(collection(db, "tips"), where("userId", "==", userId))),
-        getDocs(query(collection(db, "gearReviews"), where("userId", "==", userId))),
+        getDocs(query(collection(db, "gearReviews"), where("authorId", "==", userId))),
         getDocs(query(collection(db, "questions"), where("authorId", "==", userId))),
         // Photos are counted from both the legacy "stories" collection and the current "photoPosts" collection.
         getDocs(query(collection(db, "stories"), where("userId", "==", userId))),

@@ -54,9 +54,12 @@ export default function AdminDashboardScreen() {
       );
       const reportsSnapshot = await getDocs(reportsQuery);
 
+      // banUser() (src/services/userService.ts) writes isBanned to
+      // profiles/{uid}, not users/{uid} — query the collection it actually
+      // writes to, or this stat always reads 0 regardless of real bans.
       const bannedQuery = query(
-        collection(db, "users"),
-        where("banned", "==", true)
+        collection(db, "profiles"),
+        where("isBanned", "==", true)
       );
       const bannedSnapshot = await getDocs(bannedQuery);
 

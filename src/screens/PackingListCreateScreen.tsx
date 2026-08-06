@@ -47,6 +47,8 @@ import {
   PackingTemplateKey,
 } from "../state/packingStore";
 import { RootStackParamList } from "../navigation/types";
+import { useToast } from "../components/ToastManager";
+import { notifyError } from "../ui/notify";
 import { getSeasonInfo, WINTER_NUDGE_TEXT, type SeasonSource } from "../utils/packingSeasonUtils";
 import { useUpdateTrip } from "../state/tripsStore";
 import { auth } from "../config/firebase";
@@ -59,6 +61,7 @@ type RouteProps = RouteProp<RootStackParamList, "PackingListCreate">;
 export default function PackingListCreateScreen() {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProps>();
+  const toast = useToast();
   const { createPackingList } = usePackingStore();
   const updateTrip = useUpdateTrip();
   
@@ -127,6 +130,7 @@ export default function PackingListCreateScreen() {
         setGearItems(gear);
       } catch (error) {
         console.error("Error loading gear closet:", error);
+        notifyError(toast, "Couldn't load your gear closet. Your gear won't be included in this list.");
       } finally {
         setGearLoading(false);
       }
@@ -158,9 +162,10 @@ export default function PackingListCreateScreen() {
     if (tripId) {
       updateTrip(tripId, { packingSeasonOverride: newSeason }).catch((err) => {
         console.error("[PackingListCreate] Failed to persist season override:", err);
+        notifyError(toast, "Couldn't save your season choice. It may reset next time you open this list.");
       });
     }
-  }, [tripId, updateTrip]);
+  }, [tripId, updateTrip, toast]);
 
   // Reset to auto-detected season
   const handleResetToAuto = useCallback(() => {
@@ -172,9 +177,10 @@ export default function PackingListCreateScreen() {
     if (tripId) {
       updateTrip(tripId, { packingSeasonOverride: undefined }).catch((err) => {
         console.error("[PackingListCreate] Failed to clear season override:", err);
+        notifyError(toast, "Couldn't reset your season choice. Please try again.");
       });
     }
-  }, [tripId, updateTrip]);
+  }, [tripId, updateTrip, toast]);
 
   // Get helper text based on season source
   const getSeasonHelperText = () => {

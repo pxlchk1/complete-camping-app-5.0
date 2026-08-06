@@ -1,6 +1,12 @@
 /**
  * Content Reports Firestore Service
- * Collection: contentReports
+ * Collection: reports
+ *
+ * Writes to the same "reports" collection + schema AdminReportsScreen and
+ * AdminDashboardScreen read (contentType/contentId/reportedBy/reportedAt/
+ * status: "pending"). This used to write to a different, unrelated
+ * "contentReports" collection with a different schema — every report a
+ * user submitted was invisible to both admin screens.
  */
 
 import {
@@ -20,15 +26,15 @@ export async function reportContent(data: {
   reason: string;
   reporterId: string;
 }): Promise<string> {
-  const reportsRef = collection(db, "contentReports");
+  const reportsRef = collection(db, "reports");
 
   const docRef = await addDoc(reportsRef, {
-    targetType: data.targetType,
-    targetId: data.targetId,
+    contentType: data.targetType,
+    contentId: data.targetId,
     reason: data.reason,
-    reporterId: data.reporterId,
-    createdAt: serverTimestamp(),
-    status: "open",
+    reportedBy: data.reporterId,
+    reportedAt: serverTimestamp(),
+    status: "pending",
   });
 
   return docRef.id;

@@ -1111,8 +1111,8 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
               }, { merge: true });
               
               // 3. Update local store for instant UI update
-              setTripDestination(tripId, tripDestination, park.id);
-              
+              await setTripDestination(tripId, tripDestination, park.id);
+
               console.log("[ParksBrowse] Destination saved successfully");
               
               // 4. Close modal

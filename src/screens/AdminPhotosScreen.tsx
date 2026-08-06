@@ -58,17 +58,25 @@ export default function AdminPhotosScreen() {
 
   const checkAdminStatus = async () => {
     if (!currentUserId) return;
-    
+
+    // Mirrors firestore.rules' isAdmin(): checks both profiles/{uid} and
+    // users/{uid} for isAdmin/role/membershipTier. This screen is reachable
+    // via AdminGate (which already uses the fixed useIsAdmin() hook), but
+    // this local check gates delete permissions within the screen itself —
+    // it previously only checked users/{uid} and ignored membershipTier,
+    // so real admins provisioned that way passed the route gate but were
+    // then blocked from moderating anyone else's photos.
     try {
-      const userDoc = await getDoc(doc(db, "users", currentUserId));
-      if (userDoc.exists()) {
-        const data = userDoc.data();
-        setIsAdmin(
-          data.isAdmin === true || 
-          data.role === "admin" || 
-          data.role === "administrator"
-        );
-      }
+      const [profileDoc, userDoc] = await Promise.all([
+        getDoc(doc(db, "profiles", currentUserId)),
+        getDoc(doc(db, "users", currentUserId)),
+      ]);
+      const isAdminData = (data: Record<string, any> | undefined) =>
+        data?.isAdmin === true ||
+        data?.role === "admin" ||
+        data?.role === "administrator" ||
+        data?.membershipTier === "isAdmin";
+      setIsAdmin(isAdminData(profileDoc.data()) || isAdminData(userDoc.data()));
     } catch (error) {
       console.error("[AdminPhotos] Error checking admin status:", error);
     }

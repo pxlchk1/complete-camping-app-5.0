@@ -22,6 +22,8 @@ import { useCurrentUser, useUserStore } from "../state/userStore";
 import { useSubscriptionStore } from "../state/subscriptionStore";
 import { getPaywallVariantAndTrack, type PaywallVariant } from "../services/proAttemptService";
 import { TEXT_SECONDARY } from "../constants/colors";
+import { useToast } from "./ToastManager";
+import { notifyError } from "../ui/notify";
 
 interface VotePillProps {
   collectionPath: string;
@@ -44,6 +46,7 @@ export default function VotePill({
   size = "medium",
 }: VotePillProps) {
   const currentUser = useCurrentUser();
+  const toast = useToast();
   const isPro = useSubscriptionStore((s) => s.isPro);
   const isAdmin = useUserStore((s) => s.isAdministrator());
   const [score, setScore] = useState(initialScore);
@@ -125,10 +128,11 @@ export default function VotePill({
       setScore(prevScore);
       setUserVote(prevVote);
       console.warn("Vote failed:", err);
+      notifyError(toast, "Failed to update your vote. Please try again.");
     } finally {
       setIsVoting(false);
     }
-  }, [currentUser, isPro, isAdmin, isVoting, score, userVote, collectionPath, itemId, onRequireAccount, onRequirePro]);
+  }, [currentUser, isPro, isAdmin, isVoting, score, userVote, collectionPath, itemId, onRequireAccount, onRequirePro, toast]);
 
   const iconSize = size === "small" ? 14 : 16;
   const fontSize = size === "small" ? 11 : 13;

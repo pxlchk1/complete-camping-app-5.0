@@ -26,27 +26,30 @@ import { db } from "../config/firebase";
 
 /**
  * Validates a handle according to the rules:
- * - 3-20 characters
- * - lowercase letters, numbers, underscores only
- * - must not start with underscore
+ * - 3-30 characters
+ * - lowercase letters, numbers, hyphens, underscores only
+ *
+ * Must stay a superset of constants/reservedHandles.ts's validateHandle(),
+ * which is the rule set actually shown to users in Settings/Edit
+ * Profile/sign-up. This function gates reserveHandle()'s uniqueness
+ * transaction — if it were ever stricter than validateHandle, a handle
+ * that passed the UI-facing check (e.g. one with a hyphen) would silently
+ * fail reservation and end up completely unprotected by uniqueness.
  */
 export function isValidHandle(handle: string | null | undefined): boolean {
   if (!handle || typeof handle !== "string") return false;
-  
+
   const trimmed = handle.trim().toLowerCase();
-  
-  // Length check: 3-20 chars
-  if (trimmed.length < 3 || trimmed.length > 20) return false;
-  
-  // Character check: lowercase letters, numbers, underscores only
-  if (!/^[a-z0-9_]+$/.test(trimmed)) return false;
-  
-  // Must not start with underscore
-  if (trimmed.startsWith("_")) return false;
-  
+
+  // Length check: 3-30 chars
+  if (trimmed.length < 3 || trimmed.length > 30) return false;
+
+  // Character check: lowercase letters, numbers, hyphens, underscores only
+  if (!/^[a-z0-9_-]+$/.test(trimmed)) return false;
+
   // Reject "anonymous" and "user" as invalid
   if (trimmed === "anonymous" || trimmed === "user") return false;
-  
+
   return true;
 }
 

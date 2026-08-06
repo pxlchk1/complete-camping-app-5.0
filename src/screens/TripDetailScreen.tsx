@@ -745,17 +745,23 @@ export default function TripDetailScreen() {
                 </Text>
               </View>
 
-              <Pressable onPress={handleAddPeople} className="active:opacity-70">
-                <Ionicons name="add-circle" size={24} color={EARTH_GREEN} />
-              </Pressable>
+              {canEditTrip && (
+                <Pressable onPress={handleAddPeople} className="active:opacity-70">
+                  <Ionicons name="add-circle" size={24} color={EARTH_GREEN} />
+                </Pressable>
+              )}
             </View>
 
             {loadingParticipants ? (
               <ActivityIndicator size="small" color={EARTH_GREEN} />
             ) : participants.length === 0 ? (
-              <Pressable onPress={handleAddPeople} className="active:opacity-70">
-                <BodyText className="text-forest">Add people from your campground</BodyText>
-              </Pressable>
+              canEditTrip ? (
+                <Pressable onPress={handleAddPeople} className="active:opacity-70">
+                  <BodyText className="text-forest">Add people from your campground</BodyText>
+                </Pressable>
+              ) : (
+                <BodyText className="text-forest">No one added to this trip yet</BodyText>
+              )
             ) : (
               <View className="flex-row flex-wrap" style={{ gap: 8 }}>
                 {participants.map((person) => (

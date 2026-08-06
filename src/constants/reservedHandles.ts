@@ -102,6 +102,8 @@ export const RESERVED_HANDLES = [
   "system",
   "null",
   "undefined",
+  "anonymous",
+  "user",
   "test",
   "tester",
   "demo",

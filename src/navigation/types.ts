@@ -126,10 +126,6 @@ export type RootStackParamList = {
 
   // Dev-only screens
   MeritBadgeAssetCheck: undefined;
-
-
-  // Main tabs
-  MainTabs: { screen: string; params?: any };
 };
 
 export type RootStackScreenProps<T extends keyof RootStackParamList> =

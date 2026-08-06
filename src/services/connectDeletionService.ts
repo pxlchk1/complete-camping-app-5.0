@@ -87,9 +87,10 @@ export async function canUserDeleteContent(
       // Ignore errors fetching user doc
     }
     
-    // Check admin status from either collection OR by email
-    const emailIsAdmin = user.email?.toLowerCase() === "alana@tentandlantern.com";
-    
+    // Check admin status from either collection. No hardcoded email bypass
+    // here — firestore.rules' isAdmin() has no such concept, so a client
+    // check that's more permissive than the rule just means canDelete:true
+    // gets shown on a button that Firestore then rejects anyway.
     const isAdmin = !!(
       (profileData && (
         profileData.isAdmin === true ||
@@ -102,8 +103,7 @@ export async function canUserDeleteContent(
         userData.role === "admin" ||
         userData.role === "administrator" ||
         userData.membershipTier === "isAdmin"
-      )) ||
-      emailIsAdmin
+      ))
     );
 
     return {
@@ -147,12 +147,8 @@ export async function deleteConnectContent(
   try {
     // Check permissions first
     const { canDelete, isOwner, isAdmin } = await canUserDeleteContent(collectionName, docId, ownerField);
-    
-    // Direct email check for primary admin as fallback
-    const isEmailAdmin = user.email?.toLowerCase() === "alana@tentandlantern.com";
-    const finalCanDelete = canDelete || isEmailAdmin;
 
-    if (!finalCanDelete) {
+    if (!canDelete) {
       console.error(`${logPrefix} Error: Permission denied`);
       return {
         success: false,

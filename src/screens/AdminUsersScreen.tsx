@@ -26,6 +26,8 @@ import {
   query,
   where,
   getDocs,
+  getDoc,
+  doc,
   orderBy,
   limit,
   startAfter,
@@ -57,6 +59,26 @@ interface User {
 }
 
 const PAGE_SIZE = 50;
+
+// banUser/unbanUser/grantMembership/updateUserRole (src/services/userService.ts)
+// all write isBanned/membershipTier to profiles/{uid}, not users/{uid} — this
+// screen lists from `users` (for its email/handle/createdAt fields), so ban
+// status and admin-granted tier have to be pulled in from `profiles`
+// separately or every admin action taken elsewhere in the app would show as
+// having no effect here.
+async function mergeProfileStatus(users: User[]): Promise<User[]> {
+  const profiles = await Promise.all(
+    users.map((u) => getDoc(doc(db, "profiles", u.id)).catch(() => null))
+  );
+  return users.map((u, i) => {
+    const profileData = profiles[i]?.exists() ? profiles[i]!.data() : null;
+    return {
+      ...u,
+      banned: profileData?.isBanned ?? u.banned ?? false,
+      membershipTier: profileData?.membershipTier ?? u.membershipTier,
+    };
+  });
+}
 
 export default function AdminUsersScreen() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -101,11 +123,12 @@ export default function AdminUsersScreen() {
       }
 
       const snapshot = await getDocs(q);
-      
-      const users: User[] = snapshot.docs.map((docSnap) => ({
+
+      const rawUsers: User[] = snapshot.docs.map((docSnap) => ({
         id: docSnap.id,
         ...docSnap.data(),
       } as User));
+      const users = await mergeProfileStatus(rawUsers);
 
       if (loadMore) {
         setAllUsers((prev) => [...prev, ...users]);
@@ -153,19 +176,20 @@ export default function AdminUsersScreen() {
         getDocs(handleQuery),
       ]);
 
-      const results: User[] = [];
+      const rawResults: User[] = [];
       const seenIds = new Set<string>();
 
       [...emailSnapshot.docs, ...handleSnapshot.docs].forEach((docSnap) => {
         if (!seenIds.has(docSnap.id)) {
           seenIds.add(docSnap.id);
-          results.push({
+          rawResults.push({
             id: docSnap.id,
             ...docSnap.data(),
           } as User);
         }
       });
 
+      const results = await mergeProfileStatus(rawResults);
       setSearchResults(results);
 
       if (results.length === 0) {

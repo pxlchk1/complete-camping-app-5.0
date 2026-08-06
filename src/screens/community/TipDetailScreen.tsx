@@ -176,7 +176,7 @@ export default function TipDetailScreen() {
           { text: "Cancel", style: "cancel" },
           {
             text: "Log in / Sign up",
-            onPress: () => navigation.navigate("Account"),
+            onPress: () => navigation.navigate("Auth"),
           },
         ]
       );
@@ -216,7 +216,7 @@ export default function TipDetailScreen() {
           { text: "Cancel", style: "cancel" },
           {
             text: "Log in / Sign up",
-            onPress: () => navigation.navigate("Account"),
+            onPress: () => navigation.navigate("Auth"),
           },
         ]
       );

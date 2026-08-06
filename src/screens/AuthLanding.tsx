@@ -455,16 +455,14 @@ export default function AuthLanding({ navigation, route }: { navigation: any; ro
         // Force token refresh to ensure Firestore rules see the new auth state
         await userCredential.user.getIdToken(true);
 
-        // Atomically claim the handle now that we're authenticated (handles
-        // the rare race where two signups grab the same handle between the
-        // pre-check above and here). If it lost the race, proceed anyway —
-        // the account still works and the handle can be changed in Settings.
-        const handleReserved = await reserveHandle(userCredential.user.uid, normalizedHandle);
-        if (!handleReserved) {
-          console.warn("[AuthLanding] Handle reservation lost a race, proceeding with account creation:", normalizedHandle);
-        }
-
-        // Create user profile using protected onboarding layer
+        // Create user profile using protected onboarding layer. This MUST
+        // run before reserveHandle(): onboardingSteps.ts's ensureUserDoc is
+        // deliberately idempotent and only fully initializes users/{uid}
+        // (email, photoURL, createdAt, notification defaults, ...) if the
+        // doc doesn't exist yet. reserveHandle() also touches users/{uid}
+        // (just the handle field) — calling it first would pre-create a
+        // partial doc and make ensureUserDoc think the account was already
+        // fully set up, silently skipping the rest of its initialization.
         const onboardingParams = {
           userId: userCredential.user.uid,
           email: email.trim(),
@@ -489,8 +487,18 @@ export default function AuthLanding({ navigation, route }: { navigation: any; ro
           setError("Your login was created, but we couldn't finish setup. Tap Retry.");
           return;
         }
-        
+
         console.log("ONBOARDING_SUCCESS");
+
+        // Atomically claim the handle now that the account is fully set up
+        // (handles the rare race where two signups grab the same handle
+        // between the pre-check above and here). If it lost the race,
+        // proceed anyway — the account still works and the handle can be
+        // changed in Settings.
+        const handleReserved = await reserveHandle(userCredential.user.uid, normalizedHandle);
+        if (!handleReserved) {
+          console.warn("[AuthLanding] Handle reservation lost a race, proceeding with account creation:", normalizedHandle);
+        }
 
         // Send email verification
         try {
