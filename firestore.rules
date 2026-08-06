@@ -73,10 +73,19 @@ service cloud.firestore {
       return isAdmin() || isModerator();
     }
 
+    // Pro access: a live RevenueCat entitlement (synced to users/{uid} by
+    // subscriptionService.syncSubscriptionToFirestore), OR an admin-granted
+    // membership (grantMembership() writes profiles/{uid}.membershipTier),
+    // OR admin/moderator (both always get full Pro access client-side too).
     function isSubscribed() {
       return isSignedIn()
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subscriptionStatus == 'active';
+        && (
+          isAdmin() || isModerator() ||
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid))
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subscriptionStatus == 'active') ||
+          (exists(/databases/$(database)/documents/profiles/$(request.auth.uid))
+            && get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.membershipTier == 'subscribed')
+        );
     }
 
     // Users collection
@@ -258,14 +267,17 @@ service cloud.firestore {
     // Gear Reviews
     match /gearReviews/{id} {
       allow read: if true; // Public read
-      allow create: if isSignedIn();
-      // Owner can edit anything; anyone else signed in may only touch the
-      // vote-count fields genericVotesService.vote() writes (upvotes/
-      // downvotes or upvoteCount/downvoteCount, never both pairs at once).
-      // Previously any signed-in user could overwrite any field on anyone
-      // else's review — this closes that while still allowing voting.
+      // Gear Reviews are a documented Pro feature (see gating.ts: "FREE
+      // blocked: Gear Reviews (paywall)") — the client already paywalls
+      // creation, this makes the server actually enforce it too.
+      allow create: if isSubscribed();
+      // Owner can edit anything IF still subscribed (or admin/mod); anyone
+      // signed in may always touch the vote-count fields
+      // genericVotesService.vote() writes (upvotes/downvotes or
+      // upvoteCount/downvoteCount, never both pairs at once) — voting is
+      // free for everyone, only authoring/editing reviews is Pro.
       allow update: if isSignedIn() && (
-        isOwnerByUid() ||
+        (isOwnerByUid() && isSubscribed()) ||
         request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(["upvotes", "downvotes", "upvoteCount", "downvoteCount"])
       );

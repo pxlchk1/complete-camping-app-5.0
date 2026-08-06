@@ -271,6 +271,11 @@ export default function AuthLanding({ navigation, route }: { navigation: any; ro
         throw new Error("No current user");
       }
 
+      if (userData?.isBanned) {
+        await auth.signOut();
+        throw new Error("This account has been suspended. Contact support if you believe this is an error.");
+      }
+
       const userProfile = {
         id: userId,
         email: firebaseUser.email || "",
@@ -297,11 +302,12 @@ export default function AuthLanding({ navigation, route }: { navigation: any; ro
         favoriteGear: userData?.favoriteGear,
         role: userData?.role || "user",
         membershipTier: userData?.membershipTier || "freeMember",
+        membershipExpiresAt: userData?.membershipExpiresAt || undefined,
         isBanned: false,
         createdAt: userData?.joinedAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
-      
+
       setCurrentUser(userStoreData);
       
       // Identify user in RevenueCat to sync subscription status
@@ -525,6 +531,11 @@ export default function AuthLanding({ navigation, route }: { navigation: any; ro
       const userDoc = await getDoc(doc(db, "profiles", firebaseUser.uid));
       const userData = userDoc.data();
 
+      if (userData?.isBanned) {
+        await auth.signOut();
+        throw new Error("This account has been suspended. Contact support if you believe this is an error.");
+      }
+
       const userProfile = {
         id: firebaseUser.uid,
         email: firebaseUser.email || email.trim(),
@@ -552,6 +563,7 @@ export default function AuthLanding({ navigation, route }: { navigation: any; ro
         favoriteGear: userData?.favoriteGear,
         role: userData?.role || "user",
         membershipTier: userData?.membershipTier || "freeMember",
+        membershipExpiresAt: userData?.membershipExpiresAt || undefined,
         isBanned: false,
         createdAt: userData?.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),

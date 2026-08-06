@@ -54,6 +54,12 @@ export function isPremiumUser(): boolean {
     return true;
   }
 
+  // Admin-granted subscription (Award Subscription) counts as Pro
+  // alongside a real RevenueCat entitlement.
+  if (userState.hasGrantedMembership()) {
+    return true;
+  }
+
   return useSubscriptionStore.getState().isPro;
 }
 

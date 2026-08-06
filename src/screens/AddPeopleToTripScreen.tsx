@@ -46,6 +46,7 @@ export default function AddPeopleToTripScreen() {
   const { tripId } = route.params;
 
   const trip = useTripsStore((s) => s.getTripById(tripId));
+  const updateTrip = useTripsStore((s) => s.updateTrip);
 
   const [contacts, setContacts] = useState<CampgroundContact[]>([]);
   const [selectedContactIds, setSelectedContactIds] = useState<Set<string>>(new Set());
@@ -127,6 +128,23 @@ export default function AddPeopleToTripScreen() {
 
       const tripStartDate = trip?.startDate ? new Date(trip.startDate) : new Date();
       await addTripParticipantsWithRoles(tripId, participantsWithRoles, tripStartDate);
+
+      // Grant read access to any added contact who is a registered app
+      // user (contactUserId is only set once that contact has redeemed a
+      // campground invite). Contacts without a linked account have no uid
+      // to grant access to and just stay in the roster added above.
+      const linkedUserIds = Array.from(selectedContactIds)
+        .map((contactId) => contacts.find((c) => c.id === contactId)?.contactUserId)
+        .filter((uid): uid is string => !!uid);
+
+      if (linkedUserIds.length > 0 && trip) {
+        const existingMemberIds = trip.memberIds || [];
+        const newMemberIds = Array.from(new Set([...existingMemberIds, ...linkedUserIds]));
+        if (newMemberIds.length !== existingMemberIds.length) {
+          await updateTrip(tripId, { memberIds: newMemberIds });
+        }
+      }
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       
       // Check if we should show invite upsell modal

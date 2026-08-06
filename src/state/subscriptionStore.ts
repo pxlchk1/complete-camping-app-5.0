@@ -7,6 +7,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { CustomerInfo } from "react-native-purchases";
+import { useUserStore } from "./userStore";
 
 export interface SubscriptionState {
   // State
@@ -37,11 +38,15 @@ export const useSubscriptionStore = create<SubscriptionState>()(
       lastChecked: null,
 
       // Update subscription info from CustomerInfo
-      // CRITICAL: isPro is determined by entitlement "Pro" (case-sensitive)
+      // CRITICAL: isPro is determined by entitlement "Pro" (case-sensitive),
+      // OR by an admin-granted membership (Award Subscription) recorded on
+      // the user's profile — see the userStore.subscribe() call below,
+      // which keeps isPro in sync when a grant lands without needing a
+      // fresh RevenueCat fetch.
       setSubscriptionInfo: (customerInfo: CustomerInfo | null) => {
         if (!customerInfo) {
           set({
-            isPro: false,
+            isPro: useUserStore.getState().hasGrantedMembership(),
             activeEntitlements: [],
             customerInfo: null,
             lastChecked: new Date().toISOString(),
@@ -50,8 +55,9 @@ export const useSubscriptionStore = create<SubscriptionState>()(
         }
 
         const entitlements = Object.keys(customerInfo.entitlements.active);
-        // Check for exact entitlement "Pro" (case-sensitive)
-        const hasPro = Boolean(customerInfo.entitlements.active["Pro"]);
+        // Check for exact entitlement "Pro" (case-sensitive), or an
+        // admin-granted membership
+        const hasPro = Boolean(customerInfo.entitlements.active["Pro"]) || useUserStore.getState().hasGrantedMembership();
 
         console.log("[SubscriptionStore] Updated subscription info:", {
           isPro: hasPro,
@@ -122,6 +128,28 @@ export const useSubscriptionStore = create<SubscriptionState>()(
     }
   )
 );
+
+// Keep isPro in sync when an admin grants/revokes a membership (via
+// grantMembership/"Award Subscription") or a live profile listener updates
+// it, without waiting on a fresh RevenueCat fetch. setSubscriptionInfo only
+// runs on RevenueCat events, so a Firestore-only change would otherwise
+// never be reflected in isPro.
+useUserStore.subscribe((state, prevState) => {
+  const membershipTier = state.currentUser?.membershipTier;
+  const membershipExpiresAt = state.currentUser?.membershipExpiresAt;
+  if (
+    membershipTier === prevState.currentUser?.membershipTier &&
+    membershipExpiresAt === prevState.currentUser?.membershipExpiresAt
+  ) {
+    return;
+  }
+
+  const { customerInfo } = useSubscriptionStore.getState();
+  const revenueCatIsPro = Boolean(customerInfo?.entitlements.active["Pro"]);
+  useSubscriptionStore.setState({
+    isPro: revenueCatIsPro || useUserStore.getState().hasGrantedMembership(),
+  });
+});
 
 // Selector hooks for optimized re-renders
 export const useIsPro = () => useSubscriptionStore((s) => s.isPro);

@@ -8,9 +8,11 @@ import { View, Text, ScrollView, Pressable, TextInput, Alert, ActivityIndicator 
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { auth, db } from "../config/firebase";
-import { doc, getDoc, updateDoc, serverTimestamp, collection, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs } from "firebase/firestore";
 import ModalHeader from "../components/ModalHeader";
 import ConfirmationModal from "../components/ConfirmationModal";
+import { grantMembership } from "../services/userService";
+import { MembershipDuration } from "../types/user";
 import {
   PARCHMENT,
   CARD_BACKGROUND_LIGHT,
@@ -77,27 +79,23 @@ export default function AdminSubscriptionsScreen() {
     const { userId, email: grantedEmail, duration } = pendingGrant;
     setPendingGrant(null);
 
+    const adminId = auth.currentUser?.uid;
+    if (!adminId) {
+      Alert.alert("Error", "You must be signed in as an admin to do this.");
+      return;
+    }
+
     try {
       setLoading(true);
 
-      // Calculate expiration date
-      let expiresAt = null;
-      if (duration.months !== null) {
-        const now = new Date();
-        now.setMonth(now.getMonth() + duration.months);
-        expiresAt = now.toISOString();
-      }
-
-      // Update user document
-      await updateDoc(doc(db, "users", userId), {
-        membershipTier: "subscribed",
-        subscriptionProvider: "admin_granted",
-        subscriptionStatus: "active",
-        subscriptionUpdatedAt: serverTimestamp(),
-        subscriptionExpiresAt: expiresAt,
-        grantedBy: auth.currentUser?.email || "admin",
-        grantedAt: serverTimestamp(),
-      });
+      // grantMembership() is the real, fully-wired grant path: it writes
+      // membershipTier/membershipExpiresAt to profiles/{uid} (what the
+      // Pro-gate and account-status listener actually read), records a
+      // membershipGrants entry, and logs an audit action. This previously
+      // hand-rolled a Firestore write to the wrong collection (users, not
+      // profiles) with field names (subscriptionExpiresAt) nothing ever
+      // read, so admins believed they'd granted Pro and nothing unlocked.
+      await grantMembership(adminId, userId, duration.id as MembershipDuration);
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert(

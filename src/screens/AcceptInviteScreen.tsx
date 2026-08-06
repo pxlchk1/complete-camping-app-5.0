@@ -52,6 +52,14 @@ export default function AcceptInviteScreen() {
   // than once if Firebase fires multiple auth events in quick succession.
   const hasAttemptedRef = useRef(false);
 
+  // Only true once the guest has explicitly tapped "Create Account" / "Log
+  // In" on THIS screen's modal. Firebase fires onAuthStateChanged with the
+  // current user immediately on mount for anyone who was already signed in
+  // before opening the invite link — without this guard that fired
+  // handleAcceptInvite() right away, silently joining the campground before
+  // the user ever saw the Join/Not Now buttons below.
+  const cameFromAuthPromptRef = useRef(false);
+
   useEffect(() => {
     if (isGuest) {
       setShowAccountModal(true);
@@ -71,7 +79,12 @@ export default function AcceptInviteScreen() {
   // screen above us) and resumes acceptance automatically.
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user && !hasAttemptedRef.current && (state === "ready" || state === "loading")) {
+      if (
+        user &&
+        !hasAttemptedRef.current &&
+        cameFromAuthPromptRef.current &&
+        (state === "ready" || state === "loading")
+      ) {
         hasAttemptedRef.current = true;
         setShowAccountModal(false);
         handleAcceptInvite();
@@ -145,6 +158,7 @@ export default function AcceptInviteScreen() {
   // onAuthStateChanged listener above resumes acceptance once they're
   // actually signed in.
   const handleGoToAuth = () => {
+    cameFromAuthPromptRef.current = true;
     setShowAccountModal(false);
     navigation.navigate("Auth", { returnTo: true });
   };

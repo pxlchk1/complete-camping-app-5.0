@@ -20,16 +20,17 @@ import RootNavigator from "./src/navigation/RootNavigator";
 import { ToastProvider } from "./src/components/ToastManager";
 import { FireflyTimeProvider } from "./src/context/FireflyTimeContext";
 import { OnboardingProvider } from "./src/context/OnboardingContext";
-import { View, ImageBackground } from "react-native";
-import { useEffect, useState } from "react";
+import { View, ImageBackground, Text, Pressable } from "react-native";
+import { useEffect, useRef, useState } from "react";
 import { initSubscriptions, identifyUser } from "./src/services/subscriptionService";
 import { recordAppOpen } from "./src/services/sessionService";
 import { trackAppOpen, trackSessionStarted } from "./src/services/analyticsService";
 import { useAuthStore } from "./src/state/authStore";
 import { useTripsStore } from "./src/state/tripsStore";
+import { useUserStore } from "./src/state/userStore";
 import { auth } from "./src/config/firebase";
 import { onAuthStateChanged } from "firebase/auth";
-import { getDoc, doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { getDoc, doc, setDoc, onSnapshot, serverTimestamp } from "firebase/firestore";
 import { db } from "./src/config/firebase";
 import { RootStackParamList } from "./src/navigation/types";
 import { logUpdateDiagnostics } from "./src/utils/updateDiagnostics";
@@ -127,6 +128,12 @@ export default function App() {
   // snapping to Home. See RootNavigator's initialRouteName.
   const [authStoreHydrated, setAuthStoreHydrated] = useState(() => useAuthStore.persist.hasHydrated());
   const [authChecked, setAuthChecked] = useState(false);
+  // Set when the signed-in user's profile flips isBanned:true, either at
+  // sign-in or live via the profile listener below. Blocks the app with a
+  // dedicated screen until dismissed, rather than silently bouncing to the
+  // login screen with no explanation.
+  const [banNotice, setBanNotice] = useState<string | null>(null);
+  const profileUnsubscribeRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (authStoreHydrated) return;
@@ -157,6 +164,11 @@ export default function App() {
     }
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      // Tear down any profile listener bound to the previous uid before
+      // attaching a new one (or none, on sign-out).
+      profileUnsubscribeRef.current?.();
+      profileUnsubscribeRef.current = null;
+
       if (firebaseUser) {
         console.log("[App] Firebase user signed in:", firebaseUser.uid);
         try {
@@ -194,6 +206,49 @@ export default function App() {
             });
             console.log(`[App] Created Firestore user profile for uid: ${firebaseUser.uid}`);
           }
+
+          // Live-sync ban status and admin-granted membership for the rest
+          // of the session. Without this, banUser()/grantMembership() (both
+          // write straight to Firestore) only ever took effect on the
+          // user's NEXT full sign-in, since userStore.currentUser is
+          // otherwise set once at login and persisted locally after that —
+          // a banned user could keep using an already-open session
+          // indefinitely, and an admin-granted subscription wouldn't
+          // unlock anything until a re-login.
+          profileUnsubscribeRef.current = onSnapshot(userRef, (snap) => {
+            const data = snap.data();
+            if (!data) return;
+
+            const membershipPatch = {
+              role: data.role || "user",
+              membershipTier: data.membershipTier || "freeMember",
+              membershipExpiresAt: data.membershipExpiresAt || undefined,
+              isBanned: !!data.isBanned,
+            };
+
+            if (useUserStore.getState().currentUser) {
+              useUserStore.getState().updateCurrentUser(membershipPatch);
+            } else {
+              // Firebase session restored (e.g. reinstall) without the
+              // locally persisted profile AuthLanding normally seeds —
+              // construct the minimum fields gating/ban checks need.
+              useUserStore.getState().setCurrentUser({
+                id: firebaseUser.uid,
+                email: firebaseUser.email || "",
+                handle: data.handle || "user",
+                displayName: data.displayName || "User",
+                photoURL: data.avatarUrl || firebaseUser.photoURL || undefined,
+                createdAt: data.joinedAt || new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                ...membershipPatch,
+              });
+            }
+
+            if (data.isBanned) {
+              setBanNotice(data.banReason || "This account has been suspended. Contact support if you believe this is an error.");
+              auth.signOut();
+            }
+          });
         } catch (error) {
           console.error("[App] Failed to identify user in RevenueCat or create profile:", error);
         }
@@ -209,7 +264,10 @@ export default function App() {
       setAuthChecked(true);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      profileUnsubscribeRef.current?.();
+    };
   }, [subscriptionsInitialized]);
 
   // Splash stays up until fonts, subscriptions, the persisted-session
@@ -235,6 +293,28 @@ export default function App() {
         style={{ flex: 1, width: "100%", height: "100%" }}
         resizeMode="cover"
       />
+    );
+  }
+
+  if (banNotice) {
+    return (
+      <SafeAreaProvider>
+        <View style={{ flex: 1, backgroundColor: "#1B1F1C", alignItems: "center", justifyContent: "center", padding: 32 }}>
+          <Text style={{ color: "#F5F0E6", fontSize: 22, fontWeight: "700", textAlign: "center", marginBottom: 12 }}>
+            Account Suspended
+          </Text>
+          <Text style={{ color: "#C9C2B4", fontSize: 15, textAlign: "center", marginBottom: 28, lineHeight: 22 }}>
+            {banNotice}
+          </Text>
+          <Pressable
+            onPress={() => setBanNotice(null)}
+            className="active:opacity-80"
+            style={{ backgroundColor: "#F5F0E6", paddingVertical: 14, paddingHorizontal: 32, borderRadius: 12 }}
+          >
+            <Text style={{ color: "#1B1F1C", fontSize: 16, fontWeight: "600" }}>OK</Text>
+          </Pressable>
+        </View>
+      </SafeAreaProvider>
     );
   }
 

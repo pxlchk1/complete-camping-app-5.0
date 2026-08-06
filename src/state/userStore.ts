@@ -11,6 +11,7 @@ interface UserState {
   isAuthenticated: () => boolean;
   isModerator: () => boolean;
   isAdministrator: () => boolean;
+  hasGrantedMembership: () => boolean;
   hasUsedFreeTrip: boolean;
   setHasUsedFreeTrip: (used: boolean) => void;
 }
@@ -42,6 +43,18 @@ export const useUserStore = create<UserState>()(
       isAdministrator: () => {
         const user = get().currentUser;
         return user?.role === "administrator" || user?.membershipTier === "isAdmin";
+      },
+
+      // True when an admin has granted this user a subscription via
+      // grantMembership() (Award Subscription) — checked in addition to
+      // RevenueCat's isPro so an admin-granted membership actually unlocks
+      // Pro features rather than only updating a Firestore field nothing
+      // reads. Lifetime grants have no membershipExpiresAt.
+      hasGrantedMembership: () => {
+        const user = get().currentUser;
+        if (user?.membershipTier !== "subscribed") return false;
+        if (!user.membershipExpiresAt) return true;
+        return new Date(user.membershipExpiresAt) > new Date();
       },
 
       setHasUsedFreeTrip: (used) => set({ hasUsedFreeTrip: used }),

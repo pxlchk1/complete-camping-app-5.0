@@ -93,11 +93,11 @@ export function requireProOrFreeTrip(callbacks: AccessGateCallbacks): boolean {
   }
   
   // Check if user is Pro
-  const isPro = useSubscriptionStore.getState().isPro;
+  const isPro = useSubscriptionStore.getState().isPro || useUserStore.getState().hasGrantedMembership();
   if (isPro) {
     return true;
   }
-  
+
   // Check if user has free trip planning access (logged in + hasn't used free trip)
   if (hasFreeTripPlanningAccess()) {
     return true;
@@ -166,7 +166,7 @@ export function getAccessState(): AccessState {
     return 'PRO';
   }
   
-  const isPro = useSubscriptionStore.getState().isPro;
+  const isPro = useSubscriptionStore.getState().isPro || useUserStore.getState().hasGrantedMembership();
   return isPro ? 'PRO' : 'FREE';
 }
 
@@ -176,22 +176,23 @@ export function getAccessState(): AccessState {
 export function useAccessState(): AccessState {
   const user = useAuthStore((s) => s.user);
   const isPro = useSubscriptionStore((s) => s.isPro);
+  const hasGrantedMembership = useUserStore((s) => s.hasGrantedMembership());
   const isAdmin = useUserStore((s) => s.isAdministrator());
-  
+
   if (!user) {
     return 'NO_ACCOUNT';
   }
-  
+
   if (!SUBSCRIPTIONS_ENABLED || !PAYWALL_ENABLED) {
     return 'PRO';
   }
-  
+
   // Admins get full PRO access
   if (isAdmin) {
     return 'PRO';
   }
-  
-  return isPro ? 'PRO' : 'FREE';
+
+  return (isPro || hasGrantedMembership) ? 'PRO' : 'FREE';
 }
 
 // ============================================
@@ -239,8 +240,8 @@ export async function requireProForAction(
   
   // Check if user is logged in AND has Pro
   const isLoggedIn = !!auth.currentUser;
-  const isPro = useSubscriptionStore.getState().isPro;
-  
+  const isPro = useSubscriptionStore.getState().isPro || useUserStore.getState().hasGrantedMembership();
+
   if (!isLoggedIn || !isPro) {
     // GUEST or FREE - track attempt and show PaywallModal
     // This increments the counter and returns the variant to use
@@ -345,8 +346,8 @@ export function requirePro(callbacks: AccessGateCallbacks): boolean {
   
   // Check if user is logged in AND has Pro
   const isLoggedIn = !!auth.currentUser;
-  const isPro = useSubscriptionStore.getState().isPro;
-  
+  const isPro = useSubscriptionStore.getState().isPro || useUserStore.getState().hasGrantedMembership();
+
   if (!isLoggedIn || !isPro) {
     // GUEST or FREE - track attempt and show PaywallModal
     // Track in background, determine variant, then open paywall
@@ -385,8 +386,8 @@ export async function requireProAsync(callbacks: AccessGateCallbacks): Promise<b
   
   // Check if user is logged in AND has Pro
   const isLoggedIn = !!auth.currentUser;
-  const isPro = useSubscriptionStore.getState().isPro;
-  
+  const isPro = useSubscriptionStore.getState().isPro || useUserStore.getState().hasGrantedMembership();
+
   if (!isLoggedIn || !isPro) {
     // GUEST or FREE - track attempt and show PaywallModal with correct variant
     const variant = await getPaywallVariantAndTrack();
