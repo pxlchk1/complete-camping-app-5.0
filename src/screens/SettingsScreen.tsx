@@ -36,6 +36,7 @@ import { restorePurchases } from "../services/subscriptionService";
 import { clearLocalAppCache, isCacheResetAvailable, getUpdateSummaryText } from "../utils/updateDiagnostics";
 import ModalHeader from "../components/ModalHeader";
 import { validateHandle, isAdminEmail } from "../constants/reservedHandles";
+import { reserveHandle } from "../services/handleService";
 import { useChangePassword } from "../hooks/useChangePassword";
 import {
   PARCHMENT,
@@ -62,6 +63,7 @@ export default function SettingsScreen() {
   // User data
   const [displayName, setDisplayName] = useState("");
   const [handle, setHandle] = useState("");
+  const [originalHandle, setOriginalHandle] = useState("");
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [notificationPermissionStatus, setNotificationPermissionStatus] = useState<"unknown" | "granted" | "denied">("unknown");
   const [emailTransactionalEnabled, setEmailTransactionalEnabled] = useState(true);
@@ -116,6 +118,7 @@ export default function SettingsScreen() {
         const data = userDoc.data();
         setDisplayName(data.displayName || "");
         setHandle(data.handle || "");
+        setOriginalHandle((data.handle || "").toLowerCase());
         // Default to true if missing (null/undefined) - preselected ON
         setNotificationsEnabled(data.notificationsEnabled !== false);
         setNotificationPermissionStatus(data.notificationPermissionStatus || "unknown");
@@ -170,6 +173,22 @@ export default function SettingsScreen() {
       setErrors(newErrors);
       notifyValidationError(toast);
       return;
+    }
+
+    // Claim the handle in the uniqueness index if it actually changed.
+    // validateHandle() above only checks format/reserved words, not
+    // whether someone else already has it — without this, changing your
+    // handle here completely bypassed the uniqueness system added this
+    // session (which only ran at sign-up).
+    if (cleanHandle && cleanHandle !== originalHandle) {
+      setSaving(true);
+      const reserved = await reserveHandle(user.uid, cleanHandle);
+      if (!reserved) {
+        setSaving(false);
+        setErrors({ handle: "This handle is already taken. Please choose a different one." });
+        notifyValidationError(toast);
+        return;
+      }
     }
 
     try {

@@ -37,6 +37,7 @@ import ModalHeader from "../components/ModalHeader";
 import { useToast } from "../components/ToastManager";
 import { notifySuccess, notifyError } from "../ui/notify";
 import { validateHandle, isAdminEmail } from "../constants/reservedHandles";
+import { reserveHandle } from "../services/handleService";
 import { useChangePassword } from "../hooks/useChangePassword";
 import {
   DEEP_FOREST,
@@ -144,6 +145,7 @@ export default function EditProfileScreen() {
   // Account fields state
   const [displayName, setDisplayName] = useState("");
   const [handle, setHandle] = useState("");
+  const [originalHandle, setOriginalHandle] = useState("");
   
   // Password change modal state
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -163,6 +165,7 @@ export default function EditProfileScreen() {
           const data = userDoc.data();
           setDisplayName(data.displayName || "");
           setHandle(data.handle || "");
+          setOriginalHandle((data.handle || "").toLowerCase());
         }
       } catch (error) {
         console.error("[EditProfile] Error loading account fields:", error);
@@ -197,6 +200,18 @@ export default function EditProfileScreen() {
 
     try {
       setSaving(true);
+
+      // Claim the handle in the uniqueness index if it actually changed.
+      // validateHandle() above only checks format/reserved words, not
+      // whether someone else already has it.
+      if (cleanHandle && cleanHandle !== originalHandle) {
+        const reserved = await reserveHandle(user.uid, cleanHandle);
+        if (!reserved) {
+          setSaving(false);
+          Alert.alert("Handle Taken", "This handle is already taken. Please choose a different one.");
+          return;
+        }
+      }
 
       // Use the entered first name directly for Home welcome greeting
       const enteredFirstName = displayName.trim();
