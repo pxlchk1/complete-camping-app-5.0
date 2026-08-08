@@ -18,6 +18,7 @@ import {
   TextInput,
   TouchableOpacity,
   Alert,
+  Keyboard,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
@@ -130,6 +131,18 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
   const [zipCode, setZipCode] = useState("");
   const [userLocation, setUserLocation] = useState<LatLng | null>(null);
   const [viewMode, setViewMode] = useState<"map" | "list">("map");
+  // Name search, scoped to a single selected state (see state-mode UI
+  // below) rather than searched nationally — with ~3000 parks and a lot of
+  // reused names ("Pine Lake", "Mill Creek", etc.) across states, an
+  // unscoped search would return noisy, ambiguous results. Disabled until
+  // a state is chosen.
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearchQuery(searchQuery.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // Data and UI state
   const [parks, setParks] = useState<Park[]>([]);
@@ -374,6 +387,18 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
         }
       }
 
+      // Filter by search query — only meaningful once a state has scoped
+      // the list down, so this only applies in state mode (search UI is
+      // disabled until a state is picked; see render below).
+      if (mode === "state" && selectedState && debouncedSearchQuery) {
+        const beforeSearchFilter = fetched.length;
+        const needle = debouncedSearchQuery.toLowerCase();
+        fetched = fetched.filter((p) => p.name.toLowerCase().includes(needle));
+        if (__DEV__) {
+          console.log(`[FILTER_DEBUG] Search filter "${debouncedSearchQuery}": ${beforeSearchFilter} -> ${fetched.length} parks`);
+        }
+      }
+
       // Filter by park type
       if (parkType !== ("all" as any)) {
         const beforeTypeFilter = fetched.length;
@@ -429,7 +454,7 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
     } finally {
       setIsLoading(false);
     }
-  }, [hasSearched, mode, selectedState, userLocation, driveTime, parkType, sortBy, maxDistanceMiles, getDistance, loadRawParks]);
+  }, [hasSearched, mode, selectedState, debouncedSearchQuery, userLocation, driveTime, parkType, sortBy, maxDistanceMiles, getDistance, loadRawParks]);
 
   useEffect(() => {
     fetchParks();
@@ -445,6 +470,7 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
     if (newMode !== mode) {
       setMode(newMode);
       setSelectedState("");
+      setSearchQuery("");
       setError(null);
       setParks([]);
       setHasSearched(false);
@@ -892,6 +918,7 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
             selectedState={selectedState}
             onStateChange={(state) => {
               setSelectedState(state);
+              setSearchQuery("");
               setHasSearched(true);
             }}
             driveTime={driveTime}
@@ -909,6 +936,62 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
             viewMode={viewMode}
             onViewModeChange={setViewMode}
           />
+
+          {/* Search by park name — scoped to the selected state. Disabled
+              (with an explanatory placeholder) until a state is chosen, so
+              search never runs an ambiguous, unscoped query across ~3000
+              parks nationally. */}
+          {mode === "state" && (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                backgroundColor: selectedState ? CARD_BACKGROUND_LIGHT : `${CARD_BACKGROUND_LIGHT}80`,
+                borderWidth: 1,
+                borderColor: BORDER_SOFT,
+                borderRadius: radius.md,
+                paddingHorizontal: spacing.md,
+                paddingVertical: spacing.sm,
+                marginBottom: spacing.md,
+              }}
+            >
+              <Ionicons
+                name="search"
+                size={18}
+                color={selectedState ? TEXT_SECONDARY : TEXT_MUTED}
+                style={{ marginRight: spacing.xs }}
+              />
+              <TextInput
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                editable={!!selectedState}
+                placeholder={
+                  selectedState
+                    ? `Search parks in ${US_STATES.find((s) => s.value === selectedState)?.label || selectedState}...`
+                    : "Select a state to search parks by name"
+                }
+                placeholderTextColor={TEXT_MUTED}
+                returnKeyType="search"
+                autoCapitalize="none"
+                autoCorrect={false}
+                onSubmitEditing={() => Keyboard.dismiss()}
+                style={{
+                  flex: 1,
+                  fontFamily: fonts.bodyRegular,
+                  fontSize: fontSizes.sm,
+                  color: DEEP_FOREST,
+                }}
+              />
+              {searchQuery.length > 0 && (
+                <Pressable
+                  onPress={() => setSearchQuery("")}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons name="close-circle" size={18} color={TEXT_MUTED} />
+                </Pressable>
+              )}
+            </View>
+          )}
 
           {/* Add Private Campground Link */}
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginBottom: spacing.md }}>
@@ -1073,6 +1156,8 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
               >
                 {mode === "distance"
                   ? "Try increasing your drive time or changing the park type filter."
+                  : debouncedSearchQuery
+                  ? `No parks matched "${debouncedSearchQuery}" in ${US_STATES.find((s) => s.value === selectedState)?.label || selectedState}. Try a different search term.`
                   : "Try selecting a different state or adjusting your filters."}
               </Text>
             </View>
