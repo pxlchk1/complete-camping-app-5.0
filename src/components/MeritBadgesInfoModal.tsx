@@ -22,7 +22,6 @@ import {
   EARTH_GREEN,
   BORDER_SOFT,
   TEXT_PRIMARY_STRONG,
-  TEXT_SECONDARY,
 } from "../constants/colors";
 
 interface MeritBadgesInfoModalProps {
@@ -176,24 +175,6 @@ const styles = StyleSheet.create({
     fontFamily: "SourceSans3_400Regular",
     lineHeight: 22,
     color: TEXT_PRIMARY_STRONG,
-  },
-  badgeHighlight: {
-    backgroundColor: "rgba(72, 89, 82, 0.08)",
-    borderRadius: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    marginBottom: 8,
-  },
-  badgeName: {
-    fontSize: 15,
-    fontFamily: "SourceSans3_600SemiBold",
-    color: DEEP_FOREST,
-  },
-  badgeDesc: {
-    fontSize: 14,
-    fontFamily: "SourceSans3_400Regular",
-    color: TEXT_SECONDARY,
-    marginTop: 2,
   },
   button: {
     marginHorizontal: 24,

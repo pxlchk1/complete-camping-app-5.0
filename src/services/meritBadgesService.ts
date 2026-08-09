@@ -297,14 +297,22 @@ export async function getClaimForBadge(userId: string, badgeId: string): Promise
     where("claimantUserId", "==", userId),
     where("badgeId", "==", badgeId)
   );
-  
+
   const snapshot = await getDocs(q);
   if (snapshot.empty) return null;
-  
-  return {
-    id: snapshot.docs[0].id,
-    ...snapshot.docs[0].data()
-  } as BadgeClaim;
+
+  // A declined claim followed by a re-attempt (see createBadgeClaim) leaves
+  // more than one claim doc for this claimant+badge pair. No orderBy on the
+  // query itself (avoids needing a composite index) - sort client-side so
+  // callers always see the most recent attempt, not an arbitrary old one.
+  const claims = snapshot.docs.map((d) => ({ id: d.id, ...d.data() })) as BadgeClaim[];
+  claims.sort((a, b) => {
+    const timeA = (a.createdAt as any)?.toMillis?.() ?? new Date(a.createdAt as any).getTime();
+    const timeB = (b.createdAt as any)?.toMillis?.() ?? new Date(b.createdAt as any).getTime();
+    return timeB - timeA;
+  });
+
+  return claims[0];
 }
 
 /**
@@ -895,7 +903,7 @@ export async function getPendingClaimsForWitness(witnessUserId: string): Promise
 /**
  * Deny a badge claim (witness action)
  */
-export async function denyBadgeClaim(claimId: string, witnessUserId: string): Promise<void> {
+export async function denyBadgeClaim(claimId: string, witnessUserId: string, reason?: string): Promise<void> {
   const claimRef = doc(db, "badgeClaims", claimId);
   const claimSnap = await getDoc(claimRef);
 
@@ -913,6 +921,8 @@ export async function denyBadgeClaim(claimId: string, witnessUserId: string): Pr
   await updateDoc(claimRef, {
     status: "NOT_THIS_TIME",
     stampedAt: serverTimestamp(),
+    decisionAt: serverTimestamp(),
+    ...(reason?.trim() ? { declineReason: reason.trim() } : {}),
   });
 }
 

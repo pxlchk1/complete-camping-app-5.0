@@ -348,6 +348,20 @@ export default function BadgeDetailScreen() {
     }
   };
 
+  // Format a season window as "Dec 1 – Feb 28" for the locked-badge notice
+  const formatSeasonRange = (window: { startsAt: any; endsAt: any } | undefined): string | null => {
+    if (!window) return null;
+    try {
+      const start = window.startsAt?.toDate ? window.startsAt.toDate() : new Date(window.startsAt);
+      const end = window.endsAt?.toDate ? window.endsAt.toDate() : new Date(window.endsAt);
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) return null;
+      const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
+      return `${start.toLocaleDateString("en-US", opts)} – ${end.toLocaleDateString("en-US", opts)}`;
+    } catch {
+      return null;
+    }
+  };
+
   // Loading state
   if (loading) {
     return (
@@ -402,6 +416,11 @@ export default function BadgeDetailScreen() {
   const isEarned = displayState === "earned";
   const isPending = displayState === "pending_stamp";
   const isSeasonalLocked = displayState === "seasonal_locked";
+  // Not part of the displayState machine (a decline just falls back to
+  // not_started so the CTA correctly offers a re-attempt) - tracked
+  // separately so the claimant still finds out what happened, instead of
+  // the badge silently reverting to "Add Photo" with no explanation.
+  const isDeclined = pendingClaim?.status === "NOT_THIS_TIME" && !isEarned;
   const currentPhotoUrl = localPhotoUrl || pendingClaim?.photoUrl || earnedBadge?.photoUrl;
   const hasPhoto = !!currentPhotoUrl;
 
@@ -533,6 +552,23 @@ export default function BadgeDetailScreen() {
           ))}
         </View>
 
+        {/* Not This Time Banner */}
+        {isDeclined && (
+          <View className="rounded-xl p-4 mb-5" style={{ backgroundColor: "#F3F4F6" }}>
+            <View className="flex-row items-center mb-1">
+              <Ionicons name="close-circle-outline" size={16} color={TEXT_SECONDARY} />
+              <Text className="font-source-semibold text-sm ml-2" style={{ color: TEXT_PRIMARY_STRONG }}>
+                Not This Time
+              </Text>
+            </View>
+            <Text className="font-source-regular text-[13px]" style={{ color: TEXT_SECONDARY }}>
+              {pendingClaim?.declineReason
+                ? pendingClaim.declineReason
+                : "Your witness didn't stamp this one. Add a new photo and try again."}
+            </Text>
+          </View>
+        )}
+
         {/* Pending Status Banner */}
         {isPending && (
           <View className="rounded-xl p-4 mb-5" style={{ backgroundColor: "rgba(152, 108, 66, 0.15)" }}>
@@ -589,7 +625,9 @@ export default function BadgeDetailScreen() {
               className="font-source-regular text-sm ml-2.5 flex-1"
               style={{ color: TEXT_SECONDARY }}
             >
-              This badge is only available during its season.
+              {formatSeasonRange(badge.seasonWindow)
+                ? `Only available ${formatSeasonRange(badge.seasonWindow)}.`
+                : "This badge is only available during its season."}
             </Text>
           </View>
         )}

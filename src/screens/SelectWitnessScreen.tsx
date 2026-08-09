@@ -32,6 +32,8 @@ import {
 } from "../services/meritBadgesService";
 import { CampgroundContact } from "../types/campground";
 import { BadgeDefinition, BadgeClaim } from "../types/badges";
+import { useToast } from "../components/ToastManager";
+import { notifySuccess } from "../ui/notify";
 import {
   DEEP_FOREST,
   EARTH_GREEN,
@@ -53,6 +55,7 @@ export default function SelectWitnessScreen() {
   const navigation = useNavigation<SelectWitnessScreenNavigationProp>();
   const route = useRoute<SelectWitnessScreenRouteProp>();
   const insets = useSafeAreaInsets();
+  const toast = useToast();
   const { badgeId, photoUrl } = route.params;
 
   const [badge, setBadge] = useState<BadgeDefinition | null>(null);
@@ -159,8 +162,14 @@ export default function SelectWitnessScreen() {
         witnessUserId: selectedContact.contactUserId,
         hasPhoto: !!photoUrl,
       });
-      
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      notifySuccess(
+        toast,
+        existingClaim?.status === "PENDING_STAMP"
+          ? `Witness updated to ${selectedContact.contactName}`
+          : `Stamp request sent to ${selectedContact.contactName}`
+      );
       navigation.goBack();
     } catch (err: any) {
       console.error("[SelectWitness] Error creating claim:", {

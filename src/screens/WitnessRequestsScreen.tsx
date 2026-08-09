@@ -15,6 +15,9 @@ import {
   RefreshControl,
   Image,
   Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -22,7 +25,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 
-import { auth } from "../config/firebase";
+import { auth, db } from "../config/firebase";
+import { doc, getDoc } from "firebase/firestore";
 import { RootStackParamList } from "../navigation/types";
 import {
   getPendingClaimsForWitness,
@@ -49,6 +53,7 @@ type WitnessRequestsScreenNavigationProp = NativeStackNavigationProp<RootStackPa
 interface ClaimWithBadge extends BadgeClaim {
   badge?: BadgeDefinition;
   claimantName?: string;
+  claimantAvatarUrl?: string;
 }
 
 export default function WitnessRequestsScreen() {
@@ -61,6 +66,10 @@ export default function WitnessRequestsScreen() {
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
+  // Claim pending a decline confirmation — lets the witness optionally
+  // explain why, instead of "Not Yet" being a silent, unexplained reject.
+  const [declineTarget, setDeclineTarget] = useState<ClaimWithBadge | null>(null);
+  const [declineReason, setDeclineReason] = useState("");
 
   const userId = auth.currentUser?.uid;
 
@@ -82,18 +91,23 @@ export default function WitnessRequestsScreen() {
     try {
       const pendingClaims = await getPendingClaimsForWitness(userId);
 
-      // Fetch badge details for each claim
+      // Fetch badge details and the claimant's profile for each claim.
+      // Previously the claimant's name/photo were never fetched at all —
+      // a witness could see WHICH badge was being requested but not WHO
+      // was asking, which matters for a social approval flow.
       const claimsWithBadges: ClaimWithBadge[] = await Promise.all(
         pendingClaims.map(async (claim) => {
-          try {
-            const badge = await getBadgeDefinition(claim.badgeId);
-            return {
-              ...claim,
-              badge: badge || undefined,
-            };
-          } catch {
-            return claim;
-          }
+          const [badge, claimantProfile] = await Promise.all([
+            getBadgeDefinition(claim.badgeId).catch(() => null),
+            getDoc(doc(db, "profiles", claim.claimantUserId)).catch(() => null),
+          ]);
+          const profileData = claimantProfile?.data();
+          return {
+            ...claim,
+            badge: badge || undefined,
+            claimantName: profileData?.displayName || "A fellow camper",
+            claimantAvatarUrl: profileData?.avatarUrl,
+          };
         })
       );
 
@@ -132,15 +146,15 @@ export default function WitnessRequestsScreen() {
     }
   };
 
-  const handleDeny = async (claimId: string) => {
+  const handleDeny = async (claimId: string, reason?: string) => {
     if (!userId) return;
 
     setProcessingId(claimId);
 
     try {
-      await denyBadgeClaim(claimId, userId);
+      await denyBadgeClaim(claimId, userId, reason);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      
+
       // Remove from list
       setClaims((prev) => prev.filter((c) => c.id !== claimId));
     } catch (err) {
@@ -150,6 +164,15 @@ export default function WitnessRequestsScreen() {
     } finally {
       setProcessingId(null);
     }
+  };
+
+  const confirmDecline = () => {
+    if (!declineTarget) return;
+    const claimId = declineTarget.id;
+    const reason = declineReason;
+    setDeclineTarget(null);
+    setDeclineReason("");
+    handleDeny(claimId, reason);
   };
 
   const formatDate = (timestamp: any) => {
@@ -237,6 +260,24 @@ export default function WitnessRequestsScreen() {
                 borderLeftColor: borderColor,
               }}
             >
+              {/* Claimant Info — who is actually asking. Previously this
+                  screen showed only which badge was being requested, never
+                  who was requesting it, which made "Stamp It" an approval
+                  of a stranger by default. */}
+              <View className="px-4 pt-4 flex-row items-center">
+                {claim.claimantAvatarUrl ? (
+                  <Image
+                    source={{ uri: claim.claimantAvatarUrl }}
+                    style={{ width: 28, height: 28, borderRadius: 14 }}
+                  />
+                ) : (
+                  <Ionicons name="person-circle" size={28} color={TEXT_MUTED} />
+                )}
+                <Text className="text-sm ml-2" style={{ color: TEXT_PRIMARY_STRONG }}>
+                  <Text className="font-semibold">{claim.claimantName || "A fellow camper"}</Text> wants a stamp
+                </Text>
+              </View>
+
               {/* Badge Info */}
               <Pressable
                 className="p-4"
@@ -299,7 +340,7 @@ export default function WitnessRequestsScreen() {
                   style={{
                     backgroundColor: BORDER_SOFT,
                   }}
-                  onPress={() => handleDeny(claim.id)}
+                  onPress={() => setDeclineTarget(claim)}
                   disabled={isProcessing}
                 >
                   {isProcessing ? (
@@ -363,6 +404,70 @@ export default function WitnessRequestsScreen() {
             <Ionicons name="close" size={24} color="#FFFFFF" />
           </Pressable>
         </Pressable>
+      </Modal>
+
+      {/* Decline confirmation — optional reason, since "Not Yet" with zero
+          explanation left the claimant with no idea what to fix. */}
+      <Modal
+        visible={!!declineTarget}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDeclineTarget(null)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          className="flex-1 items-center justify-center px-6"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+        >
+          <View className="w-full rounded-2xl p-5" style={{ backgroundColor: PARCHMENT }}>
+            <Text className="text-lg font-semibold mb-1" style={{ color: TEXT_PRIMARY_STRONG }}>
+              Not this time?
+            </Text>
+            <Text className="text-sm mb-3" style={{ color: TEXT_SECONDARY }}>
+              {declineTarget?.claimantName || "They"}{"'"}ll be able to try again. Let them know why, if you want.
+            </Text>
+            <TextInput
+              value={declineReason}
+              onChangeText={setDeclineReason}
+              placeholder="e.g. Didn't see the fire lay in the photo (optional)"
+              placeholderTextColor={TEXT_MUTED}
+              multiline
+              numberOfLines={3}
+              className="rounded-xl p-3 mb-4"
+              style={{
+                backgroundColor: CARD_BACKGROUND_LIGHT,
+                borderWidth: 1,
+                borderColor: BORDER_SOFT,
+                color: TEXT_PRIMARY_STRONG,
+                minHeight: 72,
+                textAlignVertical: "top",
+              }}
+            />
+            <View className="flex-row">
+              <Pressable
+                className="flex-1 py-3 rounded-lg mr-2 items-center"
+                style={{ backgroundColor: BORDER_SOFT }}
+                onPress={() => {
+                  setDeclineTarget(null);
+                  setDeclineReason("");
+                }}
+              >
+                <Text className="font-medium" style={{ color: TEXT_SECONDARY }}>
+                  Cancel
+                </Text>
+              </Pressable>
+              <Pressable
+                className="flex-1 py-3 rounded-lg ml-2 items-center"
+                style={{ backgroundColor: DEEP_FOREST }}
+                onPress={confirmDecline}
+              >
+                <Text className="font-medium" style={{ color: PARCHMENT }}>
+                  Send
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );

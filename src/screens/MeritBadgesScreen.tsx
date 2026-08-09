@@ -59,6 +59,12 @@ export default function MeritBadgesScreen() {
   const [categories, setCategories] = useState<BadgeCategoryGroup[]>([]);
   const [stats, setStats] = useState<BadgeProgressStats | null>(null);
   const [witnessCount, setWitnessCount] = useState(0);
+  // Distinct from "categories.length === 0" — that's also true for a
+  // genuinely empty catalog. Without this, a failed load (bad rules,
+  // missing index, network error) silently showed the exact same "No
+  // badges available yet." text as an account with nothing earned yet,
+  // with no way to tell the two apart or retry.
+  const [loadError, setLoadError] = useState(false);
 
   const loadData = useCallback(async (isRefresh = false) => {
     const user = auth.currentUser;
@@ -70,6 +76,7 @@ export default function MeritBadgesScreen() {
     try {
       if (isRefresh) setRefreshing(true);
       else setLoading(true);
+      setLoadError(false);
 
       const [categoryData, statsData] = await Promise.all([
         getBadgesByCategory(user.uid),
@@ -88,6 +95,7 @@ export default function MeritBadgesScreen() {
       }
     } catch (error) {
       console.error("[MeritBadgesScreen] Load error:", error);
+      setLoadError(true);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -159,8 +167,39 @@ export default function MeritBadgesScreen() {
           />
         ))}
 
+        {/* Error State — the catalog failed to load (not the same thing as
+            a genuinely empty one). Distinct copy + retry, instead of
+            silently falling through to the "No badges available yet."
+            empty state below. */}
+        {loadError && categories.length === 0 && (
+          <View className="items-center py-10 px-6">
+            <Ionicons name="cloud-offline-outline" size={48} color={TEXT_MUTED} />
+            <Text
+              className="font-source-semibold text-base mt-3 text-center"
+              style={{ color: TEXT_PRIMARY_STRONG }}
+            >
+              Couldn't load badges
+            </Text>
+            <Text
+              className="font-source-regular text-base mt-1 text-center"
+              style={{ color: TEXT_SECONDARY }}
+            >
+              Check your connection and try again.
+            </Text>
+            <Pressable
+              onPress={() => loadData()}
+              className="mt-4 px-6 py-3 rounded-xl active:opacity-80"
+              style={{ backgroundColor: EARTH_GREEN }}
+            >
+              <Text className="font-source-semibold" style={{ color: PARCHMENT }}>
+                Try Again
+              </Text>
+            </Pressable>
+          </View>
+        )}
+
         {/* Empty State */}
-        {categories.length === 0 && (
+        {!loadError && categories.length === 0 && (
           <View className="items-center py-10 px-6">
             <Ionicons
               name={auth.currentUser ? "ribbon-outline" : "person-circle-outline"}

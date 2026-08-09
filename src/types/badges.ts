@@ -76,6 +76,7 @@ export interface BadgeClaim {
   caption?: string;
   approvedAt?: Timestamp | Date;
   decisionAt?: Timestamp | Date;
+  declineReason?: string;
 }
 
 export interface CreateBadgeClaimData {

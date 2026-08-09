@@ -30,6 +30,7 @@ import { useIsModerator, useIsAdministrator } from "../state/userStore";
 import { HERO_IMAGES } from "../constants/images";
 import AccountRequiredModal from "../components/AccountRequiredModal";
 import OnboardingModal from "../components/OnboardingModal";
+import MeritBadgesInfoModal from "../components/MeritBadgesInfoModal";
 import { useScreenOnboarding } from "../hooks/useScreenOnboarding";
 import { bootstrapNewAccount } from "../onboarding";
 import {
@@ -1889,116 +1890,14 @@ export default function MyCampsiteScreen({ navigation }: any) {
         <View style={{ height: bottomSpacer }} />
       </ScrollView>
 
-      {/* Merit Badges Info Modal */}
-      <Modal
+      {/* Merit Badges Info Modal — shared with the Learn tab so this copy
+          can't drift again (this used to be a locally-defined modal
+          describing fabricated example badges, e.g. "Weekend Camper",
+          "Trail Leader", that don't exist in the real catalog). */}
+      <MeritBadgesInfoModal
         visible={showBadgesInfo}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowBadgesInfo(false)}
-      >
-        <Pressable
-          className="flex-1 bg-black/50 items-center justify-center px-4"
-          onPress={() => setShowBadgesInfo(false)}
-        >
-          <Pressable
-            className="rounded-2xl w-full max-w-sm overflow-hidden"
-            style={{ backgroundColor: PARCHMENT }}
-            onPress={(e) => e.stopPropagation()}
-          >
-            {/* Header - Deep Forest Green background */}
-            <View
-              style={{
-                paddingTop: 24,
-                paddingHorizontal: 20,
-                paddingBottom: 16,
-                backgroundColor: DEEP_FOREST,
-              }}
-            >
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                <Text
-                  style={{ fontFamily: "Raleway_700Bold", fontSize: 22, color: PARCHMENT, flex: 1, marginRight: 12 }}
-                >
-                  Merit Badges
-                </Text>
-                <Pressable
-                  onPress={() => setShowBadgesInfo(false)}
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 18,
-                    backgroundColor: "rgba(255, 255, 255, 0.15)",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Ionicons name="close" size={20} color={PARCHMENT} />
-                </Pressable>
-              </View>
-            </View>
-
-            <View style={{ padding: 20 }}>
-              <Text
-                className="text-center mb-4"
-                style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY, lineHeight: 22 }}
-              >
-                Earn merit badges by camping, sharing tips, reviewing gear, and helping fellow campers. The more you contribute, the more badges you unlock!
-              </Text>
-
-              <View className="mb-4 p-3 rounded-xl" style={{ backgroundColor: CARD_BACKGROUND_LIGHT }}>
-                <View className="flex-row items-center mb-2">
-                  <Ionicons name="bonfire" size={20} color="#92AFB1" />
-                  <Text className="ml-2" style={{ fontFamily: "SourceSans3_600SemiBold", color: TEXT_PRIMARY_STRONG }}>
-                    Weekend Camper
-                  </Text>
-                </View>
-                <Text style={{ fontFamily: "SourceSans3_400Regular", fontSize: 13, color: TEXT_SECONDARY }}>
-                  Complete your first camping trip
-                </Text>
-              </View>
-
-              <View className="mb-4 p-3 rounded-xl" style={{ backgroundColor: CARD_BACKGROUND_LIGHT }}>
-                <View className="flex-row items-center mb-2">
-                  <Ionicons name="compass" size={20} color="#AC9A6D" />
-                  <Text className="ml-2" style={{ fontFamily: "SourceSans3_600SemiBold", color: TEXT_PRIMARY_STRONG }}>
-                    Trail Leader
-                  </Text>
-                </View>
-                <Text style={{ fontFamily: "SourceSans3_400Regular", fontSize: 13, color: TEXT_SECONDARY }}>
-                  Share 5 tips with the community
-                </Text>
-              </View>
-
-              <View className="mb-4 p-3 rounded-xl" style={{ backgroundColor: CARD_BACKGROUND_LIGHT }}>
-                <View className="flex-row items-center mb-2">
-                  <Ionicons name="navigate" size={20} color="#485952" />
-                  <Text className="ml-2" style={{ fontFamily: "SourceSans3_600SemiBold", color: TEXT_PRIMARY_STRONG }}>
-                    Backcountry Guide
-                  </Text>
-                </View>
-                <Text style={{ fontFamily: "SourceSans3_400Regular", fontSize: 13, color: TEXT_SECONDARY }}>
-                  Complete 10 trips and write 3 gear reviews
-                </Text>
-              </View>
-
-              <Pressable
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setShowBadgesInfo(false);
-                }}
-                className="rounded-xl py-3 active:opacity-90"
-                style={{ backgroundColor: DEEP_FOREST }}
-              >
-                <Text
-                  className="text-center"
-                  style={{ fontFamily: "SourceSans3_600SemiBold", color: PARCHMENT }}
-                >
-                  Got it
-                </Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+        onDismiss={() => setShowBadgesInfo(false)}
+      />
 
       {/* Onboarding Modal */}
       <OnboardingModal
