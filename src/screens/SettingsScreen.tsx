@@ -758,7 +758,20 @@ export default function SettingsScreen() {
               <Pressable
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  navigation.navigate("Paywall");
+                  if (isPro) {
+                    // Pro members get Apple's native subscription
+                    // management (billing, cancel, change plan) - Paywall
+                    // is a pure sell screen with no "already subscribed"
+                    // state and no actual management controls.
+                    const manageUrl = Platform.OS === "ios"
+                      ? "itms-apps://apps.apple.com/account/subscriptions"
+                      : "https://play.google.com/store/account/subscriptions";
+                    Linking.openURL(manageUrl).catch(() => {
+                      notifyError(toast, "Couldn't open subscription settings. Try the App Store app directly.");
+                    });
+                  } else {
+                    navigation.navigate("Paywall");
+                  }
                 }}
                 className="flex-row items-center justify-between p-4 active:opacity-70"
               >

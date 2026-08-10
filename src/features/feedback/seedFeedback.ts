@@ -58,12 +58,18 @@ export async function seedFeedbackIfEmpty() {
       
       batch.set(docRef, {
         title: item.title,
-        description: item.description,
+        body: item.body,
         category: item.category,
+        authorId: auth.currentUser?.uid ?? "system-seed",
+        createdByUserId: auth.currentUser?.uid ?? "system-seed",
+        authorName: null,
         status: "open",
         createdAt: serverTimestamp(),
-        createdByUserId: auth.currentUser?.uid ?? "system-seed",
-        karmaScore: 1,
+        voteCount: 0,
+        upvoteCount: 0,
+        downvoteCount: 0,
+        score: 0,
+        commentCount: 0,
         source: "seed",
         seedIndex: index,
       });
@@ -72,7 +78,7 @@ export async function seedFeedbackIfEmpty() {
     console.log("[FeedbackSeed] Committing batch to Firestore...");
     await batch.commit();
     console.log("[FeedbackSeed] ✅ Feedback seed batch committed successfully!");
-    console.log(`[FeedbackSeed] ✨ Seeded ${FEEDBACK_SEED_ITEMS.length} feedback posts with karmaScore: 1`);
+    console.log(`[FeedbackSeed] ✨ Seeded ${FEEDBACK_SEED_ITEMS.length} feedback posts.`);
   } catch (error) {
     console.error("[FeedbackSeed] ❌ Failed to seed feedback items:");
     console.error("[FeedbackSeed] Error details:", error);

@@ -171,6 +171,7 @@ export interface FeedbackPost {
   body: string;
   category: FeedbackCategory;
   authorId: string;
+  authorName?: string;
   createdAt: Timestamp | string;
   status: FeedbackStatus;
   voteCount: number;
@@ -186,6 +187,7 @@ export interface FeedbackComment {
   feedbackId: string;
   body: string;
   authorId: string;
+  authorName?: string;
   createdAt: Timestamp | string;
 }
 

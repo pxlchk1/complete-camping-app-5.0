@@ -50,6 +50,7 @@ import { RootStackParamList } from "../navigation/types";
 import { useToast } from "../components/ToastManager";
 import { notifyError } from "../ui/notify";
 import { getSeasonInfo, WINTER_NUDGE_TEXT, type SeasonSource } from "../utils/packingSeasonUtils";
+import { normalizeCampingStyle } from "../utils/packingUtils";
 import { useUpdateTrip } from "../state/tripsStore";
 import { auth } from "../config/firebase";
 import { getUserGear } from "../services/gearClosetService";
@@ -148,8 +149,26 @@ export default function PackingListCreateScreen() {
   const season = userOverrideSeason ?? initialSeasonInfo.season;
   const seasonSource: SeasonSource = userOverrideSeason ? "override" : initialSeasonInfo.source;
   
+  // Auto-select the template matching the trip's camping style (e.g. a
+  // hammock trip should start with the Hammock Camping template checked,
+  // not silently default to just "Essential" - which is tent/pad-based and
+  // was previously the ONLY thing ever auto-selected here, regardless of
+  // the trip's actual style).
+  const initialTemplates = useMemo(() => {
+    const templates = new Set<PackingTemplateKey>(["essential"]);
+    const normalizedStyle = normalizeCampingStyle(tripCampingStyle);
+    const styleTemplateKey: Partial<Record<typeof normalizedStyle, PackingTemplateKey>> = {
+      hammock: "hammock",
+      backpacking: "backpacking",
+      car_camping: "car-camping",
+    };
+    const matchedKey = styleTemplateKey[normalizedStyle];
+    if (matchedKey) templates.add(matchedKey);
+    return templates;
+  }, [tripCampingStyle]);
+
   const [selectedTemplates, setSelectedTemplates] = useState<Set<PackingTemplateKey>>(
-    new Set(["essential"])
+    initialTemplates
   );
 
   // Handle season change from the sheet

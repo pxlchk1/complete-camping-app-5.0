@@ -43,6 +43,7 @@ import {
   BADGE_CATEGORIES,
   BadgeCategoryId,
 } from "../types/badges";
+import { useBadgeCatalogStore } from "../state/badgeCatalogStore";
 
 const db = getFirestore(firebaseApp);
 
@@ -81,27 +82,49 @@ function ensureBadgeCatalogSeeded(): Promise<void> {
  * Get all active badge definitions
  */
 export async function getAllBadgeDefinitions(): Promise<BadgeDefinition[]> {
-  await ensureBadgeCatalogSeeded();
-
-  const badgesRef = collection(db, "badgeDefinitions");
-  const q = query(badgesRef, where("isActive", "==", true), orderBy("sortOrder", "asc"));
-
   try {
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as BadgeDefinition[];
-  } catch (error: any) {
-    // Fallback without orderBy if index missing
-    if (error.code === "failed-precondition" || error.message?.includes("index")) {
-      const simpleQuery = query(badgesRef, where("isActive", "==", true));
-      const snapshot = await getDocs(simpleQuery);
-      const badges = snapshot.docs.map(doc => ({
+    await ensureBadgeCatalogSeeded();
+
+    const badgesRef = collection(db, "badgeDefinitions");
+    const q = query(badgesRef, where("isActive", "==", true), orderBy("sortOrder", "asc"));
+
+    let definitions: BadgeDefinition[];
+    try {
+      const snapshot = await getDocs(q);
+      definitions = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       })) as BadgeDefinition[];
-      return badges.sort((a, b) => a.sortOrder - b.sortOrder);
+    } catch (error: any) {
+      // Fallback without orderBy if index missing
+      if (error.code === "failed-precondition" || error.message?.includes("index")) {
+        const simpleQuery = query(badgesRef, where("isActive", "==", true));
+        const snapshot = await getDocs(simpleQuery);
+        const badges = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as BadgeDefinition[];
+        definitions = badges.sort((a, b) => a.sortOrder - b.sortOrder);
+      } else {
+        throw error;
+      }
+    }
+
+    // The catalog barely changes and its artwork is already bundled
+    // locally - cache it so the badges screen works offline too, not just
+    // when this fetch happens to succeed.
+    if (definitions.length > 0) {
+      useBadgeCatalogStore.getState().setDefinitions(definitions);
+    }
+    return definitions;
+  } catch (error) {
+    // Live fetch failed (offline, permission issue, etc.) - fall back to
+    // the last successfully cached catalog rather than surfacing a hard
+    // error for content that's almost entirely static.
+    const cached = useBadgeCatalogStore.getState().definitions;
+    if (cached.length > 0) {
+      console.warn("[MeritBadges] Using cached badge catalog after fetch failure:", error);
+      return cached;
     }
     throw error;
   }
@@ -539,10 +562,20 @@ export async function declineBadgeClaim(claimId: string): Promise<void> {
  * Get badges with progress state for display
  */
 export async function getBadgesWithProgress(userId: string): Promise<BadgeWithProgress[]> {
+  // The catalog is the essential content (and can itself fall back to a
+  // local cache - see getAllBadgeDefinitions); a transient failure fetching
+  // this user's earned/pending overlay shouldn't block the whole screen -
+  // worst case every badge just displays as not-started until it recovers.
   const [definitions, earnedBadges, pendingClaims] = await Promise.all([
     getAllBadgeDefinitions(),
-    getUserBadges(userId),
-    getMyPendingClaims(userId),
+    getUserBadges(userId).catch((error) => {
+      console.error("[MeritBadges] Failed to load earned badges:", error);
+      return [] as UserBadge[];
+    }),
+    getMyPendingClaims(userId).catch((error) => {
+      console.error("[MeritBadges] Failed to load pending claims:", error);
+      return [] as BadgeClaim[];
+    }),
   ]);
   
   const earnedMap = new Map(earnedBadges.map(b => [b.badgeId, b]));

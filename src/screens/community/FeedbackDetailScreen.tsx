@@ -23,7 +23,6 @@ import {
   getFeedbackComments,
   addFeedbackComment,
 } from "../../services/feedbackService";
-import { getUser } from "../../services/userService";
 import { FeedbackPost, FeedbackComment } from "../../types/community";
 import { useCurrentUser } from "../../state/userStore";
 import { RootStackScreenProps } from "../../navigation/types";
@@ -143,17 +142,7 @@ export default function FeedbackDetailScreen() {
 
       setPost(postData);
       setComments(commentsData);
-
-      // Load author info (optional - may fail for non-authenticated users)
-      try {
-        const author = await getUser(postData.authorId);
-        if (author) {
-          setAuthorName(author.displayName || author.handle);
-        }
-      } catch (authorErr) {
-        // Silently ignore - author name is not critical for viewing
-        console.log("[FeedbackDetail] Could not load author:", authorErr);
-      }
+      setAuthorName(postData.authorName || null);
     } catch (err: any) {
       console.error("[FeedbackDetail] Error loading post:", err);
       // Safely extract error message, handling cases where message might be undefined
@@ -190,6 +179,7 @@ export default function FeedbackDetailScreen() {
         feedbackId: postId,
         body: commentText.trim(),
         authorId: currentUser.id,
+        authorName: currentUser.displayName,
       });
 
       // Reload comments
@@ -399,6 +389,11 @@ export default function FeedbackDetailScreen() {
                     className="rounded-xl p-4 border"
                     style={{ backgroundColor: CARD_BACKGROUND_LIGHT, borderColor: BORDER_SOFT }}
                   >
+                    <View className="flex-row items-start justify-between mb-1">
+                      <Text className="flex-1 text-xs" style={{ fontFamily: "SourceSans3_600SemiBold", color: DEEP_FOREST }}>
+                        {comment.authorName || "Anonymous"}
+                      </Text>
+                    </View>
                     <View className="flex-row items-start justify-between mb-2">
                       <Text className="flex-1 leading-6" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}>
                         {comment.body}

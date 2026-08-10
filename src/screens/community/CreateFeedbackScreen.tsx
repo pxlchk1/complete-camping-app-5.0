@@ -92,6 +92,7 @@ export default function CreateFeedbackScreen() {
         body: body.trim(),
         category,
         authorId: currentUser.id,
+        authorName: currentUser.displayName,
       });
 
       // Navigate to the feedback detail

@@ -243,7 +243,7 @@ export default function ParkFilterBar({
               color: mode === "state" ? PARCHMENT : TEXT_SECONDARY,
             }}
           >
-            Browse by{"\n"}State
+            Search +{"\n"}Browse by State
           </Text>
         </Pressable>
 

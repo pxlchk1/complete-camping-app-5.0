@@ -32,6 +32,7 @@ import InviteOptionsSheet from "../components/InviteOptionsSheet";
 import ConfirmationModal from "../components/ConfirmationModal";
 import OnboardingModal from "../components/OnboardingModal";
 import { useScreenOnboarding } from "../hooks/useScreenOnboarding";
+import { useSubscriptionStore } from "../state/subscriptionStore";
 import {
   DEEP_FOREST,
   EARTH_GREEN,
@@ -46,6 +47,7 @@ import {
 export default function MyCampgroundScreen() {
   const navigation = useNavigation<RootStackNavigationProp>();
   const insets = useSafeAreaInsets();
+  const isPro = useSubscriptionStore((s) => s.isPro);
 
   const [contacts, setContacts] = useState<CampgroundContact[]>([]);
   const [loading, setLoading] = useState(true);
@@ -516,50 +518,57 @@ export default function MyCampgroundScreen() {
               </Text>
             </View>
 
-            <View
-              className="mt-4 p-4 rounded-xl"
-              style={{
-                backgroundColor: CARD_BACKGROUND_LIGHT,
-                borderColor: BORDER_SOFT,
-                borderWidth: 1,
-              }}
-            >
-              <Text
+            {/* Pro subscribers already have the full experience this is
+                pitching - showing it here served an "Upgrade to Pro"
+                button to people who'd already paid. */}
+            {!isPro && (
+              <View
+                className="mt-4 p-4 rounded-xl"
                 style={{
-                  fontFamily: "SourceSans3_600SemiBold",
-                  color: TEXT_PRIMARY_STRONG,
+                  backgroundColor: CARD_BACKGROUND_LIGHT,
+                  borderColor: BORDER_SOFT,
+                  borderWidth: 1,
                 }}
-              >
-                Want the full experience?
-              </Text>
-              <Text
-                className="mt-2"
-                style={{
-                  fontFamily: "SourceSans3_400Regular",
-                  color: TEXT_SECONDARY,
-                  lineHeight: 20,
-                }}
-              >
-                Pro is where this really shines, especially if you camp with the
-                same people often.
-              </Text>
-            </View>
-
-            <View className="mt-5">
-              <Pressable
-                onPress={handleUpgradeToPro}
-                className="py-3 rounded-xl items-center active:opacity-90"
-                style={{ backgroundColor: DEEP_FOREST }}
               >
                 <Text
                   style={{
                     fontFamily: "SourceSans3_600SemiBold",
-                    color: PARCHMENT,
+                    color: TEXT_PRIMARY_STRONG,
                   }}
                 >
-                  Upgrade to Pro
+                  Want the full experience?
                 </Text>
-              </Pressable>
+                <Text
+                  className="mt-2"
+                  style={{
+                    fontFamily: "SourceSans3_400Regular",
+                    color: TEXT_SECONDARY,
+                    lineHeight: 20,
+                  }}
+                >
+                  Pro is where this really shines, especially if you camp with the
+                  same people often.
+                </Text>
+              </View>
+            )}
+
+            <View className="mt-5">
+              {!isPro && (
+                <Pressable
+                  onPress={handleUpgradeToPro}
+                  className="py-3 rounded-xl items-center active:opacity-90"
+                  style={{ backgroundColor: DEEP_FOREST }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: "SourceSans3_600SemiBold",
+                      color: PARCHMENT,
+                    }}
+                  >
+                    Upgrade to Pro
+                  </Text>
+                </Pressable>
+              )}
 
               <Pressable
                 onPress={handleCloseWhatIsThis}
@@ -572,7 +581,7 @@ export default function MyCampgroundScreen() {
                     color: TEXT_SECONDARY,
                   }}
                 >
-                  Not Now
+                  {isPro ? "Got it" : "Not Now"}
                 </Text>
               </Pressable>
             </View>

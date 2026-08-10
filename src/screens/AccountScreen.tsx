@@ -12,6 +12,8 @@ import {
   Image,
   ImageBackground,
   Dimensions,
+  Platform,
+  Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -20,6 +22,8 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useCurrentUser, useIsModerator, useIsAdministrator } from "../state/userStore";
 import { useIsPro } from "../state/subscriptionStore";
+import { useToast } from "../components/ToastManager";
+import { notifyError } from "../ui/notify";
 import { RootStackParamList } from "../navigation/types";
 import AdminPanel from "../components/AdminPanel";
 import ModeratorPanel from "../components/ModeratorPanel";
@@ -48,6 +52,7 @@ export default function AccountScreen() {
   const isModerator = useIsModerator();
   const isAdministrator = useIsAdministrator();
   const isPro = useIsPro();
+  const toast = useToast();
   const [activeTab, setActiveTab] = useState<TabType>("posts");
 
   if (!currentUser) {
@@ -708,7 +713,16 @@ export default function AccountScreen() {
                   className="flex-row items-center justify-between py-3 active:opacity-70"
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    navigation.navigate("Paywall");
+                    // Send Pro members to Apple's native subscription
+                    // management (billing, cancel, change plan) instead of
+                    // the Paywall sell screen, which has no "already
+                    // subscribed" state and no actual management controls.
+                    const manageUrl = Platform.OS === "ios"
+                      ? "itms-apps://apps.apple.com/account/subscriptions"
+                      : "https://play.google.com/store/account/subscriptions";
+                    Linking.openURL(manageUrl).catch(() => {
+                      notifyError(toast, "Couldn't open subscription settings. Try the App Store app directly.");
+                    });
                   }}
                 >
                   <View className="flex-row items-center flex-1">

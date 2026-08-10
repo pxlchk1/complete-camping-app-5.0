@@ -4,12 +4,12 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { View, Text, Pressable, FlatList, ActivityIndicator, TextInput } from "react-native";
+import { View, Text, Pressable, FlatList, ActivityIndicator } from "react-native";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { feedbackService, FeedbackPost } from "../../services/firestore/feedbackService";
-import { feedbackVoteService } from "../../services/firestore/feedbackVoteService";
+import { getFeedbackPosts } from "../../services/feedbackService";
+import { FeedbackPost, FeedbackCategory } from "../../types/community";
 import { auth } from "../../config/firebase";
 import AccountRequiredModal from "../../components/AccountRequiredModal";
 import OnboardingModal from "../../components/OnboardingModal";
@@ -30,7 +30,7 @@ import {
   TEXT_MUTED,
 } from "../../constants/colors";
 
-type CategoryFilter = 'Feature Request' | 'Bug Report' | 'Improvement' | 'Question' | 'Other' | 'all';
+type CategoryFilter = FeedbackCategory | "all";
 
 export default function FeedbackListScreen() {
   const navigation = useNavigation<RootStackNavigationProp>();
@@ -40,7 +40,7 @@ export default function FeedbackListScreen() {
   // Onboarding modal
   const { showModal, currentTooltip, dismissModal, openModal } = useScreenOnboarding("Feedback");
 
-  const [posts, setPosts] = useState<(FeedbackPost & { voteScore: number; userVote: "up" | "down" | null; commentCount?: number })[]>([]);
+  const [posts, setPosts] = useState<FeedbackPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>("all");
@@ -57,29 +57,15 @@ export default function FeedbackListScreen() {
     try {
       setLoading(true);
       setError(null);
-      const allPosts = await feedbackService.getFeedback();
+      const { posts: allPosts } = await getFeedbackPosts(
+        "newest",
+        selectedCategory === "all" ? undefined : selectedCategory
+      );
       // Filter out hidden content (unless user is author)
-      const visiblePosts = allPosts.filter(post => 
+      const visiblePosts = allPosts.filter(post =>
         shouldShowInFeed(post, currentUser?.uid)
       );
-      const postsWithVotes = await Promise.all(
-        visiblePosts.map(async (post) => {
-          let voteScore = post.karmaScore || 0;
-          let userVote: "up" | "down" | null = null;
-          try {
-            const summary = await feedbackVoteService.getUserVote(post.id);
-            if (summary) userVote = summary.value === 1 ? "up" : summary.value === -1 ? "down" : null;
-          } catch {}
-          // commentCount is a real denormalized field, kept in sync by
-          // addFeedbackComment (increment) and deleteComment (decrement).
-          // ?? 0 only covers posts created before the field existed.
-          return { ...post, voteScore, userVote, commentCount: post.commentCount ?? 0 };
-        })
-      );
-      const filtered = selectedCategory === "all"
-        ? postsWithVotes
-        : postsWithVotes.filter(post => post.category === selectedCategory);
-      setPosts(filtered);
+      setPosts(visiblePosts);
     } catch (err: any) {
       setError(err.message || "Failed to load feedback");
     } finally {
@@ -100,7 +86,7 @@ export default function FeedbackListScreen() {
   const handlePostPress = (postId: string) => {
     navigation.navigate("FeedbackDetail", { postId });
   };
-  
+
   const handleCreatePost = () => {
     // Feedback submission requires account (free for all logged-in users)
     if (!requireAccount({
@@ -112,62 +98,20 @@ export default function FeedbackListScreen() {
     navigation.navigate("CreateFeedback");
   };
 
-  const handleUpvote = async (postId: string) => {
-    // Voting requires account (free for all logged-in users)
-    if (!requireAccount({
-      openAccountModal: () => setShowLoginModal(true),
-    })) {
-      return;
-    }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    try {
-      await feedbackService.upvoteFeedback(postId);
-      setPosts(prev =>
-        prev.map(p => (p.id === postId ? { ...p, karmaScore: p.karmaScore + 1 } : p))
-      );
-    } catch (err) {
-      // Silently fail
-    }
-  };
-
-  const handleDownvote = async (postId: string) => {
-    // Voting requires account (free for all logged-in users)
-    if (!requireAccount({
-      openAccountModal: () => setShowLoginModal(true),
-    })) {
-      return;
-    }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    try {
-      await feedbackService.adjustKarma(postId, -1);
-      setPosts(prev =>
-        prev.map(p => (p.id === postId ? { ...p, karmaScore: p.karmaScore - 1 } : p))
-      );
-    } catch (err) {
-      // Silently fail
-    }
-  };
-
-  const getCategoryLabel = (category: string) => {
+  const getCategoryLabel = (category: FeedbackCategory) => {
     switch (category) {
-      case "Feature Request":
-        return "Feature Request";
-      case "Bug Report":
-        return "Bug Report";
-      case "Improvement":
-        return "Improvement";
-      case "Question":
-        return "Question";
-      case "Other":
-        return "Other";
-      default:
-        return category;
+      case "feature": return "Feature Request";
+      case "bug": return "Bug Report";
+      case "improvement": return "Improvement";
+      case "question": return "Question";
+      case "other": return "Other";
+      default: return "Other";
     }
   };
 
   const formatTimeAgo = (dateString: string | any) => {
     const now = new Date();
-    const date = typeof dateString === "string" ? new Date(dateString) : dateString.toDate?.() || new Date();
+    const date = typeof dateString === "string" ? new Date(dateString) : dateString?.toDate?.() || new Date();
     const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
 
     if (diffInHours < 1) return "Just now";
@@ -182,7 +126,7 @@ export default function FeedbackListScreen() {
     return date.toLocaleDateString();
   };
 
-  const renderPost = ({ item }: { item: FeedbackPost & { voteScore: number; userVote: "up" | "down" | null; commentCount?: number } }) => {
+  const renderPost = ({ item }: { item: FeedbackPost }) => {
     return (
       <Pressable
         onPress={() => handlePostPress(item.id)}
@@ -211,7 +155,7 @@ export default function FeedbackListScreen() {
           numberOfLines={2}
           style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}
         >
-          {item.description}
+          {item.body}
         </Text>
 
         {/* Footer: author, date, and comments count */}
@@ -425,4 +369,3 @@ export default function FeedbackListScreen() {
     </View>
   );
 }
-

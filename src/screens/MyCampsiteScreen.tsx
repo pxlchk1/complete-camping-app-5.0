@@ -14,6 +14,8 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  Linking,
+  Platform,
 } from "react-native";
 import { useFocusEffect, useRoute, RouteProp } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
@@ -135,6 +137,7 @@ export default function MyCampsiteScreen({ navigation }: any) {
   const [connectContributions, setConnectContributions] = useState<ConnectContribution[]>([]);
   const [connectLoading, setConnectLoading] = useState(true);
   const [showAccountModal, setShowAccountModal] = useState(false);
+  const [selectedSavedPlace, setSelectedSavedPlace] = useState<SavedPlace | null>(null);
   const insets = useSafeAreaInsets();
 
   // Onboarding modal
@@ -575,6 +578,23 @@ export default function MyCampsiteScreen({ navigation }: any) {
       address: place.address || null,
       lat: place.lat || null,
       lng: place.lon || null,
+    });
+  };
+
+  // Saved Places are user-added custom campgrounds, not entries in the
+  // parks catalog - there's no ParksBrowse/ParkDetailModal record to open
+  // for them, so directions is the closest equivalent to a detail view.
+  const handleGetDirections = (place: SavedPlace) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const query = place.lat != null && place.lon != null
+      ? `${place.lat},${place.lon}`
+      : place.address || place.name;
+    const encoded = encodeURIComponent(query);
+    const url = Platform.OS === "ios" ? `maps:0,0?q=${encoded}` : `geo:0,0?q=${encoded}`;
+    Linking.openURL(url).catch(() => {
+      Linking.openURL(`https://maps.google.com/?q=${encoded}`).catch(() => {
+        Alert.alert("Couldn't Open Maps", "Unable to open a maps app on this device.");
+      });
     });
   };
 
@@ -1563,17 +1583,13 @@ export default function MyCampsiteScreen({ navigation }: any) {
                   key={fav.parkId}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    // Navigate to Plan tab with Parks selected and park ID
-                    navigation.navigate("HomeTabs", {
-                      screen: "Plan",
-                      params: {
-                        screen: "MyTrips",
-                        params: {
-                          initialTab: "parks",
-                          selectedParkId: fav.parkId,
-                        },
-                      },
-                    });
+                    // ParksBrowse opens this park's detail modal directly via
+                    // selectedParkId (same pattern push notifications use) -
+                    // this used to route through the Plan tab's nested
+                    // MyTrips screen, which doesn't read selectedParkId at
+                    // all, so tapping a favorite silently dropped the user
+                    // onto whatever Plan tab happened to be active.
+                    navigation.navigate("ParksBrowse", { selectedParkId: fav.parkId });
                   }}
                   className="p-4 rounded-xl border mb-3 active:opacity-90"
                   style={{ backgroundColor: CARD_BACKGROUND_LIGHT, borderColor: BORDER_SOFT }}
@@ -1713,7 +1729,7 @@ export default function MyCampsiteScreen({ navigation }: any) {
                   key={place.placeId}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    // Could navigate to place detail if available
+                    setSelectedSavedPlace(place);
                   }}
                   className="p-4 rounded-xl border mb-3 active:opacity-90"
                   style={{ backgroundColor: CARD_BACKGROUND_LIGHT, borderColor: BORDER_SOFT }}
@@ -1889,6 +1905,133 @@ export default function MyCampsiteScreen({ navigation }: any) {
         {/* Bottom Spacer for Tab Bar */}
         <View style={{ height: bottomSpacer }} />
       </ScrollView>
+
+      {/* Saved Place detail - user-added custom campgrounds aren't in the
+          parks catalog, so there's no ParksBrowse/ParkDetailModal record to
+          open for them; this is their equivalent detail view. */}
+      <Modal
+        visible={!!selectedSavedPlace}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedSavedPlace(null)}
+      >
+        <Pressable
+          className="flex-1 items-center justify-center px-6"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+          onPress={() => setSelectedSavedPlace(null)}
+        >
+          {selectedSavedPlace && (
+            <Pressable
+              className="w-full rounded-2xl p-5"
+              style={{ backgroundColor: PARCHMENT }}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <View className="flex-row items-start justify-between mb-1">
+                <Text
+                  className="text-xl flex-1 mr-3"
+                  style={{ fontFamily: "Raleway_700Bold", color: TEXT_PRIMARY_STRONG }}
+                >
+                  {selectedSavedPlace.name}
+                </Text>
+                <Pressable
+                  onPress={() => setSelectedSavedPlace(null)}
+                  className="w-8 h-8 rounded-full items-center justify-center active:opacity-70"
+                  style={{ backgroundColor: CARD_BACKGROUND_LIGHT }}
+                  accessibilityLabel="Close"
+                >
+                  <Ionicons name="close" size={18} color={TEXT_SECONDARY} />
+                </Pressable>
+              </View>
+
+              <Text
+                className="text-sm mb-4"
+                style={{ fontFamily: "SourceSans3_600SemiBold", color: EARTH_GREEN }}
+              >
+                {selectedSavedPlace.placeType === "campground" ? "Campground" :
+                 selectedSavedPlace.placeType === "park" ? "Park" :
+                 selectedSavedPlace.placeType === "trailhead" ? "Trailhead" : "Other"}
+              </Text>
+
+              {selectedSavedPlace.address && (
+                <View className="flex-row items-start mb-3">
+                  <Ionicons name="location-outline" size={18} color={EARTH_GREEN} style={{ marginTop: 2 }} />
+                  <Text
+                    className="ml-2 flex-1"
+                    style={{ fontFamily: "SourceSans3_400Regular", fontSize: 15, color: TEXT_PRIMARY_STRONG }}
+                  >
+                    {selectedSavedPlace.address}
+                  </Text>
+                </View>
+              )}
+
+              {selectedSavedPlace.notes && (
+                <View className="mb-4 p-3 rounded-xl" style={{ backgroundColor: CARD_BACKGROUND_LIGHT }}>
+                  <Text
+                    style={{ fontFamily: "SourceSans3_400Regular", fontSize: 14, color: TEXT_SECONDARY, fontStyle: "italic" }}
+                  >
+                    {selectedSavedPlace.notes}
+                  </Text>
+                </View>
+              )}
+
+              <Pressable
+                onPress={() => handleGetDirections(selectedSavedPlace)}
+                className="flex-row items-center justify-center py-3 rounded-xl mb-2 active:opacity-90"
+                style={{ backgroundColor: EARTH_GREEN }}
+              >
+                <Ionicons name="navigate-outline" size={18} color={PARCHMENT} />
+                <Text className="ml-2" style={{ fontFamily: "SourceSans3_600SemiBold", color: PARCHMENT }}>
+                  Get Directions
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  const place = selectedSavedPlace;
+                  setSelectedSavedPlace(null);
+                  handlePlanFromSavedPlace(place);
+                }}
+                className="flex-row items-center justify-center py-3 rounded-xl mb-2 active:opacity-90 border"
+                style={{ borderColor: DEEP_FOREST }}
+              >
+                <Ionicons name="calendar-outline" size={18} color={DEEP_FOREST} />
+                <Text className="ml-2" style={{ fontFamily: "SourceSans3_600SemiBold", color: DEEP_FOREST }}>
+                  Plan a Trip Here
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  const place = selectedSavedPlace;
+                  setSelectedSavedPlace(null);
+                  Alert.alert(
+                    "Remove Park?",
+                    `Remove ${place.name} from your saved parks?`,
+                    [
+                      { text: "Cancel", style: "cancel" },
+                      {
+                        text: "Remove",
+                        style: "destructive",
+                        onPress: async () => {
+                          const userId = auth.currentUser?.uid;
+                          if (!userId) return;
+                          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                          await removeSavedPlace(userId, place.placeId);
+                        },
+                      },
+                    ]
+                  );
+                }}
+                className="items-center py-2"
+              >
+                <Text style={{ fontFamily: "SourceSans3_600SemiBold", color: RUST }}>
+                  Remove from Saved Parks
+                </Text>
+              </Pressable>
+            </Pressable>
+          )}
+        </Pressable>
+      </Modal>
 
       {/* Merit Badges Info Modal — shared with the Learn tab so this copy
           can't drift again (this used to be a locally-defined modal

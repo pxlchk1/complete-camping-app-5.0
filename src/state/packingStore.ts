@@ -33,6 +33,7 @@ export type PackingTemplateKey =
   | "meals"
   | "backpacking"
   | "car-camping"
+  | "hammock"
   | "winter"
   | "pets"
   | "family";

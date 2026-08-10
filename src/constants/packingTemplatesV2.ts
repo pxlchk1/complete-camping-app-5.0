@@ -198,6 +198,27 @@ const BACKPACKING: PackingTemplate = {
   ],
 };
 
+const HAMMOCK_CAMPING: PackingTemplate = {
+  key: "hammock",
+  name: "Hammock Camping",
+  description: "Swap the tent and sleeping pad for a hammock setup",
+  icon: "bed",
+  items: [
+    // group matches ESSENTIAL_CAMPING's generic items so this replaces
+    // them (see the functional-group dedup in packingStore.createPackingList)
+    // instead of a hammock trip getting a tent AND a hammock.
+    { name: "Hammock", category: "Shelter & Sleep", essential: true, group: "tent" },
+    { name: "Suspension straps/whoopie slings", category: "Shelter & Sleep", essential: true },
+    { name: "Rain tarp", category: "Shelter & Sleep", essential: true },
+    { name: "Bug net", category: "Shelter & Sleep", essential: false },
+    { name: "Ridgeline organizer", category: "Shelter & Sleep", essential: false },
+    { name: "Top quilt or sleeping bag", category: "Shelter & Sleep", essential: true, group: "sleepingBag" },
+    { name: "Underquilt", category: "Shelter & Sleep", essential: true, group: "sleepingPad" },
+    { name: "Tree-friendly straps (check site rules)", category: "Tools & Utilities", essential: false },
+    { name: "Hammock patch kit", category: "Tools & Utilities", essential: false },
+  ],
+};
+
 const CAR_CAMPING: PackingTemplate = {
   key: "car-camping",
   name: "Car Camping Comfort",
@@ -332,6 +353,7 @@ export const PACKING_TEMPLATES: PackingTemplate[] = [
   CLOTHING_PERSONAL,
   MEAL_PLANNING,
   BACKPACKING,
+  HAMMOCK_CAMPING,
   CAR_CAMPING,
   WINTER_CAMPING,
   PETS,

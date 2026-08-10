@@ -395,6 +395,15 @@ export default function HomeScreen() {
           }
         }
 
+        // Subscription-pitch announcements are meaningless (and were being
+        // shown) to users who are already Pro - admins can broadcast one
+        // with ctaMode "subscription" (see AdminCommunicationsScreen) with
+        // no way to exclude subscribers themselves.
+        if (data.ctaMode === "subscription" && isPro) {
+          console.log("[HomeScreen] Skipping subscription announcement for Pro user");
+          return;
+        }
+
         console.log("[HomeScreen] Showing announcement modal:", data.headline);
         setAnnouncementModal({
           versionId: data.versionId,
@@ -411,7 +420,7 @@ export default function HomeScreen() {
     };
 
     checkAnnouncementModal();
-  }, []);
+  }, [isPro]);
 
   // Dismiss announcement modal and mark as dismissed
   const dismissAnnouncementModal = async () => {
