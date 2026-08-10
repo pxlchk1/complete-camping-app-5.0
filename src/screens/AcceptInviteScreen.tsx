@@ -218,7 +218,7 @@ export default function AcceptInviteScreen() {
             className="text-center"
             style={{ fontFamily: "SourceSans3_600SemiBold", color: PARCHMENT, fontSize: 16 }}
           >
-            Go to My Campground
+            Go to Friends
           </Text>
         </Pressable>
       </View>

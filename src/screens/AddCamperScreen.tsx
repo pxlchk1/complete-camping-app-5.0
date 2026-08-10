@@ -1,7 +1,8 @@
 /**
- * Add Camper Screen
- * Form to add a new contact to My Campground
- * After adding, shows invite options sheet
+ * Add Guest Screen
+ * Form to add someone without an app account (kid, pet, camping buddy who
+ * hasn't joined yet) to the user's Guests list. After adding, shows the
+ * invite options sheet so they can be invited to join the app.
  */
 
 import React, { useState } from "react";
@@ -115,7 +116,7 @@ export default function AddCamperScreen() {
   return (
     <View className="flex-1" style={{ backgroundColor: PARCHMENT }}>
       <ModalHeader
-        title="Add Camper"
+        title="Add Guest"
         showTitle
         rightAction={{
           icon: "checkmark",
@@ -250,7 +251,7 @@ export default function AddCamperScreen() {
                 className="text-center"
                 style={{ fontFamily: "SourceSans3_600SemiBold", color: PARCHMENT }}
               >
-                Add Camper
+                Add Guest
               </Text>
             )}
           </Pressable>

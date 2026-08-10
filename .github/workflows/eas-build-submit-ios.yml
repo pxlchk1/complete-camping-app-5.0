@@ -1,8 +1,11 @@
 name: EAS Build & Submit — iOS (TestFlight)
 
-# Manual only: this builds and submits a real iOS build to App Store
-# Connect / TestFlight, which consumes EAS build credits and creates a
-# build number on Apple's side. Not something to trigger on every push.
+# Manual only: this builds a real iOS build, consuming EAS build credits
+# and (for production) creating a build number on Apple's side. Not
+# something to trigger on every push. Only the production profile
+# auto-submits to App Store Connect / TestFlight - eas.json has no submit
+# target configured for preview, which is internal/ad-hoc distribution
+# only (install via the EAS build page, no App Store involvement).
 on:
   workflow_dispatch:
     inputs:
@@ -48,5 +51,10 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Build iOS
+        if: github.event.inputs.profile != 'production'
+        run: eas build --platform ios --profile ${{ github.event.inputs.profile }} --non-interactive
+
       - name: Build iOS and submit to TestFlight
+        if: github.event.inputs.profile == 'production'
         run: eas build --platform ios --profile ${{ github.event.inputs.profile }} --non-interactive --auto-submit

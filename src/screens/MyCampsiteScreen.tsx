@@ -27,6 +27,22 @@ import { signOut } from "firebase/auth";
 import { restorePurchases, syncSubscriptionToFirestore } from "../services/subscriptionService";
 import { listenToFavoriteParks, removeFavoritePark, FavoritePark } from "../services/favoriteParksService";
 import { listenToSavedPlaces, removeSavedPlace, SavedPlace } from "../services/savedPlacesService";
+import {
+  getFriendCount,
+  getFriendConnection,
+  sendFriendRequest,
+  cancelFriendRequest,
+  acceptFriendRequest,
+  declineFriendRequest,
+  FriendConnection,
+} from "../services/friendsService";
+import { useToast } from "../components/ToastManager";
+import { notifyError, notifySuccess } from "../ui/notify";
+import { getUserGear } from "../services/gearClosetService";
+import { GearItem, GEAR_CATEGORIES } from "../types/gear";
+import { getUserTripStories } from "../services/photoPostsService";
+import { PhotoPost } from "../types/photoPost";
+import { ContentVisibility } from "../types/user";
 import { useUserStatus } from "../utils/authHelper";
 import { useIsModerator, useIsAdministrator } from "../state/userStore";
 import { HERO_IMAGES } from "../constants/images";
@@ -90,6 +106,8 @@ type UserProfile = {
   stats?: ProfileStats;
   meritBadges?: MeritBadge[]; // Dynamic merit badges from Firestore
   isProfileContentPublic?: boolean; // Default true - whether content below header is public
+  gearClosetVisibility?: ContentVisibility; // Default "private"
+  tripStoriesVisibility?: ContentVisibility; // Default "private"
 };
 
 type ActivityTab = "photos" | "connect";
@@ -138,7 +156,17 @@ export default function MyCampsiteScreen({ navigation }: any) {
   const [connectLoading, setConnectLoading] = useState(true);
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [selectedSavedPlace, setSelectedSavedPlace] = useState<SavedPlace | null>(null);
+  const [ownFriendCount, setOwnFriendCount] = useState<number | null>(null);
+  const [friendConnection, setFriendConnection] = useState<FriendConnection | null>(null);
+  const [friendActionLoading, setFriendActionLoading] = useState(false);
+  // Sharable gear closet / trip stories - visibility enforced server-side
+  // by firestore.rules (gearClosetVisibility / tripStoriesVisibility), so
+  // an empty result here just means "nothing to show," not necessarily
+  // "nothing exists."
+  const [sharedGearItems, setSharedGearItems] = useState<GearItem[]>([]);
+  const [tripStories, setTripStories] = useState<PhotoPost[]>([]);
   const insets = useSafeAreaInsets();
+  const toast = useToast();
 
   // Onboarding modal
   const { showModal, currentTooltip, dismissModal, openModal } = useScreenOnboarding("MyCampsite");
@@ -342,6 +370,49 @@ export default function MyCampsiteScreen({ navigation }: any) {
     }
   }, []);
 
+  // Own profile: how many friends the viewer has, shown on the Friends
+  // quick link. Someone else's profile: the connection state between the
+  // signed-in user and that profile, to render Add Friend/Pending/Friends.
+  // A public friend *count* for other profiles isn't shown - the
+  // users/{uid}/friends subcollection is only readable by its two members,
+  // so there's no way to read someone else's total without a denormalized
+  // counter, which is out of scope here.
+  const loadFriendData = useCallback(async (targetUserId: string) => {
+    if (!isViewingOtherUser) {
+      try {
+        setOwnFriendCount(await getFriendCount(targetUserId));
+      } catch (error) {
+        console.error("[MyCampsite] Error loading friend count:", error);
+      }
+    } else if (auth.currentUser) {
+      try {
+        setFriendConnection(await getFriendConnection(auth.currentUser.uid, targetUserId));
+      } catch (error) {
+        console.error("[MyCampsite] Error loading friend connection:", error);
+      }
+    }
+  }, [isViewingOtherUser]);
+
+  // Gear Closet and Trip Stories: on own profile these always resolve
+  // (owner always has read access); on someone else's profile the
+  // Firestore rule silently filters out anything the viewer isn't
+  // entitled to see per that person's visibility setting, so a caught
+  // error or empty result both just mean "show nothing" here.
+  const loadSharedContent = useCallback(async (targetUserId: string) => {
+    try {
+      setSharedGearItems(await getUserGear(targetUserId));
+    } catch (error) {
+      console.error("[MyCampsite] Error loading shared gear:", error);
+      setSharedGearItems([]);
+    }
+    try {
+      setTripStories(await getUserTripStories(targetUserId));
+    } catch (error) {
+      console.error("[MyCampsite] Error loading trip stories:", error);
+      setTripStories([]);
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       // If viewing another user's profile, use their ID
@@ -359,7 +430,9 @@ export default function MyCampsiteScreen({ navigation }: any) {
       // Load user photos and Connect contributions
       loadUserPhotos(targetUserId);
       loadConnectContributions(targetUserId);
-      
+      loadFriendData(targetUserId);
+      loadSharedContent(targetUserId);
+
       // Only load favorites and saved places for the current user's own profile
       if (!isViewingOtherUser) {
         // Listen to favorite parks
@@ -387,7 +460,7 @@ export default function MyCampsiteScreen({ navigation }: any) {
         setFavoriteParks([]);
         setSavedPlaces([]);
       }
-    }, [navigation, loadProfile, loadUserPhotos, loadConnectContributions, viewingUserId, isViewingOtherUser, isGuest])
+    }, [navigation, loadProfile, loadUserPhotos, loadConnectContributions, loadFriendData, loadSharedContent, viewingUserId, isViewingOtherUser, isGuest])
   );
 
   const createDefaultProfile = async (userId: string) => {
@@ -598,6 +671,66 @@ export default function MyCampsiteScreen({ navigation }: any) {
     });
   };
 
+  const handleSendFriendRequest = async () => {
+    if (!auth.currentUser || !viewingUserId) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setFriendActionLoading(true);
+    try {
+      await sendFriendRequest(auth.currentUser.uid, viewingUserId);
+      // Re-fetch rather than construct locally - the Cancel action below
+      // needs the real request id, not a placeholder.
+      setFriendConnection(await getFriendConnection(auth.currentUser.uid, viewingUserId));
+      notifySuccess(toast, `Friend request sent to ${profile?.displayName || "this camper"}`);
+    } catch (error: any) {
+      notifyError(toast, error?.message || "Couldn't send friend request. Please try again.");
+    } finally {
+      setFriendActionLoading(false);
+    }
+  };
+
+  const handleCancelFriendRequest = async () => {
+    if (!friendConnection?.request || !viewingUserId) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setFriendActionLoading(true);
+    try {
+      await cancelFriendRequest(friendConnection.request.id);
+      setFriendConnection({ status: "none", request: null });
+    } catch (error: any) {
+      notifyError(toast, error?.message || "Couldn't cancel that request. Please try again.");
+    } finally {
+      setFriendActionLoading(false);
+    }
+  };
+
+  const handleAcceptFriendRequest = async () => {
+    if (!friendConnection?.request) return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setFriendActionLoading(true);
+    try {
+      await acceptFriendRequest(friendConnection.request);
+      setFriendConnection({ status: "friends", request: null });
+      notifySuccess(toast, `You and ${profile?.displayName || "this camper"} are now friends`);
+    } catch (error: any) {
+      notifyError(toast, error?.message || "Couldn't accept that request. Please try again.");
+    } finally {
+      setFriendActionLoading(false);
+    }
+  };
+
+  const handleDeclineFriendRequest = async () => {
+    if (!friendConnection?.request) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setFriendActionLoading(true);
+    try {
+      await declineFriendRequest(friendConnection.request.id);
+      setFriendConnection({ status: "none", request: null });
+    } catch (error: any) {
+      notifyError(toast, error?.message || "Couldn't decline that request. Please try again.");
+    } finally {
+      setFriendActionLoading(false);
+    }
+  };
+
   const getMembershipBadgeColor = (tier: MembershipTier): string => {
     // Use the profile's membershipTier to determine badge color (not the viewer's status)
     if (tier === "isAdmin") return "#dc2626"; // Red for admin
@@ -692,9 +825,25 @@ export default function MyCampsiteScreen({ navigation }: any) {
   // Content is visible if:
   // 1. Viewing own profile (not as public preview)
   // 2. Profile content is set to public (default is true)
-  const isProfileContentVisible = 
-    (!shouldHidePrivateContent) || 
+  const isProfileContentVisible =
+    (!shouldHidePrivateContent) ||
     (profile.isProfileContentPublic !== false);
+
+  // Gear Closet / Trip Stories visibility is enforced server-side for a
+  // genuinely different viewer (isViewingOtherUser), so sharedGearItems/
+  // tripStories already only contain what that viewer is allowed to see.
+  // "Preview as public" is a different case: the fetch still runs as the
+  // real owner (who always passes the rule), so it can't rely on the
+  // server to hide anything - simulate what a stranger would see instead.
+  const strangerSeesGearCloset = viewAsPublic && profile.gearClosetVisibility === "public";
+  const strangerSeesTripStories = viewAsPublic && profile.tripStoriesVisibility === "public";
+  const showGearClosetSection =
+    (isViewingOtherUser && sharedGearItems.length > 0) ||
+    (strangerSeesGearCloset && sharedGearItems.length > 0);
+  const showTripStoriesSection =
+    (!shouldHidePrivateContent) ||
+    (isViewingOtherUser && tripStories.length > 0) ||
+    (strangerSeesTripStories && tripStories.length > 0);
 
   // Use safe area bottom padding for consistent tab bar height
   const bottomSpacer = Math.max(insets.bottom || 0, 18) + 72;
@@ -908,6 +1057,87 @@ export default function MyCampsiteScreen({ navigation }: any) {
 
         {/* Profile Section */}
         <View className="px-5" style={{ marginTop: 16 }}>
+          {/* Friend connect button - other users' profiles only, and not
+              while previewing your own profile as public */}
+          {isViewingOtherUser && !viewAsPublic && auth.currentUser && friendConnection && (
+            <View className="mb-4">
+              {friendConnection.status === "friends" ? (
+                <View
+                  className="flex-row items-center justify-center py-3 rounded-xl border"
+                  style={{ borderColor: EARTH_GREEN, backgroundColor: `${EARTH_GREEN}15` }}
+                >
+                  <Ionicons name="checkmark-circle" size={18} color={EARTH_GREEN} />
+                  <Text className="ml-2" style={{ fontFamily: "SourceSans3_600SemiBold", color: EARTH_GREEN }}>
+                    Friends
+                  </Text>
+                </View>
+              ) : friendConnection.status === "pending_incoming" ? (
+                <View className="flex-row" style={{ gap: 8 }}>
+                  <Pressable
+                    onPress={handleAcceptFriendRequest}
+                    disabled={friendActionLoading}
+                    className="flex-1 flex-row items-center justify-center py-3 rounded-xl active:opacity-90"
+                    style={{ backgroundColor: EARTH_GREEN }}
+                  >
+                    {friendActionLoading ? (
+                      <ActivityIndicator size="small" color={PARCHMENT} />
+                    ) : (
+                      <Text style={{ fontFamily: "SourceSans3_600SemiBold", color: PARCHMENT }}>
+                        Accept Request
+                      </Text>
+                    )}
+                  </Pressable>
+                  <Pressable
+                    onPress={handleDeclineFriendRequest}
+                    disabled={friendActionLoading}
+                    className="flex-1 flex-row items-center justify-center py-3 rounded-xl border active:opacity-70"
+                    style={{ borderColor: BORDER_SOFT }}
+                  >
+                    <Text style={{ fontFamily: "SourceSans3_600SemiBold", color: TEXT_SECONDARY }}>
+                      Decline
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : friendConnection.status === "pending_outgoing" ? (
+                <Pressable
+                  onPress={handleCancelFriendRequest}
+                  disabled={friendActionLoading}
+                  className="flex-row items-center justify-center py-3 rounded-xl border active:opacity-70"
+                  style={{ borderColor: BORDER_SOFT }}
+                >
+                  {friendActionLoading ? (
+                    <ActivityIndicator size="small" color={TEXT_SECONDARY} />
+                  ) : (
+                    <>
+                      <Ionicons name="time-outline" size={18} color={TEXT_SECONDARY} />
+                      <Text className="ml-2" style={{ fontFamily: "SourceSans3_600SemiBold", color: TEXT_SECONDARY }}>
+                        Request Sent - Cancel
+                      </Text>
+                    </>
+                  )}
+                </Pressable>
+              ) : (
+                <Pressable
+                  onPress={handleSendFriendRequest}
+                  disabled={friendActionLoading}
+                  className="flex-row items-center justify-center py-3 rounded-xl active:opacity-90"
+                  style={{ backgroundColor: DEEP_FOREST }}
+                >
+                  {friendActionLoading ? (
+                    <ActivityIndicator size="small" color={PARCHMENT} />
+                  ) : (
+                    <>
+                      <Ionicons name="person-add-outline" size={18} color={PARCHMENT} />
+                      <Text className="ml-2" style={{ fontFamily: "SourceSans3_600SemiBold", color: PARCHMENT }}>
+                        Add Friend
+                      </Text>
+                    </>
+                  )}
+                </Pressable>
+              )}
+            </View>
+          )}
+
           {/* Learning Badges Row */}
           <View className="mb-4">
             <Pressable
@@ -1166,7 +1396,7 @@ export default function MyCampsiteScreen({ navigation }: any) {
                 </Text>
               </Pressable>
 
-              {/* My Campground */}
+              {/* Friends */}
               <Pressable
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1180,8 +1410,16 @@ export default function MyCampsiteScreen({ navigation }: any) {
                   className="mt-2 text-center"
                   style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 13, color: TEXT_PRIMARY_STRONG }}
                 >
-                  My Campground
+                  Friends
                 </Text>
+                {ownFriendCount !== null && (
+                  <Text
+                    className="mt-0.5 text-center"
+                    style={{ fontFamily: "SourceSans3_400Regular", fontSize: 11, color: TEXT_SECONDARY }}
+                  >
+                    {ownFriendCount} {ownFriendCount === 1 ? "friend" : "friends"}
+                  </Text>
+                )}
               </Pressable>
             </View>
           )}
@@ -1822,6 +2060,135 @@ export default function MyCampsiteScreen({ navigation }: any) {
             </View>
           )}
         </View>
+        )}
+
+        {/* Gear Closet - other users' profiles only (own profile already
+            has the My Gear Closet quick link above for full management).
+            Only renders when the owner's gearClosetVisibility setting
+            allows this viewer to see it - an empty result from the
+            Firestore-rule-gated fetch just means nothing to show. */}
+        {showGearClosetSection && (
+          <View className="mb-6 px-5">
+            <Text
+              className="text-lg mb-3"
+              style={{ fontFamily: "Raleway_700Bold", color: TEXT_PRIMARY_STRONG }}
+            >
+              Gear Closet
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 16 }}>
+              <View style={{ flexDirection: "row", gap: 12 }}>
+                {sharedGearItems.map((item) => (
+                  <View
+                    key={item.id}
+                    className="rounded-xl border p-3"
+                    style={{ backgroundColor: CARD_BACKGROUND_LIGHT, borderColor: BORDER_SOFT, width: 130 }}
+                  >
+                    <View
+                      className="rounded-lg items-center justify-center mb-2"
+                      style={{ backgroundColor: PARCHMENT, height: 80 }}
+                    >
+                      {item.imageUrl ? (
+                        <Image
+                          source={{ uri: item.imageUrl }}
+                          style={{ width: "100%", height: "100%", borderRadius: 8 }}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <Ionicons name="bag-handle-outline" size={28} color={EARTH_GREEN} />
+                      )}
+                    </View>
+                    <Text
+                      numberOfLines={1}
+                      style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 13, color: TEXT_PRIMARY_STRONG }}
+                    >
+                      {item.name}
+                    </Text>
+                    <Text
+                      numberOfLines={1}
+                      style={{ fontFamily: "SourceSans3_400Regular", fontSize: 11, color: TEXT_SECONDARY }}
+                    >
+                      {GEAR_CATEGORIES.find((c) => c.value === item.category)?.label || item.category}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Trip Stories - own profile always shows (with a prompt when
+            empty); other users' profiles only show when the owner's
+            tripStoriesVisibility setting allows this viewer to see them. */}
+        {showTripStoriesSection && (
+          <View className="mb-6 px-5">
+            <Text
+              className="text-lg mb-3"
+              style={{ fontFamily: "Raleway_700Bold", color: TEXT_PRIMARY_STRONG }}
+            >
+              Trip Stories
+            </Text>
+            {tripStories.length === 0 ? (
+              <View className="p-6 rounded-xl items-center border" style={{ backgroundColor: CARD_BACKGROUND_LIGHT, borderColor: BORDER_SOFT }}>
+                <Ionicons name="book-outline" size={40} color={EARTH_GREEN} />
+                <Text
+                  className="mt-3"
+                  style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 15, color: TEXT_PRIMARY_STRONG }}
+                >
+                  No trip stories yet
+                </Text>
+                <Text
+                  className="mt-1 text-center px-4"
+                  style={{ fontFamily: "SourceSans3_400Regular", fontSize: 14, color: TEXT_SECONDARY }}
+                >
+                  Tag a photo to a trip when you share it to start your story.
+                </Text>
+                {!shouldHidePrivateContent && (
+                  <Pressable
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      navigation.navigate("PhotoComposer", {});
+                    }}
+                    className="mt-4 px-5 py-2 rounded-full"
+                    style={{ backgroundColor: EARTH_GREEN }}
+                  >
+                    <Text style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 14, color: PARCHMENT }}>
+                      Share a Photo
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
+            ) : (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 16 }}>
+                <View style={{ flexDirection: "row", gap: 12 }}>
+                  {tripStories.map((post) => (
+                    <Pressable
+                      key={post.id}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        navigation.navigate("PhotoDetail", { storyId: post.id });
+                      }}
+                      className="rounded-xl overflow-hidden border active:opacity-90"
+                      style={{ backgroundColor: CARD_BACKGROUND_LIGHT, borderColor: BORDER_SOFT, width: 150 }}
+                    >
+                      <Image
+                        source={{ uri: post.photoUrls?.[0] }}
+                        style={{ width: "100%", height: 100, backgroundColor: BORDER_SOFT }}
+                        resizeMode="cover"
+                      />
+                      <View className="p-2">
+                        <Text
+                          numberOfLines={1}
+                          style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 12, color: TEXT_PRIMARY_STRONG }}
+                        >
+                          {post.tripName || "Trip Story"}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  ))}
+                </View>
+              </ScrollView>
+            )}
+          </View>
         )}
 
         {/* Account Actions - only show on own profile (not when viewing others) */}

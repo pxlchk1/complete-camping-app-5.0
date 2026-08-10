@@ -25,6 +25,7 @@ import * as Haptics from "expo-haptics";
 import { auth } from "../config/firebase";
 import { RootStackParamList } from "../navigation/types";
 import { getCampgroundContacts } from "../services/campgroundContactsService";
+import { getFriends } from "../services/friendsService";
 import {
   getBadgeDefinition,
   createBadgeClaim,
@@ -101,24 +102,46 @@ export default function SelectWitnessScreen() {
     setError(null);
 
     try {
-      const [badgeData, contactsData, claimData] = await Promise.all([
+      const [badgeData, contactsData, friendsData, claimData] = await Promise.all([
         getBadgeDefinition(badgeId),
         getCampgroundContacts(userId),
+        getFriends(userId),
         getClaimForBadge(userId, badgeId),
       ]);
 
       setBadge(badgeData);
-      
+
       // Only show contacts that have a linked user account (contactUserId)
       const linkedContacts = contactsData.filter((c) => c.contactUserId);
-      setContacts(linkedContacts);
-      setFilteredContacts(linkedContacts);
+
+      // Friends are always registered accounts, so they're always eligible
+      // witnesses - a pure Friend (never added to a trip, so no
+      // campgroundContacts record exists yet) would otherwise be invisible
+      // here. Skip any friend already represented by a linked contact.
+      const linkedFriendUids = new Set(linkedContacts.map((c) => c.contactUserId));
+      const friendCandidates: CampgroundContact[] = friendsData
+        .filter((f) => !linkedFriendUids.has(f.friendUid))
+        .map((f) => ({
+          id: `friend:${f.friendUid}`,
+          ownerId: userId,
+          contactUserId: f.friendUid,
+          contactName: f.displayName,
+          contactEmail: null,
+          contactPhone: null,
+          contactNote: null,
+          createdAt: f.since,
+          updatedAt: f.since,
+        }));
+
+      const eligibleWitnesses = [...linkedContacts, ...friendCandidates];
+      setContacts(eligibleWitnesses);
+      setFilteredContacts(eligibleWitnesses);
       setUnlinkedContactsCount(contactsData.length - linkedContacts.length);
       setExistingClaim(claimData);
 
       // Pre-select if there's an existing claim
       if (claimData?.witnessUserId) {
-        const existingContact = linkedContacts.find(
+        const existingContact = eligibleWitnesses.find(
           (c) => c.contactUserId === claimData.witnessUserId
         );
         if (existingContact) {
@@ -276,18 +299,18 @@ export default function SelectWitnessScreen() {
           <View className="mx-4 mt-6 p-6 rounded-xl items-center" style={{ backgroundColor: CARD_BACKGROUND_LIGHT }}>
             <Ionicons name="people-outline" size={48} color={TEXT_MUTED} />
             <Text className="text-center mt-4 text-lg font-medium" style={{ color: TEXT_PRIMARY_STRONG }}>
-              No Linked Campers
+              No Eligible Witnesses
             </Text>
             {unlinkedContactsCount > 0 ? (
               <Text className="text-center mt-2" style={{ color: TEXT_SECONDARY }}>
                 {unlinkedContactsCount === 1
-                  ? "You have 1 camper added, but they haven't linked a Tent & Lantern account yet."
-                  : `You have ${unlinkedContactsCount} campers added, but none of them have linked a Tent & Lantern account yet.`}
-                {" "}Send them an invite so they can verify your badge.
+                  ? "You have 1 guest added, but they haven't linked a Tent & Lantern account yet."
+                  : `You have ${unlinkedContactsCount} guests added, but none of them have linked a Tent & Lantern account yet.`}
+                {" "}Send them an invite, or add a friend who's already on the app.
               </Text>
             ) : (
               <Text className="text-center mt-2" style={{ color: TEXT_SECONDARY }}>
-                To request a stamp, you need campers in your campground who have linked their accounts.
+                To request a stamp, you need a friend on the app who can verify your badge.
               </Text>
             )}
             <Pressable
@@ -296,7 +319,7 @@ export default function SelectWitnessScreen() {
               onPress={() => navigation.navigate("MyCampground")}
             >
               <Text className="font-medium" style={{ color: PARCHMENT }}>
-                Go to My Campground
+                Go to Friends
               </Text>
             </Pressable>
           </View>

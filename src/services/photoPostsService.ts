@@ -54,6 +54,8 @@ export interface CreatePhotoPostData {
   tripStyle?: TripStyle;
   detailTags?: DetailTag[];
   location?: { latitude: number; longitude: number };
+  tripId?: string;
+  tripName?: string;
 }
 
 export async function createPhotoPost(data: CreatePhotoPostData): Promise<string> {
@@ -86,6 +88,10 @@ export async function createPhotoPost(data: CreatePhotoPostData): Promise<string
   // Add tags
   if (data.tripStyle) docData.tripStyle = data.tripStyle;
   if (data.detailTags && data.detailTags.length > 0) docData.detailTags = data.detailTags;
+
+  // Add trip story tag
+  if (data.tripId) docData.tripId = data.tripId;
+  if (data.tripName) docData.tripName = data.tripName;
 
   // Add location
   if (data.location) {
@@ -205,6 +211,17 @@ export async function getUserPhotoPosts(
     id: doc.id,
     ...doc.data(),
   })) as PhotoPost[];
+}
+
+/**
+ * A user's trip-tagged posts ("trip stories"), newest first. Filtered
+ * client-side rather than with a tripId != null query - avoids a second
+ * composite index for what's normally a small per-user set, matching how
+ * category filtering is already done elsewhere in this codebase.
+ */
+export async function getUserTripStories(userId: string, limitCount: number = 30): Promise<PhotoPost[]> {
+  const posts = await getUserPhotoPosts(userId, limitCount);
+  return posts.filter((post) => !!post.tripId);
 }
 
 // ==================== Update Photo Post ====================

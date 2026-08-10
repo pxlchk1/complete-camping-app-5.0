@@ -26,6 +26,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useCurrentUser } from "../../state/userStore";
+import { useTripsStore } from "../../state/tripsStore";
 import { RootStackNavigationProp } from "../../navigation/types";
 import { createPhotoPost } from "../../services/photoPostsService";
 import { getConnectDisplayHandle } from "../../services/handleService";
@@ -91,6 +92,16 @@ export default function PhotoComposerScreen() {
   const route = useRoute();
   const { postType: initialPostType } = (route.params || {}) as RouteParams;
   const currentUser = useCurrentUser();
+  const trips = useTripsStore((s) => s.trips);
+  const loadTrips = useTripsStore((s) => s.loadTrips);
+
+  // Trips may not be loaded yet if the user reached this screen without
+  // visiting the Plan tab this session - the trip-tagging picker below
+  // needs them.
+  useEffect(() => {
+    loadTrips();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Image state
   const [imageUri, setImageUri] = useState<string | null>(null);
@@ -109,6 +120,11 @@ export default function PhotoComposerScreen() {
   // Tags
   const [tripStyle, setTripStyle] = useState<TripStyle | null>(null);
   const [detailTags, setDetailTags] = useState<DetailTag[]>([]);
+
+  // Trip story - optionally tag this post to one of the user's trips.
+  // Visibility of trip-tagged posts follows the tripStoriesVisibility
+  // privacy setting in Edit Profile, unlike untagged posts.
+  const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
 
   // UI state
   const [uploading, setUploading] = useState(false);
@@ -231,6 +247,8 @@ export default function PhotoComposerScreen() {
         hideCampsiteNumber: postType === "campsite-spotlight" ? hideCampsiteNumber : undefined,
         tripStyle: tripStyle || undefined,
         detailTags: detailTags.length > 0 ? detailTags : undefined,
+        tripId: selectedTripId || undefined,
+        tripName: selectedTripId ? trips.find((t) => t.id === selectedTripId)?.name : undefined,
       });
 
       // Record the upload for daily limit tracking
@@ -529,6 +547,70 @@ export default function PhotoComposerScreen() {
                 </Text>
               )}
             </View>
+
+            {/* Trip Story */}
+            {trips.length > 0 && (
+              <View className="mb-5">
+                <Text className="mb-1" style={{ fontFamily: "SourceSans3_600SemiBold", color: TEXT_PRIMARY_STRONG }}>
+                  Tag to a Trip (optional)
+                </Text>
+                <Text className="mb-3 text-xs" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}>
+                  Makes this a trip story - visibility follows your Trip Stories setting in Edit Profile.
+                </Text>
+                <View className="flex-row flex-wrap gap-2">
+                  <Pressable
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setSelectedTripId(null);
+                    }}
+                    className="px-3 py-2 rounded-full"
+                    style={{
+                      backgroundColor: !selectedTripId ? DEEP_FOREST : CARD_BACKGROUND_LIGHT,
+                      borderWidth: 1,
+                      borderColor: !selectedTripId ? DEEP_FOREST : BORDER_SOFT,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontFamily: "SourceSans3_600SemiBold",
+                        color: !selectedTripId ? PARCHMENT : TEXT_PRIMARY_STRONG,
+                        fontSize: 13,
+                      }}
+                    >
+                      None
+                    </Text>
+                  </Pressable>
+                  {trips.map((trip) => {
+                    const isSelected = selectedTripId === trip.id;
+                    return (
+                      <Pressable
+                        key={trip.id}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          setSelectedTripId(isSelected ? null : trip.id);
+                        }}
+                        className="px-3 py-2 rounded-full"
+                        style={{
+                          backgroundColor: isSelected ? DEEP_FOREST : CARD_BACKGROUND_LIGHT,
+                          borderWidth: 1,
+                          borderColor: isSelected ? DEEP_FOREST : BORDER_SOFT,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontFamily: "SourceSans3_600SemiBold",
+                            color: isSelected ? PARCHMENT : TEXT_PRIMARY_STRONG,
+                            fontSize: 13,
+                          }}
+                        >
+                          {trip.name}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
 
             {/* Submit Button */}
             <Pressable

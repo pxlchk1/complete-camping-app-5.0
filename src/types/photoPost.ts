@@ -173,6 +173,13 @@ export interface PhotoPost {
   tripStyle?: TripStyle;
   detailTags?: DetailTag[];
 
+  // Trip story - tags this post to a specific trip. Visibility of
+  // trip-tagged posts is governed by the author's tripStoriesVisibility
+  // profile setting (public/friends/private), unlike untagged posts
+  // which are always public.
+  tripId?: string;
+  tripName?: string;
+
   // Engagement
   helpfulCount: number;
   voteCount?: number; // Reddit-style upvote/downvote score

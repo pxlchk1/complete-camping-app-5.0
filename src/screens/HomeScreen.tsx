@@ -967,7 +967,7 @@ export default function HomeScreen() {
                 </View>
               </Pressable>
 
-              {/* My Campground */}
+              {/* Friends */}
               <Pressable
                 className="rounded-xl active:scale-95"
                 style={{ backgroundColor: "#4A6B5D", paddingVertical: 14, borderRadius: 10 }}
@@ -979,10 +979,10 @@ export default function HomeScreen() {
                     setShowAccountModal(true);
                     return;
                   }
-                  // Logged-in users go directly to MyCampground
+                  // Logged-in users go directly to Friends
                   navigation.navigate("MyCampground");
                 }}
-                accessibilityLabel="My Campground"
+                accessibilityLabel="Friends"
                 accessibilityRole="button"
               >
                 <View className="flex-row items-center justify-between px-4">
@@ -999,7 +999,7 @@ export default function HomeScreen() {
                         color: "#FFFFFF",
                       }}
                     >
-                      My Campground
+                      Friends
                     </Text>
                   </View>
                   <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />

@@ -106,6 +106,34 @@ export async function createCampgroundContact(
 }
 
 /**
+ * Create a contact entry for an already-linked Friend. Used when a trip
+ * owner picks a pure Friend (no existing contact record) in
+ * AddPeopleToTripScreen - the trip-roster system (TripParticipant,
+ * addTripParticipantsWithRoles) is keyed on campgroundContactId, so a
+ * Friend needs a contact doc the first time they're added to a trip.
+ */
+export async function createLinkedContactFromFriend(
+  ownerId: string,
+  friendUid: string,
+  friendDisplayName: string
+): Promise<string> {
+  const contactsRef = collection(db, "campgroundContacts");
+
+  const docRef = await addDoc(contactsRef, {
+    ownerId,
+    contactUserId: friendUid,
+    contactName: friendDisplayName,
+    contactEmail: null,
+    contactPhone: null,
+    contactNote: null,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  return docRef.id;
+}
+
+/**
  * Update an existing campground contact
  */
 export async function updateCampgroundContact(

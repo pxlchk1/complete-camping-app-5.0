@@ -16,9 +16,11 @@ import { useNavigation, useRoute, RouteProp, useFocusEffect } from "@react-navig
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { auth } from "../config/firebase";
-import { getCampgroundContacts } from "../services/campgroundContactsService";
+import { getCampgroundContacts, createLinkedContactFromFriend } from "../services/campgroundContactsService";
 import { addTripParticipantsWithRoles } from "../services/tripParticipantsService";
+import { getFriends } from "../services/friendsService";
 import { CampgroundContact } from "../types/campground";
+import { Friend } from "../types/friends";
 import { RootStackParamList, RootStackNavigationProp } from "../navigation/types";
 import { useTripsStore } from "../state/tripsStore";
 import ModalHeader from "../components/ModalHeader";
@@ -40,6 +42,14 @@ import {
   TEXT_MUTED,
 } from "../constants/colors";
 
+// A trip roster entry: either an existing campgroundContacts record
+// (guest or already-linked friend) or a pure Friend with no contact
+// record yet - lazily provisioned into one on submit, since the trip
+// roster system (TripParticipant) is keyed on campgroundContactId.
+type RosterItem =
+  | { id: string; kind: "contact"; contact: CampgroundContact }
+  | { id: string; kind: "friend"; friend: Friend };
+
 export default function AddPeopleToTripScreen() {
   const navigation = useNavigation<RootStackNavigationProp>();
   const route = useRoute<RouteProp<RootStackParamList, "AddPeopleToTrip">>();
@@ -49,9 +59,20 @@ export default function AddPeopleToTripScreen() {
   const updateTrip = useTripsStore((s) => s.updateTrip);
 
   const [contacts, setContacts] = useState<CampgroundContact[]>([]);
-  const [selectedContactIds, setSelectedContactIds] = useState<Set<string>>(new Set());
+  const [friends, setFriends] = useState<Friend[]>([]);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  // Friends already represented by a linked contact record show once, as
+  // that contact - not twice.
+  const linkedFriendUids = new Set(contacts.map((c) => c.contactUserId).filter(Boolean));
+  const roster: RosterItem[] = [
+    ...contacts.map((contact): RosterItem => ({ id: contact.id, kind: "contact", contact })),
+    ...friends
+      .filter((f) => !linkedFriendUids.has(f.friendUid))
+      .map((friend): RosterItem => ({ id: `friend:${friend.friendUid}`, kind: "friend", friend })),
+  ];
 
   // Gating modal state
   const [showAccountModal, setShowAccountModal] = useState(false);
@@ -62,17 +83,17 @@ export default function AddPeopleToTripScreen() {
   const { canShowSoftModal, markInviteModalShown, recordModalDismissal } = useUpsellStore();
 
   useEffect(() => {
-    loadContacts();
+    loadRoster();
   }, []);
 
-  // Reload contacts when screen comes back into focus (e.g., after adding new person)
+  // Reload when screen comes back into focus (e.g., after adding a new guest)
   useFocusEffect(
     useCallback(() => {
-      loadContacts();
+      loadRoster();
     }, [])
   );
 
-  const loadContacts = async () => {
+  const loadRoster = async () => {
     const user = auth.currentUser;
     if (!user) {
       Alert.alert("Error", "You must be signed in");
@@ -81,31 +102,35 @@ export default function AddPeopleToTripScreen() {
     }
 
     try {
-      const contactsData = await getCampgroundContacts(user.uid);
+      const [contactsData, friendsData] = await Promise.all([
+        getCampgroundContacts(user.uid),
+        getFriends(user.uid),
+      ]);
       setContacts(contactsData);
+      setFriends(friendsData);
     } catch (error: any) {
-      console.error("Error loading contacts:", error);
-      Alert.alert("Error", "Failed to load contacts");
+      console.error("Error loading trip roster:", error);
+      Alert.alert("Error", "Failed to load your friends and guests");
     } finally {
       setLoading(false);
     }
   };
 
-  const toggleContact = (contactId: string) => {
+  const toggleItem = (itemId: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setSelectedContactIds(prev => {
+    setSelectedIds(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(contactId)) {
-        newSet.delete(contactId);
+      if (newSet.has(itemId)) {
+        newSet.delete(itemId);
       } else {
-        newSet.add(contactId);
+        newSet.add(itemId);
       }
       return newSet;
     });
   };
 
   const handleSubmit = async () => {
-    if (selectedContactIds.size === 0) {
+    if (selectedIds.size === 0) {
       Alert.alert("No Selection", "Please select at least one person to add");
       return;
     }
@@ -120,8 +145,23 @@ export default function AddPeopleToTripScreen() {
 
     try {
       setSubmitting(true);
-      // Add all selected contacts as "guest" role
-      const participantsWithRoles = Array.from(selectedContactIds).map(contactId => ({
+      const user = auth.currentUser;
+      if (!user) throw new Error("You must be signed in");
+
+      const selectedItems = roster.filter((item) => selectedIds.has(item.id));
+
+      // Pure Friends (no existing campgroundContacts record) need one
+      // provisioned first - the trip roster is keyed on
+      // campgroundContactId, not a bare user id.
+      const resolvedContactIds = await Promise.all(
+        selectedItems.map((item) =>
+          item.kind === "contact"
+            ? Promise.resolve(item.contact.id)
+            : createLinkedContactFromFriend(user.uid, item.friend.friendUid, item.friend.displayName)
+        )
+      );
+
+      const participantsWithRoles = resolvedContactIds.map((contactId) => ({
         contactId,
         role: "guest" as const,
       }));
@@ -129,12 +169,13 @@ export default function AddPeopleToTripScreen() {
       const tripStartDate = trip?.startDate ? new Date(trip.startDate) : new Date();
       await addTripParticipantsWithRoles(tripId, participantsWithRoles, tripStartDate);
 
-      // Grant read access to any added contact who is a registered app
-      // user (contactUserId is only set once that contact has redeemed a
-      // campground invite). Contacts without a linked account have no uid
-      // to grant access to and just stay in the roster added above.
-      const linkedUserIds = Array.from(selectedContactIds)
-        .map((contactId) => contacts.find((c) => c.id === contactId)?.contactUserId)
+      // Grant read access to any added person who is a registered app
+      // user (either an already-linked contact, or a Friend - Friends are
+      // always registered users by definition). Guests without an
+      // account have no uid to grant access to and just stay in the
+      // roster added above.
+      const linkedUserIds = selectedItems
+        .map((item) => (item.kind === "friend" ? item.friend.friendUid : item.contact.contactUserId))
         .filter((uid): uid is string => !!uid);
 
       if (linkedUserIds.length > 0 && trip) {
@@ -176,7 +217,7 @@ export default function AddPeopleToTripScreen() {
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color={DEEP_FOREST} />
           <Text className="mt-4" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}>
-            Loading contacts...
+            Loading your friends and guests...
           </Text>
         </View>
       </View>
@@ -195,14 +236,14 @@ export default function AddPeopleToTripScreen() {
       />
 
       <ScrollView className="flex-1 px-5 pt-5">
-        {contacts.length === 0 ? (
+        {roster.length === 0 ? (
           <View className="py-12 items-center">
             <Ionicons name="people-outline" size={64} color={BORDER_SOFT} />
             <Text
               className="mt-4 text-center mb-4"
               style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_MUTED }}
             >
-              No contacts in your campground yet. Add people to your campground first.
+              No friends or guests yet. Add some people first.
             </Text>
             <Pressable
               onPress={() => {
@@ -213,7 +254,7 @@ export default function AddPeopleToTripScreen() {
               style={{ backgroundColor: DEEP_FOREST }}
             >
               <Text style={{ fontFamily: "SourceSans3_600SemiBold", color: PARCHMENT }}>
-                Go to My Campground
+                Go to Friends
               </Text>
             </Pressable>
           </View>
@@ -223,15 +264,17 @@ export default function AddPeopleToTripScreen() {
               className="mb-4"
               style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}
             >
-              Select people from your campground to add to this trip
+              Select friends or guests to add to this trip
             </Text>
 
-            {contacts.map(contact => {
-              const isSelected = selectedContactIds.has(contact.id);
+            {roster.map(item => {
+              const isSelected = selectedIds.has(item.id);
+              const title = item.kind === "contact" ? item.contact.contactName : item.friend.displayName;
+              const subtitle = item.kind === "contact" ? item.contact.contactEmail : `@${item.friend.handle}`;
               return (
                 <Pressable
-                  key={contact.id}
-                  onPress={() => toggleContact(contact.id)}
+                  key={item.id}
+                  onPress={() => toggleItem(item.id)}
                   className="mb-3 p-4 rounded-xl border active:opacity-70"
                   style={{
                     backgroundColor: isSelected ? EARTH_GREEN : CARD_BACKGROUND_LIGHT,
@@ -248,11 +291,27 @@ export default function AddPeopleToTripScreen() {
                             color: isSelected ? PARCHMENT : TEXT_PRIMARY_STRONG,
                           }}
                         >
-                          {contact.contactName}
+                          {title}
                         </Text>
+                        {item.kind === "friend" && (
+                          <View
+                            className="ml-2 px-2 py-0.5 rounded-full"
+                            style={{ backgroundColor: isSelected ? "rgba(255,255,255,0.25)" : `${EARTH_GREEN}20` }}
+                          >
+                            <Text
+                              style={{
+                                fontFamily: "SourceSans3_600SemiBold",
+                                fontSize: 11,
+                                color: isSelected ? PARCHMENT : EARTH_GREEN,
+                              }}
+                            >
+                              Friend
+                            </Text>
+                          </View>
+                        )}
                       </View>
 
-                      {contact.contactEmail && (
+                      {subtitle && (
                         <Text
                           className="mt-1"
                           style={{
@@ -260,7 +319,7 @@ export default function AddPeopleToTripScreen() {
                             color: isSelected ? PARCHMENT : TEXT_SECONDARY,
                           }}
                         >
-                          {contact.contactEmail}
+                          {subtitle}
                         </Text>
                       )}
                     </View>
@@ -281,10 +340,10 @@ export default function AddPeopleToTripScreen() {
 
             <Pressable
               onPress={handleSubmit}
-              disabled={selectedContactIds.size === 0 || submitting}
+              disabled={selectedIds.size === 0 || submitting}
               className="mt-4 mb-8 py-3 rounded-lg active:opacity-90"
               style={{
-                backgroundColor: selectedContactIds.size > 0 ? DEEP_FOREST : BORDER_SOFT,
+                backgroundColor: selectedIds.size > 0 ? DEEP_FOREST : BORDER_SOFT,
               }}
             >
               {submitting ? (
@@ -294,8 +353,8 @@ export default function AddPeopleToTripScreen() {
                   className="text-center"
                   style={{ fontFamily: "SourceSans3_600SemiBold", color: PARCHMENT }}
                 >
-                  {selectedContactIds.size > 0 
-                    ? `Add ${selectedContactIds.size} ${selectedContactIds.size === 1 ? "person" : "people"} to trip`
+                  {selectedIds.size > 0
+                    ? `Add ${selectedIds.size} ${selectedIds.size === 1 ? "person" : "people"} to trip`
                     : "Select people to add"}
                 </Text>
               )}

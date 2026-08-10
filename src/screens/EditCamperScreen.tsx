@@ -121,7 +121,7 @@ export default function EditCamperScreen() {
   if (loading) {
     return (
       <View className="flex-1" style={{ backgroundColor: PARCHMENT }}>
-        <ModalHeader title="Edit Camper" showTitle />
+        <ModalHeader title="Edit Guest" showTitle />
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color={DEEP_FOREST} />
           <Text className="mt-4" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}>
@@ -135,7 +135,7 @@ export default function EditCamperScreen() {
   return (
     <View className="flex-1" style={{ backgroundColor: PARCHMENT }}>
       <ModalHeader
-        title="Edit Camper"
+        title="Edit Guest"
         showTitle
         rightAction={{
           icon: "checkmark",

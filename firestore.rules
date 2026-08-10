@@ -21,6 +21,29 @@ service cloud.firestore {
       );
     }
 
+    // The named profile field's value (gearClosetVisibility /
+    // tripStoriesVisibility), defaulting to "private" when unset or when
+    // the profile doc itself doesn't exist (get() on a missing doc throws
+    // rather than returning null, which would otherwise deny even the
+    // owner access to their own content).
+    function profileVisibility(ownerId, field) {
+      return exists(/databases/$(database)/documents/profiles/$(ownerId))
+        ? get(/databases/$(database)/documents/profiles/$(ownerId)).data.get(field, 'private')
+        : 'private';
+    }
+
+    // Shared-content gate for the My Campsite privacy settings (Gear
+    // Closet, Trip Stories): owner always sees their own; "public" is
+    // readable by anyone; "friends" requires a mirrored friendship doc
+    // (see users/{uid}/friends below); "private" (the default) is
+    // owner-only.
+    function canViewSharedContent(ownerId, field) {
+      return profileVisibility(ownerId, field) == 'public' ||
+        (isSignedIn() && request.auth.uid == ownerId) ||
+        (isSignedIn() && profileVisibility(ownerId, field) == 'friends' &&
+          exists(/databases/$(database)/documents/users/$(ownerId)/friends/$(request.auth.uid)));
+    }
+
     function isAdmin() {
       return isSignedIn()
         && (
@@ -111,6 +134,30 @@ service cloud.firestore {
       match /savedPlaces/{placeId} {
         allow read: if isSignedIn() && request.auth.uid == userId;
         allow create, update, delete: if isSignedIn() && request.auth.uid == userId;
+      }
+
+      // Friends subcollection - mirrored on both sides of a friendship
+      // (users/A/friends/B and users/B/friends/A) when a friend request is
+      // accepted. Either party may read/write either mirror doc since
+      // accepting/unfriending is a joint action with no server function to
+      // do it atomically server-side - same trust model already used for
+      // campgroundContacts' bidirectional invite-redemption links.
+      match /friends/{friendUid} {
+        allow read: if isSignedIn() && (request.auth.uid == userId || request.auth.uid == friendUid);
+        allow create: if isSignedIn() && (request.auth.uid == userId || request.auth.uid == friendUid);
+        allow delete: if isSignedIn() && (request.auth.uid == userId || request.auth.uid == friendUid);
+        allow update: if false;
+      }
+
+      // My Campground subcollection - a personal tag marking which of the
+      // user's own friends count as "people I actually camp with" (shown
+      // as "My Campground" in the UI; everyone else just shows as
+      // "Friends"). Purely one-sided/private, unlike the friends mirror
+      // above - only the owner can see or change their own tags.
+      match /campgroundMembers/{friendUid} {
+        allow read: if isSignedIn() && request.auth.uid == userId;
+        allow create, delete: if isSignedIn() && request.auth.uid == userId;
+        allow update: if false;
       }
 
       // Trips subcollection
@@ -361,7 +408,11 @@ service cloud.firestore {
 
     // Photo Posts collection (enhanced community photos with post types, tags)
     match /photoPosts/{id} {
-      allow read: if true; // Public read
+      // Untagged posts stay fully public, same as always. Posts tagged to
+      // a trip (tripId set) are "trip stories" - gated by the author's
+      // tripStoriesVisibility profile setting instead.
+      allow read: if resource.data.get('tripId', null) == null
+        || canViewSharedContent(resource.data.userId, 'tripStoriesVisibility');
       allow create: if isSignedIn();
       allow update: if isSignedIn(); // Allow signed-in users to update (for helpful count)
       // Owner, admin, or moderator can delete
@@ -518,6 +569,26 @@ service cloud.firestore {
       allow update, delete: if isOwner() || isAdmin();
     }
 
+    // Friend Requests - the handshake before a users/{uid}/friends mirror
+    // gets created. fromUserId sends, toUserId accepts/declines.
+    match /friendRequests/{id} {
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.fromUserId ||
+        request.auth.uid == resource.data.toUserId
+      );
+      allow create: if isSignedIn() &&
+        request.auth.uid == request.resource.data.fromUserId &&
+        request.resource.data.fromUserId != request.resource.data.toUserId;
+      // toUserId accepts/declines; either side can also update (e.g. to
+      // cancel a pending request by deleting it below - update is only
+      // ever used for the accept/decline status change by the recipient).
+      allow update: if isSignedIn() && request.auth.uid == resource.data.toUserId;
+      allow delete: if isSignedIn() && (
+        request.auth.uid == resource.data.fromUserId ||
+        request.auth.uid == resource.data.toUserId
+      );
+    }
+
     // Campground Contacts (My Campground)
     match /campgroundContacts/{id} {
       allow read: if isSignedIn() && (
@@ -541,7 +612,9 @@ service cloud.firestore {
 
     // User Gear (Gear Closet)
     match /userGear/{id} {
-      allow read: if isSignedIn() && request.auth.uid == resource.data.ownerId;
+      // Owner always; otherwise gated by the owner's gearClosetVisibility
+      // profile setting (public / friends / private, default private).
+      allow read: if canViewSharedContent(resource.data.ownerId, 'gearClosetVisibility');
       allow create: if isSignedIn() && request.auth.uid == request.resource.data.ownerId;
       allow update, delete: if isSignedIn() && request.auth.uid == resource.data.ownerId;
     }

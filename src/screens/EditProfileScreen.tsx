@@ -33,6 +33,7 @@ import { doc, getDoc, updateDoc, setDoc, deleteDoc, serverTimestamp } from "fire
 import { deleteUser } from "firebase/auth";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useCurrentUser, useUserStore } from "../state/userStore";
+import { ContentVisibility } from "../types/user";
 import ModalHeader from "../components/ModalHeader";
 import { useToast } from "../components/ToastManager";
 import { notifySuccess, notifyError } from "../ui/notify";
@@ -140,6 +141,15 @@ export default function EditProfileScreen() {
   // Privacy state - default to public (true)
   const [isProfileContentPublic, setIsProfileContentPublic] = useState(
     currentUser?.isProfileContentPublic !== false
+  );
+  // Gear Closet and Trip Stories default to private, unlike the rest of
+  // the profile - these expose more specific personal detail (what gear
+  // you own, where you actually went) so opt-in is the safer default.
+  const [gearClosetVisibility, setGearClosetVisibility] = useState<ContentVisibility>(
+    currentUser?.gearClosetVisibility || "private"
+  );
+  const [tripStoriesVisibility, setTripStoriesVisibility] = useState<ContentVisibility>(
+    currentUser?.tripStoriesVisibility || "private"
   );
 
   // Account fields state
@@ -470,22 +480,64 @@ export default function EditProfileScreen() {
     if (!user) return;
 
     setIsProfileContentPublic(isPublic);
-    
+
     try {
       await updateDoc(doc(db, "profiles", user.uid), {
         isProfileContentPublic: isPublic,
         updatedAt: serverTimestamp(),
       });
-      
+
       // Also update local store
       updateCurrentUser({
         isProfileContentPublic: isPublic,
       });
-      
+
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch (error) {
       console.error("[EditProfile] Error updating profile privacy:", error);
       setIsProfileContentPublic(!isPublic); // Revert on error
+    }
+  };
+
+  const handleSetGearClosetVisibility = async (visibility: ContentVisibility) => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const previous = gearClosetVisibility;
+    setGearClosetVisibility(visibility);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    try {
+      await updateDoc(doc(db, "profiles", user.uid), {
+        gearClosetVisibility: visibility,
+        updatedAt: serverTimestamp(),
+      });
+      updateCurrentUser({ gearClosetVisibility: visibility });
+    } catch (error) {
+      console.error("[EditProfile] Error updating gear closet visibility:", error);
+      setGearClosetVisibility(previous);
+      notifyError(toast, "Couldn't update Gear Closet privacy. Please try again.");
+    }
+  };
+
+  const handleSetTripStoriesVisibility = async (visibility: ContentVisibility) => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const previous = tripStoriesVisibility;
+    setTripStoriesVisibility(visibility);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    try {
+      await updateDoc(doc(db, "profiles", user.uid), {
+        tripStoriesVisibility: visibility,
+        updatedAt: serverTimestamp(),
+      });
+      updateCurrentUser({ tripStoriesVisibility: visibility });
+    } catch (error) {
+      console.error("[EditProfile] Error updating trip stories visibility:", error);
+      setTripStoriesVisibility(previous);
+      notifyError(toast, "Couldn't update Trip Stories privacy. Please try again.");
     }
   };
 
@@ -904,6 +956,34 @@ export default function EditProfileScreen() {
                   </View>
                   <Ionicons name="chevron-forward" size={20} color={TEXT_SECONDARY} />
                 </Pressable>
+
+                {/* Gear Closet Visibility */}
+                <View className="mt-4 pt-4 border-t" style={{ borderColor: BORDER_SOFT }}>
+                  <Text style={{ fontFamily: "SourceSans3_600SemiBold", color: TEXT_PRIMARY_STRONG }}>
+                    Gear Closet
+                  </Text>
+                  <Text
+                    className="text-sm mb-3"
+                    style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}
+                  >
+                    Who can see the gear in your closet on your profile
+                  </Text>
+                  <VisibilityPicker value={gearClosetVisibility} onChange={handleSetGearClosetVisibility} />
+                </View>
+
+                {/* Trip Stories Visibility */}
+                <View className="mt-4 pt-4 border-t" style={{ borderColor: BORDER_SOFT }}>
+                  <Text style={{ fontFamily: "SourceSans3_600SemiBold", color: TEXT_PRIMARY_STRONG }}>
+                    Trip Stories
+                  </Text>
+                  <Text
+                    className="text-sm mb-3"
+                    style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}
+                  >
+                    Who can see photos you've tagged to a trip
+                  </Text>
+                  <VisibilityPicker value={tripStoriesVisibility} onChange={handleSetTripStoriesVisibility} />
+                </View>
               </View>
             </View>
 
@@ -1367,6 +1447,51 @@ export default function EditProfileScreen() {
           </Pressable>
         </KeyboardAvoidingView>
       </Modal>
+    </View>
+  );
+}
+
+const VISIBILITY_OPTIONS: { value: ContentVisibility; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { value: "private", label: "Private", icon: "lock-closed-outline" },
+  { value: "friends", label: "Friends", icon: "people-outline" },
+  { value: "public", label: "Public", icon: "globe-outline" },
+];
+
+function VisibilityPicker({
+  value,
+  onChange,
+}: {
+  value: ContentVisibility;
+  onChange: (value: ContentVisibility) => void;
+}) {
+  return (
+    <View className="flex-row" style={{ gap: 8 }}>
+      {VISIBILITY_OPTIONS.map((option) => {
+        const isSelected = value === option.value;
+        return (
+          <Pressable
+            key={option.value}
+            onPress={() => onChange(option.value)}
+            className="flex-1 py-2.5 rounded-lg items-center active:opacity-80"
+            style={{
+              backgroundColor: isSelected ? DEEP_FOREST : PARCHMENT,
+              borderWidth: 1,
+              borderColor: isSelected ? DEEP_FOREST : BORDER_SOFT,
+            }}
+          >
+            <Ionicons name={option.icon} size={16} color={isSelected ? PARCHMENT : TEXT_SECONDARY} />
+            <Text
+              className="mt-1 text-xs"
+              style={{
+                fontFamily: "SourceSans3_600SemiBold",
+                color: isSelected ? PARCHMENT : TEXT_SECONDARY,
+              }}
+            >
+              {option.label}
+            </Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }

@@ -6,6 +6,10 @@ export type MembershipTier = "freeMember" | "subscribed" | "isAdmin" | "isModera
 
 export type MembershipDuration = "1_month" | "3_months" | "6_months" | "1_year" | "lifetime";
 
+// Who can see a piece of shareable profile content: everyone, only
+// accepted friends, or nobody but the owner.
+export type ContentVisibility = "public" | "friends" | "private";
+
 export interface User {
   id: string;
   email: string;
@@ -20,6 +24,10 @@ export interface User {
   membershipTier: MembershipTier;
   membershipExpiresAt?: string; // ISO string, undefined for lifetime or free
   isProfileContentPublic?: boolean; // Whether profile content (below header) is visible to others. Default true.
+  /** Who can see this user's Gear Closet on their profile. Default "private". */
+  gearClosetVisibility?: ContentVisibility;
+  /** Who can see this user's trip-tagged photo posts ("trip stories") on their profile. Default "private". */
+  tripStoriesVisibility?: ContentVisibility;
   /** Whether user is subscribed to email newsletter */
   emailSubscribed?: boolean;
   /** Whether user has enabled push notifications */
