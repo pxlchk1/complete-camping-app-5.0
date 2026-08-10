@@ -201,26 +201,11 @@ service cloud.firestore {
     // Trips collection
     // Members (recipients) have READ-ONLY access - only owner can edit
     match /trips/{tripId} {
-      // Helper function to check if user is the trip owner
-      function isTripOwner() {
-        return isSignedIn() && request.auth.uid == resource.data.userId;
-      }
-      
       // Helper function to check if user is the trip owner (for subcollections)
       function isTripOwnerForSubcollection() {
         return isSignedIn() && get(/databases/$(database)/documents/trips/$(tripId)).data.userId == request.auth.uid;
       }
-      
-      // Helper function to check if user is a trip member (read-only recipient)
-      function isTripMember() {
-        return isSignedIn() && request.auth.uid in resource.data.memberIds;
-      }
-      
-      // Helper function to check if user can read trip (owner OR member)
-      function canReadTrip() {
-        return isTripOwner() || isTripMember();
-      }
-      
+
       // Owner or trip member can read
       allow read: if isSignedIn() && (
         request.auth.uid == resource.data.userId ||
