@@ -34,6 +34,7 @@ import { User } from "../../types/user";
 import { useCurrentUser } from "../../state/userStore";
 import { auth, db } from "../../config/firebase";
 import { getConnectDisplayHandle } from "../../services/handleService";
+import HiddenReviewBanner from "../../components/HiddenReviewBanner";
 
 /** Fallback theme values (safe if your constants are not available here). */
 const DEEP_FOREST = "#1F3B2C";
@@ -63,6 +64,9 @@ type GearReview = {
   displayName?: string | null;
   photoUrls?: string[];
   productUrl?: string | null;
+  // Set by moderationService.checkAndApplyAutoHide() once downvotes cross
+  // AUTO_HIDE_DOWNVOTE_THRESHOLD - hidden from everyone except the author.
+  isHidden?: boolean;
 };
 
 type RouteParams = {
@@ -311,6 +315,7 @@ export default function GearReviewDetailScreen() {
       />
 
       <ScrollView className="flex-1 p-5">
+        {review.isHidden && review.authorId === currentUser?.id && <HiddenReviewBanner />}
         {/* Gear Name and Brand with Actions */}
         <View className="flex-row items-start justify-between mb-2">
           <Text

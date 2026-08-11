@@ -25,6 +25,7 @@ import { usePackingStore } from "../state/packingStore";
 import { useUserStatus } from "../utils/authHelper";
 import {
   getTripParticipants,
+  removeTripParticipant,
 } from "../services/tripParticipantsService";
 import { getCampgroundContactById } from "../services/campgroundContactsService";
 import { BodyText } from "../components/Typography";
@@ -92,6 +93,7 @@ export default function TripDetailScreen() {
 
   // Select trip from trips array directly to ensure reactivity on updates
   const trips = useTripsStore((s) => s.trips);
+  const updateTrip = useTripsStore((s) => s.updateTrip);
   const trip = useMemo(() => trips.find((t) => t.id === tripId), [trips, tripId]);
   // Only the trip owner can edit — shared-trip members previously saw the
   // same Edit Trip / Add People controls and got a false "success" because
@@ -124,9 +126,10 @@ export default function TripDetailScreen() {
   const [mealStats, setMealStats] = useState({ planned: 0 });
 
   const [participants, setParticipants] = useState<
-    Array<{ id: string; name: string }>
+    Array<{ id: string; name: string; contactUserId: string | null; hasAccess: boolean }>
   >([]);
   const [loadingParticipants, setLoadingParticipants] = useState(false);
+  const [removingParticipantId, setRemovingParticipantId] = useState<string | null>(null);
   const [showEditTripModal, setShowEditTripModal] = useState(false);
 
   // Details state
@@ -173,6 +176,10 @@ export default function TripDetailScreen() {
     };
   }, [trip?.tripDestination]);
 
+  const hasDestinationName = !!(
+    trip?.tripDestination?.name || trip?.destination?.name || trip?.locationName
+  );
+
   const startDate = useMemo(() => (trip ? new Date(trip.startDate) : null), [trip]);
   const endDate = useMemo(() => (trip ? new Date(trip.endDate) : null), [trip]);
 
@@ -209,13 +216,17 @@ export default function TripDetailScreen() {
     try {
       setLoadingParticipants(true);
       const participantsData = await getTripParticipants(tripId);
+      const memberIds = trip?.memberIds || [];
 
       const resolved = await Promise.all(
         participantsData.map(async (p) => {
           const contact = await getCampgroundContactById(p.campgroundContactId);
+          const contactUserId = contact?.contactUserId || null;
           return {
             id: p.id,
             name: contact?.contactName || "Unknown",
+            contactUserId,
+            hasAccess: !!contactUserId && memberIds.includes(contactUserId),
           };
         })
       );
@@ -226,7 +237,7 @@ export default function TripDetailScreen() {
     } finally {
       setLoadingParticipants(false);
     }
-  }, [tripId]);
+  }, [tripId, trip?.memberIds]);
 
   useEffect(() => {
     loadParticipants();
@@ -469,6 +480,44 @@ export default function TripDetailScreen() {
     setActivePlanTab("parks");
     navigation.goBack();
   }, [navigation, setActivePlanTab, setDestinationPickerTripId, tripId]);
+
+  const handleRemoveParticipant = useCallback(
+    (participant: { id: string; name: string; contactUserId: string | null; hasAccess: boolean }) => {
+      Alert.alert(
+        "Remove from trip?",
+        `Remove ${participant.name} from this trip${
+          participant.hasAccess ? " and revoke their access to it" : ""
+        }?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Remove",
+            style: "destructive",
+            onPress: async () => {
+              setRemovingParticipantId(participant.id);
+              try {
+                await removeTripParticipant(tripId, participant.id);
+                if (participant.hasAccess && trip) {
+                  const newMemberIds = (trip.memberIds || []).filter(
+                    (uid) => uid !== participant.contactUserId
+                  );
+                  await updateTrip(tripId, { memberIds: newMemberIds });
+                }
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                await loadParticipants();
+              } catch (error) {
+                console.error("Error removing participant:", error);
+                Alert.alert("Error", "Could not remove that person. Please try again.");
+              } finally {
+                setRemovingParticipantId(null);
+              }
+            },
+          },
+        ]
+      );
+    },
+    [tripId, trip, updateTrip, loadParticipants]
+  );
 
   const handleAddPeople = useCallback(async () => {
     try {
@@ -767,14 +816,42 @@ export default function TripDetailScreen() {
                 {participants.map((person) => (
                   <View
                     key={person.id}
-                    className="px-3 py-1.5 rounded-full border"
-                    style={{ backgroundColor: PARCHMENT, borderColor: PARCHMENT_BORDER }}
+                    className="flex-row items-center px-3 py-1.5 rounded-full border"
+                    style={{ backgroundColor: PARCHMENT, borderColor: PARCHMENT_BORDER, gap: 6 }}
                   >
+                    {person.hasAccess && (
+                      <Ionicons name="eye-outline" size={13} color={EARTH_GREEN} />
+                    )}
                     <Text style={{ fontFamily: "SourceSans3_400Regular", color: DEEP_FOREST }}>
                       {person.name}
                     </Text>
+                    {canEditTrip && (
+                      <Pressable
+                        onPress={() => handleRemoveParticipant(person)}
+                        disabled={removingParticipantId === person.id}
+                        hitSlop={8}
+                        className="active:opacity-60"
+                      >
+                        {removingParticipantId === person.id ? (
+                          <ActivityIndicator size="small" color={EARTH_GREEN} />
+                        ) : (
+                          <Ionicons name="close-circle" size={16} color={TEXT_SECONDARY} />
+                        )}
+                      </Pressable>
+                    )}
                   </View>
                 ))}
+              </View>
+            )}
+            {canEditTrip && participants.some((p) => p.hasAccess) && (
+              <View className="flex-row items-center mt-2" style={{ gap: 4 }}>
+                <Ionicons name="eye-outline" size={11} color={TEXT_SECONDARY} />
+                <Text
+                  className="text-xs"
+                  style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}
+                >
+                  can view this trip in the app · others are attendee-only
+                </Text>
               </View>
             )}
           </View>
@@ -818,7 +895,8 @@ export default function TripDetailScreen() {
         <View className="pb-6">
           {/* Destination */}
           <Pressable
-            onPress={handleOpenDestination}
+            onPress={hasDestinationName || canEditTrip ? handleOpenDestination : undefined}
+            disabled={!hasDestinationName && !canEditTrip}
             className="bg-white rounded-xl p-4 mb-3 active:opacity-80"
             style={{ borderWidth: 1, borderColor: "#e7e5e4" }}
           >
@@ -844,29 +922,31 @@ export default function TripDetailScreen() {
                     style={{ fontFamily: "SourceSans3_400Regular", color: EARTH_GREEN }}
                     numberOfLines={1}
                   >
-                    {trip.tripDestination?.name || trip.destination?.name || trip.locationName
+                    {hasDestinationName
                       ? trip.tripDestination?.name || trip.destination?.name || trip.locationName
-                      : "Choose a park or campground"}
+                      : canEditTrip
+                      ? "Choose a park or campground"
+                      : "No destination set yet"}
                   </Text>
 
-                  {(trip.tripDestination?.name || trip.destination?.name || trip.locationName) && (
+                  {hasDestinationName && canEditTrip && (
                     <Pressable
                       onPress={(e) => {
                         e.stopPropagation();
                         handleChangeDestination();
                       }}
                       className="mt-2 self-start active:opacity-70"
-                      style={{ 
-                        backgroundColor: "#f5f5f4", 
-                        paddingHorizontal: 10, 
-                        paddingVertical: 4, 
+                      style={{
+                        backgroundColor: "#f5f5f4",
+                        paddingHorizontal: 10,
+                        paddingVertical: 4,
                         borderRadius: 12,
                       }}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     >
                       <Text
-                        style={{ 
-                          fontFamily: "SourceSans3_400Regular", 
+                        style={{
+                          fontFamily: "SourceSans3_400Regular",
                           fontSize: 12,
                           color: TEXT_SECONDARY,
                         }}
@@ -878,9 +958,11 @@ export default function TripDetailScreen() {
                 </View>
               </View>
 
-              <View className="flex-row items-center">
-                <Ionicons name="chevron-forward" size={20} color={EARTH_GREEN} />
-              </View>
+              {(hasDestinationName || canEditTrip) && (
+                <View className="flex-row items-center">
+                  <Ionicons name="chevron-forward" size={20} color={EARTH_GREEN} />
+                </View>
+              )}
             </View>
           </Pressable>
 
@@ -980,12 +1062,13 @@ export default function TripDetailScreen() {
                 locationName={trip.weatherDestination?.label || trip.destination?.name || "Unknown location"}
                 lastUpdated={trip.weather.lastUpdated}
                 onViewMore={handleOpenWeather}
-                onChangeLocation={handleChangeWeather}
+                onChangeLocation={canEditTrip ? handleChangeWeather : undefined}
                 tripStartDate={trip.startDate}
               />
             ) : (
               <Pressable
-                onPress={handleOpenWeather}
+                onPress={canEditTrip ? handleOpenWeather : undefined}
+                disabled={!canEditTrip}
                 className="bg-white rounded-xl p-4 active:opacity-80"
                 style={{ borderWidth: 1, borderColor: "#e7e5e4" }}
               >
@@ -1011,14 +1094,16 @@ export default function TripDetailScreen() {
                         style={{ fontFamily: "SourceSans3_400Regular", color: EARTH_GREEN }}
                         numberOfLines={1}
                       >
-                        {trip.weatherDestination
-                          ? `Check weather for ${trip.weatherDestination.label}`
-                          : "Check weather for your location"}
+                        {canEditTrip
+                          ? trip.weatherDestination
+                            ? `Check weather for ${trip.weatherDestination.label}`
+                            : "Check weather for your location"
+                          : "No forecast added yet"}
                       </Text>
                     </View>
                   </View>
 
-                  <Ionicons name="chevron-forward" size={20} color={EARTH_GREEN} />
+                  {canEditTrip && <Ionicons name="chevron-forward" size={20} color={EARTH_GREEN} />}
                 </View>
               </Pressable>
             )}
@@ -1030,12 +1115,14 @@ export default function TripDetailScreen() {
               tripId={tripId}
               tripStartDate={trip.startDate}
               tripEndDate={trip.endDate}
+              canEditTrip={canEditTrip}
             />
           </View>
 
           {/* Notes Section */}
           <Pressable
-            onPress={handleEditNotes}
+            onPress={canEditTrip ? handleEditNotes : undefined}
+            disabled={!canEditTrip}
             className="bg-white rounded-xl p-4 mb-3 active:opacity-80"
             style={{ borderWidth: 1, borderColor: "#e7e5e4" }}
           >
@@ -1054,17 +1141,19 @@ export default function TripDetailScreen() {
                   Notes
                 </Text>
               </View>
-              <View className="flex-row items-center">
-                <Ionicons name="create-outline" size={18} color={EARTH_GREEN} />
-                <Text
-                  className="ml-1 text-sm"
-                  style={{ fontFamily: "SourceSans3_600SemiBold", color: EARTH_GREEN }}
-                >
-                  Edit
-                </Text>
-              </View>
+              {canEditTrip && (
+                <View className="flex-row items-center">
+                  <Ionicons name="create-outline" size={18} color={EARTH_GREEN} />
+                  <Text
+                    className="ml-1 text-sm"
+                    style={{ fontFamily: "SourceSans3_600SemiBold", color: EARTH_GREEN }}
+                  >
+                    Edit
+                  </Text>
+                </View>
+              )}
             </View>
-            
+
             {detailsNotes ? (
               <Text
                 className="text-sm"
@@ -1078,7 +1167,7 @@ export default function TripDetailScreen() {
                 className="text-sm italic"
                 style={{ fontFamily: "SourceSans3_400Regular", color: EARTH_GREEN }}
               >
-                Add notes (day-by-day plans, reminders, permit info...)
+                {canEditTrip ? "Add notes (day-by-day plans, reminders, permit info...)" : "No notes added yet"}
               </Text>
             )}
           </Pressable>

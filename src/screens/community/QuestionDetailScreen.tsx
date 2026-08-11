@@ -13,6 +13,7 @@ import ModalHeader from "../../components/ModalHeader";
 import VotePill from "../../components/VotePill";
 import AccountRequiredModal from "../../components/AccountRequiredModal";
 import { ContentActionsAffordance } from "../../components/contentActions";
+import HiddenReviewBanner from "../../components/HiddenReviewBanner";
 import { requireEmailVerification } from "../../utils/authHelper";
 import * as Haptics from "expo-haptics";
 import {
@@ -327,6 +328,7 @@ export default function QuestionDetailScreen() {
         >
           {/* Question Card */}
           <View className="mx-5 mt-5 rounded-xl p-5 border" style={{ backgroundColor: CARD_BACKGROUND_LIGHT, borderColor: BORDER_SOFT }}>
+            {question.isHidden && question.authorId === currentUser?.id && <HiddenReviewBanner />}
             {/* Header with actions */}
             <View className="flex-row items-start justify-between mb-3">
               <View className="flex-1">

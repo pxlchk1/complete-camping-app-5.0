@@ -20,6 +20,9 @@ export interface Tip {
   score: number; // upvotes - downvotes
   commentCount: number;
   userVote?: "up" | "down" | null;
+  // Set by moderationService.checkAndApplyAutoHide() once downvotes cross
+  // AUTO_HIDE_DOWNVOTE_THRESHOLD - hidden from everyone except the author.
+  isHidden?: boolean;
 }
 
 export interface TipComment {
@@ -69,6 +72,9 @@ export interface GearReview {
   score: number; // upvotes - downvotes
   commentCount: number;
   userVote?: "up" | "down" | null;
+  // Set by moderationService.checkAndApplyAutoHide() once downvotes cross
+  // AUTO_HIDE_DOWNVOTE_THRESHOLD - hidden from everyone except the author.
+  isHidden?: boolean;
 }
 
 // ==================== Questions (Ask a Camper) ====================
@@ -96,6 +102,9 @@ export interface Question {
   hasAcceptedAnswer: boolean;
   acceptedAnswerId?: string;
   userVote?: "up" | "down" | null;
+  // Set by moderationService.checkAndApplyAutoHide() once downvotes cross
+  // AUTO_HIDE_DOWNVOTE_THRESHOLD - hidden from everyone except the author.
+  isHidden?: boolean;
 }
 
 export interface Answer {
@@ -143,6 +152,9 @@ export interface Story {
   commentCount: number;
   upvotes?: number;
   downvotes?: number;
+  // Set by moderationService.checkAndApplyAutoHide() once downvotes cross
+  // AUTO_HIDE_DOWNVOTE_THRESHOLD - hidden from everyone except the author.
+  isHidden?: boolean;
 }
 
 export interface StoryComment {
@@ -180,6 +192,9 @@ export interface FeedbackPost {
   score: number; // upvotes - downvotes
   commentCount: number;
   userVote?: "up" | "down" | null;
+  // Set by moderationService.checkAndApplyAutoHide() once downvotes cross
+  // AUTO_HIDE_DOWNVOTE_THRESHOLD - hidden from everyone except the author.
+  isHidden?: boolean;
 }
 
 export interface FeedbackComment {

@@ -30,6 +30,7 @@ import ConfirmationModal from "../../components/ConfirmationModal";
 import { useToast } from "../../components/ToastManager";
 import { notifySuccess, notifyError } from "../../ui/notify";
 import { ContentActionsAffordance } from "../../components/contentActions";
+import HiddenReviewBanner from "../../components/HiddenReviewBanner";
 import { requireEmailVerification } from "../../utils/authHelper";
 import { isAdmin, isModerator, canModerateContent, getUser } from "../../services/userService";
 import { User } from "../../types/user";
@@ -619,6 +620,10 @@ export default function PhotoDetailScreen() {
 
           {/* Info */}
           <View className="px-5 py-4">
+            {(isNewFormat ? photoPost?.isHidden : photo?.isHidden) &&
+              (isNewFormat ? photoPost?.userId : photo?.authorId) === currentUser?.id && (
+                <HiddenReviewBanner />
+              )}
             {/* Location line for new format */}
             {isNewFormat && renderLocationLine()}
 

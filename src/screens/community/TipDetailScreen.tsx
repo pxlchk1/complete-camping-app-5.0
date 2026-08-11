@@ -32,6 +32,7 @@ import ModalHeader from "../../components/ModalHeader";
 import VotePill from "../../components/VotePill";
 import AccountRequiredModal from "../../components/AccountRequiredModal";
 import { ContentActionsAffordance } from "../../components/contentActions";
+import HiddenReviewBanner from "../../components/HiddenReviewBanner";
 import { isAdmin, isModerator, canModerateContent, getUser } from "../../services/userService";
 import { getConnectDisplayHandle } from "../../services/handleService";
 import { User } from "../../types/user";
@@ -319,6 +320,7 @@ export default function TipDetailScreen() {
         <ScrollView className="flex-1">
           {/* Tip Content */}
           <View className="p-5">
+            {tip.isHidden && tip.authorId === currentUser?.id && <HiddenReviewBanner />}
             <View className="flex-row items-start justify-between mb-3">
               <Text
                 className="text-2xl flex-1"

@@ -11,6 +11,7 @@ import ModalHeader from "../../components/ModalHeader";
 import VotePill from "../../components/VotePill";
 import AccountRequiredModal from "../../components/AccountRequiredModal";
 import { ContentActionsAffordance } from "../../components/contentActions";
+import HiddenReviewBanner from "../../components/HiddenReviewBanner";
 import { useContentActions } from "../../hooks/useContentActions";
 import { isAdmin, isModerator, canModerateContent } from "../../services/userService";
 import { deleteFeedback, deleteComment } from "../../services/connectDeletionService";
@@ -306,6 +307,7 @@ export default function FeedbackDetailScreen() {
         <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 20 }}>
           {/* Post Card */}
           <View className="mx-5 mt-5 rounded-xl p-5 border" style={{ backgroundColor: CARD_BACKGROUND_LIGHT, borderColor: BORDER_SOFT }}>
+            {post.isHidden && post.authorId === currentUser?.id && <HiddenReviewBanner />}
             {/* Header with tags and actions */}
             <View className="flex-row items-start justify-between mb-3">
               <View className="flex-row flex-wrap gap-2 flex-1">

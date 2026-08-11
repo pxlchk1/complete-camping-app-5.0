@@ -47,12 +47,18 @@ interface ItineraryLinksSectionProps {
   tripStartDate: string;
   tripEndDate: string;
   onAddLink?: () => void;
+  // Firestore rules only allow the trip owner to write itineraryLinks -
+  // members are read-only. Defaults to true so existing owner-only call
+  // sites don't need to change; pass false explicitly for a shared-trip
+  // viewer.
+  canEditTrip?: boolean;
 }
 
 export default function ItineraryLinksSection({
   tripId,
   tripStartDate,
   tripEndDate,
+  canEditTrip = true,
 }: ItineraryLinksSectionProps) {
   const [links, setLinks] = useState<ItineraryLink[]>([]);
   const [loading, setLoading] = useState(true);
@@ -143,9 +149,13 @@ export default function ItineraryLinksSection({
       undefined,
       [
         { text: 'Open', onPress: () => handleOpenLink(link) },
-        { text: 'Edit', onPress: () => handleEditLink(link) },
         { text: 'Copy link', onPress: () => handleCopyLink(link) },
-        { text: 'Delete', style: 'destructive', onPress: () => handleDeleteLink(link) },
+        ...(canEditTrip
+          ? [
+              { text: 'Edit', onPress: () => handleEditLink(link) },
+              { text: 'Delete' as const, style: 'destructive' as const, onPress: () => handleDeleteLink(link) },
+            ]
+          : []),
         { text: 'Cancel', style: 'cancel' },
       ]
     );
@@ -174,7 +184,7 @@ export default function ItineraryLinksSection({
           <Ionicons name="map-outline" size={20} color={DEEP_FOREST} />
           <Text style={styles.headerTitle}>Itinerary Links</Text>
         </View>
-        {!isEmpty && (
+        {!isEmpty && canEditTrip && (
           <Pressable
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -198,19 +208,23 @@ export default function ItineraryLinksSection({
         /* Empty State */
         <View style={styles.emptyState}>
           <Text style={styles.emptyText}>
-            Trail maps, routes, permits, and plans, organized by day.
+            {canEditTrip
+              ? 'Trail maps, routes, permits, and plans, organized by day.'
+              : 'No itinerary links added yet.'}
           </Text>
-          <Pressable
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              setEditingLink(null);
-              setShowAddModal(true);
-            }}
-            style={styles.emptyButton}
-          >
-            <Ionicons name="add-circle-outline" size={18} color={PARCHMENT} />
-            <Text style={styles.emptyButtonText}>Add link</Text>
-          </Pressable>
+          {canEditTrip && (
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                setEditingLink(null);
+                setShowAddModal(true);
+              }}
+              style={styles.emptyButton}
+            >
+              <Ionicons name="add-circle-outline" size={18} color={PARCHMENT} />
+              <Text style={styles.emptyButtonText}>Add link</Text>
+            </Pressable>
+          )}
         </View>
       ) : (
         /* Populated State - Links grouped by day */

@@ -1679,6 +1679,177 @@ export const onTripUpdated = functions.firestore
         });
       }
     }
+
+    // If new people were granted access to the trip (AddPeopleToTripScreen
+    // unions their uid into memberIds), let each of them know - previously
+    // nothing told a newly-added member their trip even existed.
+    const beforeMemberIds: string[] = before.memberIds || [];
+    const afterMemberIds: string[] = after.memberIds || [];
+    const newlyAddedUids = afterMemberIds.filter((uid) => !beforeMemberIds.includes(uid));
+
+    for (const uid of newlyAddedUids) {
+      if (uid === after.userId) continue; // owner never needs this
+      if (!(await shouldNotifyUser(db, uid))) continue;
+
+      await db.collection("notificationQueue").add({
+        userId: uid,
+        type: "trip_member_added",
+        sendAt: admin.firestore.Timestamp.now(),
+        payload: {
+          title: "You've been added to a trip",
+          body: `You now have access to "${after.name || "a trip"}" in the app.`,
+          deepLink: `cta://trip/${tripId}`,
+          tripId,
+        },
+        status: "pending",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        metadata: { tripId },
+      });
+    }
+
+    if (newlyAddedUids.length > 0) {
+      await sendQueuedNotifications(db);
+    }
+  });
+
+// ============================================
+// SOCIAL EVENT TRIGGERS
+// ============================================
+
+/**
+ * Mirrors the shape (and defaults) of NotificationPreferences on the
+ * client (src/services/notificationService.ts) - a missing prefs doc, or
+ * a missing individual key on an existing doc, both mean "on", matching
+ * DEFAULT_NOTIFICATION_PREFERENCES there.
+ */
+async function shouldNotifyUser(
+  db: admin.firestore.Firestore,
+  userId: string,
+  prefKey?: "questionAnswers" | "campgroundInvites"
+): Promise<boolean> {
+  const prefsSnap = await db.collection("notificationPreferences").doc(userId).get();
+  if (!prefsSnap.exists) return true;
+
+  const prefs = prefsSnap.data() || {};
+  if (prefs.enabled === false) return false;
+  if (prefKey && prefs[prefKey] === false) return false;
+  return true;
+}
+
+/**
+ * When a friend request is created, notify the recipient. Previously
+ * nothing did this at all - the recipient only found out by opening the
+ * Friends hub or the sender's profile on their own.
+ */
+export const onFriendRequestCreated = functions.firestore
+  .document("friendRequests/{requestId}")
+  .onCreate(async (snap) => {
+    const request = snap.data();
+    if (!request?.toUserId || !request?.fromUserId) return;
+
+    const db = admin.firestore();
+    if (!(await shouldNotifyUser(db, request.toUserId, "campgroundInvites"))) return;
+
+    await db.collection("notificationQueue").add({
+      userId: request.toUserId,
+      type: "friend_request_received",
+      sendAt: admin.firestore.Timestamp.now(),
+      payload: {
+        title: "New friend request",
+        body: `${request.fromDisplayName || "Someone"} wants to connect`,
+        deepLink: "cta://campground/invite",
+      },
+      status: "pending",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      metadata: { requestId: snap.id },
+    });
+
+    await sendQueuedNotifications(db);
+
+    functions.logger.info("Queued friend_request_received notification", {
+      requestId: snap.id,
+      toUserId: request.toUserId,
+    });
+  });
+
+/**
+ * When a friend request is accepted, notify the person who originally
+ * sent it.
+ */
+export const onFriendRequestUpdated = functions.firestore
+  .document("friendRequests/{requestId}")
+  .onUpdate(async (change) => {
+    const before = change.before.data();
+    const after = change.after.data();
+
+    if (before.status === after.status) return;
+    if (after.status !== "accepted") return;
+    if (!after.fromUserId) return;
+
+    const db = admin.firestore();
+    if (!(await shouldNotifyUser(db, after.fromUserId, "campgroundInvites"))) return;
+
+    await db.collection("notificationQueue").add({
+      userId: after.fromUserId,
+      type: "friend_request_accepted",
+      sendAt: admin.firestore.Timestamp.now(),
+      payload: {
+        title: "Friend request accepted",
+        body: `${after.toDisplayName || "Someone"} accepted your friend request`,
+        deepLink: "cta://campground/invite",
+      },
+      status: "pending",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      metadata: { requestId: change.after.id },
+    });
+
+    await sendQueuedNotifications(db);
+
+    functions.logger.info("Queued friend_request_accepted notification", {
+      requestId: change.after.id,
+      fromUserId: after.fromUserId,
+    });
+  });
+
+/**
+ * When someone answers a question, notify the question's author - unless
+ * they answered their own question.
+ */
+export const onAnswerCreated = functions.firestore
+  .document("answers/{answerId}")
+  .onCreate(async (snap) => {
+    const answer = snap.data();
+    if (!answer?.questionId || !answer?.userId) return;
+
+    const db = admin.firestore();
+    const questionSnap = await db.collection("questions").doc(answer.questionId).get();
+    if (!questionSnap.exists) return;
+
+    const question = questionSnap.data();
+    const questionAuthorId = question?.authorId;
+    if (!questionAuthorId || questionAuthorId === answer.userId) return;
+    if (!(await shouldNotifyUser(db, questionAuthorId, "questionAnswers"))) return;
+
+    await db.collection("notificationQueue").add({
+      userId: questionAuthorId,
+      type: "question_answered",
+      sendAt: admin.firestore.Timestamp.now(),
+      payload: {
+        title: "New answer to your question",
+        body: `Someone answered "${question?.title || "your question"}"`,
+        deepLink: `cta://question/${answer.questionId}`,
+      },
+      status: "pending",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      metadata: { questionId: answer.questionId },
+    });
+
+    await sendQueuedNotifications(db);
+
+    functions.logger.info("Queued question_answered notification", {
+      questionId: answer.questionId,
+      questionAuthorId,
+    });
   });
 
 // ============================================

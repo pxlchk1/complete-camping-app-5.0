@@ -35,6 +35,21 @@ type NavigateFunction = (screen: string, params?: Record<string, any>) => void;
 function navigateToCtaDeepLink(navigateFn: NavigateFunction, deepLink: string) {
   const path = deepLink.replace(/^cta:\/\//, "").replace(/\/$/, "");
 
+  // Dynamic-segment paths (social notifications carry the id in the link
+  // itself, since the push payload only ever forwards {deepLink, type} -
+  // see sendQueuedNotifications in functions/src/index.ts).
+  const tripMatch = path.match(/^trip\/([^/]+)$/);
+  if (tripMatch) {
+    navigateFn("TripDetail", { tripId: tripMatch[1] });
+    return;
+  }
+
+  const questionMatch = path.match(/^question\/([^/]+)$/);
+  if (questionMatch) {
+    navigateFn("QuestionDetail", { questionId: questionMatch[1] });
+    return;
+  }
+
   switch (path) {
     case "plan/new":
       navigateFn("CreateTrip");
@@ -133,6 +148,20 @@ export function useNotificationListeners(
         // No content-type-specific detail route is addressable from a bare
         // contentId (could be a tip, question, or photo) — land on Connect.
         navigateFn("HomeTabs", { screen: "Connect" });
+        break;
+
+      // Server-queued social types (functions/src/index.ts) — all carry a
+      // deepLink with the id already embedded in the path, since the push
+      // payload doesn't forward arbitrary fields like tripId/questionId.
+      case "friend_request_received":
+      case "friend_request_accepted":
+      case "question_answered":
+      case "trip_member_added":
+        if (data.deepLink) {
+          navigateToCtaDeepLink(navigateFn, data.deepLink as string);
+        } else {
+          navigateFn("HomeTabs");
+        }
         break;
 
       case "subscription":
