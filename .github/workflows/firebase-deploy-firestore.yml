@@ -1,0 +1,39 @@
+name: Deploy Firestore Rules & Indexes
+
+# Automatic: runs whenever firestore.rules or firestore.indexes.json
+# change on the default branch. This exists because those files can be
+# edited and committed with zero effect on the live app if nobody
+# remembers to run `firebase deploy` by hand - that's exactly what
+# happened before this workflow was added (rules changes sat in git,
+# never deployed, until manually discovered and pushed from a local
+# machine). Also runnable on demand via workflow_dispatch.
+on:
+  push:
+    branches:
+      - claude/camping-app-5-setup-mn4k6x
+    paths:
+      - "firestore.rules"
+      - "firestore.indexes.json"
+  workflow_dispatch: {}
+
+concurrency:
+  group: firebase-deploy-firestore
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Write service account key
+        run: echo "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-service-account.json"
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Deploy Firestore rules and indexes
+        run: npx firebase-tools deploy --only firestore:rules,firestore:indexes --project tentandlanternapp --non-interactive
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-service-account.json
