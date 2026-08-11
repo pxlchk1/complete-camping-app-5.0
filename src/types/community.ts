@@ -124,6 +124,9 @@ export interface Answer {
   score: number; // upvotes - downvotes
   isAccepted: boolean;
   userVote?: "up" | "down" | null;
+  // Set by moderationService.checkAndApplyAutoHide() once downvotes cross
+  // AUTO_HIDE_DOWNVOTE_THRESHOLD - hidden from everyone except the author.
+  isHidden?: boolean;
 }
 
 export interface QAFilters {

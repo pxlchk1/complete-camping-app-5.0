@@ -16,6 +16,7 @@ import OnboardingModal from "../../components/OnboardingModal";
 import { useScreenOnboarding } from "../../hooks/useScreenOnboarding";
 import { requireAccount } from "../../utils/gating";
 import { shouldShowInFeed } from "../../services/moderationService";
+import { getConnectDisplayHandle } from "../../services/handleService";
 import { RootStackNavigationProp } from "../../navigation/types";
 import CommunitySectionHeader from "../../components/CommunitySectionHeader";
 import { seedFeedbackIfEmpty } from "../../features/feedback/seedFeedback";
@@ -162,7 +163,7 @@ export default function FeedbackListScreen() {
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: 12, borderTopWidth: 1, borderColor: BORDER_SOFT }}>
           <View style={{ flexDirection: "row", alignItems: "center", flexShrink: 1 }}>
             <Text style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 12, color: TEXT_SECONDARY }}>
-              {item.authorName || "Anonymous"}
+              {item.authorName || `@${getConnectDisplayHandle(null, item.authorId)}`}
             </Text>
             <Text style={{ marginHorizontal: 6, opacity: 0.7, color: TEXT_SECONDARY }}>•</Text>
             <Text style={{ fontFamily: "SourceSans3_400Regular", fontSize: 12, color: TEXT_SECONDARY }}>

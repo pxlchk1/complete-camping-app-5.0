@@ -130,6 +130,7 @@ export default function PhotoComposerScreen() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPhotoLimitModal, setShowPhotoLimitModal] = useState(false);
+  const [photoLimitMessage, setPhotoLimitMessage] = useState<string | undefined>(undefined);
 
   // Set caption template when post type changes
   useEffect(() => {
@@ -218,6 +219,7 @@ export default function PhotoComposerScreen() {
     // Check photo limit
     const limitCheck = await canUploadPhotoToday();
     if (!limitCheck.canUpload) {
+      setPhotoLimitMessage(limitCheck.message);
       setShowPhotoLimitModal(true);
       return;
     }
@@ -637,6 +639,7 @@ export default function PhotoComposerScreen() {
       <PremiumFeatureModal
         visible={showPhotoLimitModal}
         featureType="photos"
+        body={photoLimitMessage}
         onUpgrade={() => {
           setShowPhotoLimitModal(false);
           navigation.navigate("Paywall", { triggerKey: "photo_limit" });

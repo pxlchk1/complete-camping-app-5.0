@@ -108,6 +108,12 @@ type UserProfile = {
   isProfileContentPublic?: boolean; // Default true - whether content below header is public
   gearClosetVisibility?: ContentVisibility; // Default "private"
   tripStoriesVisibility?: ContentVisibility; // Default "private"
+  // Denormalized by Cloud Function triggers (onFriendAdded/onFriendRemoved
+  // in functions/src/index.ts) whenever the users/{uid}/friends
+  // subcollection changes, since that subcollection's own count isn't
+  // readable by anyone but its two members. Undefined (not 0) for anyone
+  // who hasn't had a friend added/removed since this was introduced.
+  friendCount?: number;
 };
 
 type ActivityTab = "photos" | "connect";
@@ -1037,7 +1043,16 @@ export default function MyCampsiteScreen({ navigation }: any) {
                 >
                   @{profile.handle || "user"}
                 </Text>
-                
+
+                {isViewingOtherUser && profile.friendCount !== undefined && (
+                  <Text
+                    className="text-sm mt-1"
+                    style={{ fontFamily: "SourceSans3_400Regular", color: PARCHMENT, opacity: 0.8, textAlign: "center" }}
+                  >
+                    {profile.friendCount} {profile.friendCount === 1 ? "friend" : "friends"}
+                  </Text>
+                )}
+
                 {/* Membership Badge */}
                 <View
                   className="rounded-full px-3 py-1 mt-2"

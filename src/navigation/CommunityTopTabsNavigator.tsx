@@ -175,8 +175,8 @@ export default function CommunityTopTabsNavigator({ initialRouteName }: Communit
         }}
       >
         <Tab.Screen name="Tips" component={TipsListScreen} />
-        <Tab.Screen name="Gear" component={GearReviewsListScreen} />
-        <Tab.Screen name="Ask" component={QuestionsListScreen} />
+        <Tab.Screen name="Gear" component={GearReviewsListScreen} options={{ title: "Gear Reviews" }} />
+        <Tab.Screen name="Ask" component={QuestionsListScreen} options={{ title: "Q&A" }} />
         <Tab.Screen name="Photos" component={PhotosListScreen} />
         <Tab.Screen name="Feedback" component={FeedbackListScreen} />
       </Tab.Navigator>

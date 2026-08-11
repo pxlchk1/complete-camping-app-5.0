@@ -362,8 +362,28 @@ service cloud.firestore {
     match /answers/{id} {
       allow read: if true; // Public read
       allow create: if isSignedIn();
-      // Owner, admin, or moderator can update/delete
-      allow update, delete: if isOwner() || canModerateContent();
+      // Owner, admin, or moderator can update/delete. The asking question's
+      // author may also flip isAccepted on someone else's answer - and
+      // ONLY that field - to mark it accepted (acceptAnswer() in
+      // questionsService.ts); any signed-in user may update ONLY the vote
+      // counts (genericVotesService.vote(), same pattern as tips/questions/
+      // gearReviews/feedbackPosts) - no other field of another user's
+      // answer is writable this way.
+      allow update: if isSignedIn() && (
+        isOwner() ||
+        canModerateContent() ||
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isAccepted']) &&
+          get(/databases/$(database)/documents/questions/$(resource.data.questionId)).data.authorId == request.auth.uid) ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['upvoteCount', 'downvoteCount'])
+      );
+      allow delete: if isOwner() || canModerateContent();
+
+      // Votes subcollection - shared genericVotesService.vote() pattern
+      match /votes/{voterId} {
+        allow read: if true;
+        allow create, update: if isSignedIn() && request.auth.uid == voterId;
+        allow delete: if isSignedIn() && request.auth.uid == voterId;
+      }
     }
 
     // Stories (Photos)

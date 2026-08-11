@@ -104,6 +104,7 @@ export default function PhotosListScreen() {
   // Gating modal state
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [showPhotoLimitModal, setShowPhotoLimitModal] = useState(false);
+  const [photoLimitMessage, setPhotoLimitMessage] = useState<string | undefined>(undefined);
 
   // Onboarding modal
   const { showModal, currentTooltip, dismissModal, openModal } = useScreenOnboarding("Photos");
@@ -228,6 +229,7 @@ export default function PhotosListScreen() {
 
     const limitCheck = await canUploadPhotoToday();
     if (!limitCheck.canUpload) {
+      setPhotoLimitMessage(limitCheck.message);
       setShowPhotoLimitModal(true);
       return;
     }
@@ -479,6 +481,23 @@ export default function PhotosListScreen() {
     </View>
   );
 
+  const formatGridTimeAgo = (dateValue: string | any): string => {
+    const now = new Date();
+    const date = typeof dateValue === "string" ? new Date(dateValue) : dateValue?.toDate?.() || new Date();
+    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
+
+    if (diffInHours < 1) return "Just now";
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 7) return `${diffInDays}d ago`;
+
+    const diffInWeeks = Math.floor(diffInDays / 7);
+    if (diffInWeeks < 4) return `${diffInWeeks}w ago`;
+
+    return date.toLocaleDateString();
+  };
+
   // Render photo grid item
   const renderPhotoItem = ({ item, index }: { item: PhotoPost | Story; index: number }) => {
     const isPhotoPost = "photoUrls" in item;
@@ -536,7 +555,22 @@ export default function PhotosListScreen() {
                   {caption}
                 </Text>
               )}
-              
+
+              {/* Timestamp - grid cards previously showed no author or
+                  time at all, unlike every other content type in Connect */}
+              {!!item.createdAt && (
+                <Text
+                  style={{
+                    fontFamily: "SourceSans3_400Regular",
+                    color: "rgba(255,255,255,0.75)",
+                    fontSize: 10,
+                    marginTop: 2,
+                  }}
+                >
+                  {formatGridTimeAgo(item.createdAt)}
+                </Text>
+              )}
+
               {/* Post type badge + helpful */}
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 4 }}>
                 {isPhotoPost && (item as PhotoPost).postType && (
@@ -711,6 +745,7 @@ export default function PhotosListScreen() {
       <PremiumFeatureModal
         visible={showPhotoLimitModal}
         featureType="photos"
+        body={photoLimitMessage}
         onUpgrade={() => {
           setShowPhotoLimitModal(false);
           navigation.navigate("Paywall", { triggerKey: "photo_limit" });

@@ -14,6 +14,7 @@ import { ContentActionsAffordance } from "../../components/contentActions";
 import HiddenReviewBanner from "../../components/HiddenReviewBanner";
 import { useContentActions } from "../../hooks/useContentActions";
 import { isAdmin, isModerator, canModerateContent } from "../../services/userService";
+import { getConnectDisplayHandle } from "../../services/handleService";
 import { deleteFeedback, deleteComment } from "../../services/connectDeletionService";
 import { User } from "../../types/user";
 import { requireAccount } from "../../utils/gating";
@@ -348,12 +349,12 @@ export default function FeedbackDetailScreen() {
                 {post.authorId ? (
                   <Pressable onPress={() => navigation.navigate("MyCampsite", { userId: post.authorId })}>
                     <Text className="text-xs" style={{ fontFamily: "SourceSans3_600SemiBold", color: DEEP_FOREST, textDecorationLine: "underline" }}>
-                      Posted by {authorName || "Anonymous"}
+                      Posted by {authorName || `@${getConnectDisplayHandle(null, post.authorId)}`}
                     </Text>
                   </Pressable>
                 ) : (
                   <Text className="text-xs" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}>
-                    Posted by {authorName || "Anonymous"}
+                    Posted by {authorName || `@${getConnectDisplayHandle(null, post.authorId)}`}
                   </Text>
                 )}
                 <Text className="text-xs" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}>
@@ -393,7 +394,7 @@ export default function FeedbackDetailScreen() {
                   >
                     <View className="flex-row items-start justify-between mb-1">
                       <Text className="flex-1 text-xs" style={{ fontFamily: "SourceSans3_600SemiBold", color: DEEP_FOREST }}>
-                        {comment.authorName || "Anonymous"}
+                        {comment.authorName || `@${getConnectDisplayHandle(null, comment.authorId)}`}
                       </Text>
                     </View>
                     <View className="flex-row items-start justify-between mb-2">

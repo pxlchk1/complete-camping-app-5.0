@@ -499,6 +499,7 @@ export default function EditProfileScreen() {
     } catch (error) {
       console.error("[EditProfile] Error updating profile privacy:", error);
       setIsProfileContentPublic(!isPublic); // Revert on error
+      notifyError(toast, "Couldn't update profile privacy. Please try again.");
     }
   };
 

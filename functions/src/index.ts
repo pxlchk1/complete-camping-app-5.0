@@ -1725,7 +1725,7 @@ export const onTripUpdated = functions.firestore
 async function shouldNotifyUser(
   db: admin.firestore.Firestore,
   userId: string,
-  prefKey?: "questionAnswers" | "campgroundInvites"
+  prefKey?: "questionAnswers" | "campgroundInvites" | "commentReplies" | "tipEngagement"
 ): Promise<boolean> {
   const prefsSnap = await db.collection("notificationPreferences").doc(userId).get();
   if (!prefsSnap.exists) return true;
@@ -1850,6 +1850,266 @@ export const onAnswerCreated = functions.firestore
       questionId: answer.questionId,
       questionAuthorId,
     });
+  });
+
+/**
+ * Maintain a denormalized friendCount on each user's public profile doc.
+ * users/{uid}/friends is only readable by its owner (see firestore.rules),
+ * so there was previously no way for anyone else to see how many friends
+ * a user has - this keeps a public counter in sync via the Admin SDK,
+ * which bypasses that read restriction entirely.
+ *
+ * Note: this only tracks changes from this point forward. Existing
+ * friendships made before this shipped won't be reflected in
+ * profiles/{uid}.friendCount until that user's next friend add/remove -
+ * the client treats a missing field as "unknown" and hides the count
+ * rather than showing a misleading 0.
+ */
+export const onFriendAdded = functions.firestore
+  .document("users/{userId}/friends/{friendUid}")
+  .onCreate(async (_snap, context) => {
+    const { userId } = context.params;
+    await admin
+      .firestore()
+      .collection("profiles")
+      .doc(userId)
+      .set({ friendCount: admin.firestore.FieldValue.increment(1) }, { merge: true });
+  });
+
+export const onFriendRemoved = functions.firestore
+  .document("users/{userId}/friends/{friendUid}")
+  .onDelete(async (_snap, context) => {
+    const { userId } = context.params;
+    await admin
+      .firestore()
+      .collection("profiles")
+      .doc(userId)
+      .set({ friendCount: admin.firestore.FieldValue.increment(-1) }, { merge: true });
+  });
+
+/**
+ * Comment-on-your-content notifications. Four content types have a real,
+ * separate comment-creation path (Gear Reviews have no comment feature at
+ * all, so there's nothing to hook there); each trigger looks up the
+ * parent item's author and skips notifying someone about their own
+ * comment on their own content.
+ */
+export const onTipCommentCreated = functions.firestore
+  .document("tipComments/{commentId}")
+  .onCreate(async (snap) => {
+    const comment = snap.data();
+    if (!comment?.tipId || !comment?.authorId) return;
+
+    const db = admin.firestore();
+    const tipSnap = await db.collection("tips").doc(comment.tipId).get();
+    if (!tipSnap.exists) return;
+
+    const tipAuthorId = tipSnap.data()?.authorId;
+    if (!tipAuthorId || tipAuthorId === comment.authorId) return;
+    if (!(await shouldNotifyUser(db, tipAuthorId, "commentReplies"))) return;
+
+    await db.collection("notificationQueue").add({
+      userId: tipAuthorId,
+      type: "tip_comment_added",
+      sendAt: admin.firestore.Timestamp.now(),
+      payload: {
+        title: "New comment on your tip",
+        body: `Someone commented on "${tipSnap.data()?.title || "your tip"}"`,
+        deepLink: `cta://tip/${comment.tipId}`,
+      },
+      status: "pending",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      metadata: { tipId: comment.tipId },
+    });
+
+    await sendQueuedNotifications(db);
+  });
+
+export const onFeedbackCommentCreated = functions.firestore
+  .document("feedbackComments/{commentId}")
+  .onCreate(async (snap) => {
+    const comment = snap.data();
+    if (!comment?.feedbackId || !comment?.authorId) return;
+
+    const db = admin.firestore();
+    const postSnap = await db.collection("feedbackPosts").doc(comment.feedbackId).get();
+    if (!postSnap.exists) return;
+
+    const postAuthorId = postSnap.data()?.authorId;
+    if (!postAuthorId || postAuthorId === comment.authorId) return;
+    if (!(await shouldNotifyUser(db, postAuthorId, "commentReplies"))) return;
+
+    await db.collection("notificationQueue").add({
+      userId: postAuthorId,
+      type: "feedback_comment_added",
+      sendAt: admin.firestore.Timestamp.now(),
+      payload: {
+        title: "New comment on your feedback",
+        body: `Someone commented on "${postSnap.data()?.title || "your feedback"}"`,
+        deepLink: `cta://feedback/${comment.feedbackId}`,
+      },
+      status: "pending",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      metadata: { feedbackId: comment.feedbackId },
+    });
+
+    await sendQueuedNotifications(db);
+  });
+
+export const onStoryCommentCreated = functions.firestore
+  .document("storyComments/{commentId}")
+  .onCreate(async (snap) => {
+    const comment = snap.data();
+    if (!comment?.storyId || !comment?.authorId) return;
+
+    const db = admin.firestore();
+    const storySnap = await db.collection("stories").doc(comment.storyId).get();
+    if (!storySnap.exists) return;
+
+    const storyAuthorId = storySnap.data()?.authorId;
+    if (!storyAuthorId || storyAuthorId === comment.authorId) return;
+    if (!(await shouldNotifyUser(db, storyAuthorId, "commentReplies"))) return;
+
+    await db.collection("notificationQueue").add({
+      userId: storyAuthorId,
+      type: "photo_comment_added",
+      sendAt: admin.firestore.Timestamp.now(),
+      payload: {
+        title: "New comment on your photo",
+        body: "Someone commented on your photo",
+        deepLink: `cta://photo/${comment.storyId}`,
+      },
+      status: "pending",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      metadata: { storyId: comment.storyId },
+    });
+
+    await sendQueuedNotifications(db);
+  });
+
+export const onPhotoCommentCreated = functions.firestore
+  .document("photoPosts/{postId}/comments/{commentId}")
+  .onCreate(async (snap, context) => {
+    const comment = snap.data();
+    const { postId } = context.params;
+    if (!comment?.userId) return;
+
+    const db = admin.firestore();
+    const postSnap = await db.collection("photoPosts").doc(postId).get();
+    if (!postSnap.exists) return;
+
+    const postAuthorId = postSnap.data()?.userId;
+    if (!postAuthorId || postAuthorId === comment.userId) return;
+    if (!(await shouldNotifyUser(db, postAuthorId, "commentReplies"))) return;
+
+    await db.collection("notificationQueue").add({
+      userId: postAuthorId,
+      type: "photo_comment_added",
+      sendAt: admin.firestore.Timestamp.now(),
+      payload: {
+        title: "New comment on your photo",
+        body: "Someone commented on your photo",
+        deepLink: `cta://photo/${postId}`,
+      },
+      status: "pending",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      metadata: { postId },
+    });
+
+    await sendQueuedNotifications(db);
+  });
+
+/**
+ * First-upvote notification ("Tip Engagement" preference). Deliberately
+ * fires only once per item, on the vote that takes its upvote count from
+ * 0 to 1 - not on every subsequent vote - since a push per vote on
+ * popular content would get spammy fast. Covers every content type that
+ * shares the genericVotesService.vote() pattern (tips, questions,
+ * gearReviews, feedbackPosts, answers); legacy `stories` photos are
+ * excluded since that format is being phased out in favor of photoPosts,
+ * which don't carry a stable per-post upvote counter this trigger can
+ * key off of the same way.
+ */
+async function handleFirstUpvote(
+  db: admin.firestore.Firestore,
+  collectionName: string,
+  itemId: string,
+  authorField: string,
+  titleField: string,
+  deepLink: string
+): Promise<void> {
+  const itemSnap = await db.collection(collectionName).doc(itemId).get();
+  if (!itemSnap.exists) return;
+
+  const item = itemSnap.data();
+  const upvotes = item?.upvoteCount ?? item?.upvotes ?? 0;
+  if (upvotes !== 1) return; // only the first upvote, not every vote
+
+  const authorId = item?.[authorField];
+  if (!authorId) return;
+  if (!(await shouldNotifyUser(db, authorId, "tipEngagement"))) return;
+
+  await db.collection("notificationQueue").add({
+    userId: authorId,
+    type: "content_upvoted",
+    sendAt: admin.firestore.Timestamp.now(),
+    payload: {
+      title: "Your post got its first upvote!",
+      body: `"${item?.[titleField] || "Your post"}" was upvoted`,
+      deepLink,
+    },
+    status: "pending",
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    metadata: { itemId },
+  });
+
+  await sendQueuedNotifications(db);
+}
+
+export const onTipVoteChanged = functions.firestore
+  .document("tips/{itemId}/votes/{voterId}")
+  .onCreate(async (_snap, context) => {
+    const { itemId } = context.params;
+    await handleFirstUpvote(admin.firestore(), "tips", itemId, "authorId", "title", `cta://tip/${itemId}`);
+  });
+
+export const onQuestionVoteChanged = functions.firestore
+  .document("questions/{itemId}/votes/{voterId}")
+  .onCreate(async (_snap, context) => {
+    const { itemId } = context.params;
+    await handleFirstUpvote(admin.firestore(), "questions", itemId, "authorId", "title", `cta://question/${itemId}`);
+  });
+
+export const onGearReviewVoteChanged = functions.firestore
+  .document("gearReviews/{itemId}/votes/{voterId}")
+  .onCreate(async (_snap, context) => {
+    const { itemId } = context.params;
+    await handleFirstUpvote(admin.firestore(), "gearReviews", itemId, "authorId", "gearName", `cta://gearreview/${itemId}`);
+  });
+
+export const onFeedbackVoteChanged = functions.firestore
+  .document("feedbackPosts/{itemId}/votes/{voterId}")
+  .onCreate(async (_snap, context) => {
+    const { itemId } = context.params;
+    await handleFirstUpvote(admin.firestore(), "feedbackPosts", itemId, "authorId", "title", `cta://feedback/${itemId}`);
+  });
+
+export const onAnswerVoteChanged = functions.firestore
+  .document("answers/{itemId}/votes/{voterId}")
+  .onCreate(async (_snap, context) => {
+    const { itemId } = context.params;
+    const db = admin.firestore();
+    // Deep link needs the PARENT question's id, not the answer's own id.
+    const answerSnap = await db.collection("answers").doc(itemId).get();
+    const questionId = answerSnap.data()?.questionId;
+    await handleFirstUpvote(
+      db,
+      "answers",
+      itemId,
+      "userId",
+      "body",
+      questionId ? `cta://question/${questionId}` : "cta://community"
+    );
   });
 
 // ============================================

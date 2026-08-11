@@ -22,6 +22,7 @@ import {
   RefreshControl,
   Modal,
   Image,
+  Alert,
 } from "react-native";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
@@ -261,24 +262,52 @@ export default function MyCampgroundScreen() {
     }
   };
 
-  const handleDecline = async (request: FriendRequest) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    try {
-      await declineFriendRequest(request.id);
-      setIncoming((prev) => prev.filter((r) => r.id !== request.id));
-    } catch (err: any) {
-      notifyError(toast, err?.message || "Couldn't decline that request. Please try again.");
-    }
+  const handleDecline = (request: FriendRequest) => {
+    Alert.alert(
+      "Decline request?",
+      `Decline the friend request from ${request.fromDisplayName}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Decline",
+          style: "destructive",
+          onPress: async () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            try {
+              await declineFriendRequest(request.id);
+              setIncoming((prev) => prev.filter((r) => r.id !== request.id));
+              notifySuccess(toast, `Declined ${request.fromDisplayName}'s request`);
+            } catch (err: any) {
+              notifyError(toast, err?.message || "Couldn't decline that request. Please try again.");
+            }
+          },
+        },
+      ]
+    );
   };
 
-  const handleCancelRequest = async (request: FriendRequest) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    try {
-      await cancelFriendRequest(request.id);
-      setOutgoing((prev) => prev.filter((r) => r.id !== request.id));
-    } catch (err: any) {
-      notifyError(toast, err?.message || "Couldn't cancel that request. Please try again.");
-    }
+  const handleCancelRequest = (request: FriendRequest) => {
+    Alert.alert(
+      "Cancel request?",
+      `Cancel your friend request to ${request.toDisplayName}?`,
+      [
+        { text: "Keep it", style: "cancel" },
+        {
+          text: "Cancel Request",
+          style: "destructive",
+          onPress: async () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            try {
+              await cancelFriendRequest(request.id);
+              setOutgoing((prev) => prev.filter((r) => r.id !== request.id));
+              notifySuccess(toast, "Request cancelled");
+            } catch (err: any) {
+              notifyError(toast, err?.message || "Couldn't cancel that request. Please try again.");
+            }
+          },
+        },
+      ]
+    );
   };
 
   // ---- My Campground tagging ----
@@ -293,8 +322,10 @@ export default function MyCampgroundScreen() {
     try {
       if (nextValue) {
         await addToCampground(userId, friend);
+        notifySuccess(toast, `Added ${friend.displayName} to My Campground`);
       } else {
         await removeFromCampground(userId, friend.friendUid);
+        notifySuccess(toast, `Removed ${friend.displayName} from My Campground`);
       }
     } catch (err: any) {
       // Revert on failure

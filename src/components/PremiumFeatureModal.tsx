@@ -24,6 +24,11 @@ interface PremiumFeatureModalProps {
   featureType: FeatureType;
   onUpgrade: () => void;
   onDismiss: () => void;
+  // Overrides the default upsell copy - e.g. photoLimitService's
+  // "try again tomorrow, or upgrade" message for a free user who's hit
+  // their daily cap, which is more accurate than a bare Pro pitch since
+  // waiting is also a free option.
+  body?: string;
 }
 
 const COPY: Record<FeatureType, { title: string; body: string }> = {
@@ -46,8 +51,10 @@ export default function PremiumFeatureModal({
   featureType,
   onUpgrade,
   onDismiss,
+  body,
 }: PremiumFeatureModalProps) {
   const copy = COPY[featureType];
+  const bodyText = body || copy.body;
 
   const handleUpgrade = () => {
     try {
@@ -85,7 +92,7 @@ export default function PremiumFeatureModal({
             className="text-forest mb-5 leading-5"
             style={{ fontFamily: "SourceSans3_400Regular", fontSize: 15 }}
           >
-            {copy.body}
+            {bodyText}
           </Text>
 
           {/* Actions */}

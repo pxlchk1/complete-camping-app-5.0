@@ -20,17 +20,18 @@ import {
   getQuestionById,
   getAnswers,
   createAnswer,
-  upvoteAnswer,
   incrementQuestionViews,
+  acceptAnswer,
 } from "../../services/questionsService";
 import { deleteQuestion, deleteAnswer } from "../../services/connectDeletionService";
 import { getUser, isAdmin, isModerator, canModerateContent } from "../../services/userService";
+import { shouldShowInFeed } from "../../services/moderationService";
 import { Question, Answer } from "../../types/community";
 import { User } from "../../types/user";
 import { useCurrentUser } from "../../state/userStore";
 import { RootStackScreenProps } from "../../navigation/types";
 import { useToast } from "../../components/ToastManager";
-import { notifyError } from "../../ui/notify";
+import { notifyError, notifySuccess } from "../../ui/notify";
 import {
   DEEP_FOREST,
   PARCHMENT,
@@ -185,46 +186,24 @@ export default function QuestionDetailScreen() {
     }
   };
 
-  const handleUpvoteAnswer = async (answerId: string) => {
-    if (!currentUser) {
-      Alert.alert(
-        "You need to be logged in to do that",
-        "",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Log in / Sign up",
-            onPress: () => navigation.navigate("Auth"),
-          },
-        ]
-      );
-      return;
-    }
-
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  const handleAcceptAnswer = async (answerId: string) => {
+    if (!question) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      await upvoteAnswer(answerId);
-      setAnswers(prev =>
-        prev.map(a => (a.id === answerId ? { ...a, upvoteCount: a.upvoteCount + 1 } : a))
+      await acceptAnswer(question.id, answerId);
+      setAnswers((prev) => prev.map((a) => ({ ...a, isAccepted: a.id === answerId })));
+      setQuestion((prev) =>
+        prev ? { ...prev, hasAcceptedAnswer: true, acceptedAnswerId: answerId, status: "answered" } : prev
       );
-    } catch (err) {
-      notifyError(toast, "Failed to upvote. Please try again.");
+      notifySuccess(toast, "Marked as the accepted answer");
+    } catch (err: any) {
+      notifyError(toast, err?.message || "Couldn't mark that answer as accepted. Please try again.");
     }
   };
 
   const handleSubmitAnswer = async () => {
     if (!currentUser) {
-      Alert.alert(
-        "You need to be logged in to do that",
-        "",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Log in / Sign up",
-            onPress: () => navigation.navigate("Auth"),
-          },
-        ]
-      );
+      setShowAccountRequired(true);
       return;
     }
 
@@ -427,7 +406,7 @@ export default function QuestionDetailScreen() {
               </View>
             ) : (
               <View className="space-y-3">
-                {answers.map((answer) => (
+                {answers.filter((a) => shouldShowInFeed(a, currentUser?.id)).map((answer) => (
                   <View
                     key={answer.id}
                     className="rounded-xl p-4 border"
@@ -442,6 +421,18 @@ export default function QuestionDetailScreen() {
                             Accepted Answer
                           </Text>
                         </View>
+                      )}
+                      {!answer.isAccepted && !question?.hasAcceptedAnswer && currentUser?.id === question?.authorId && (
+                        <Pressable
+                          onPress={() => handleAcceptAnswer(answer.id)}
+                          className="flex-row items-center px-2 py-1 rounded-lg active:opacity-70"
+                          style={{ backgroundColor: "#f0fdf4" }}
+                        >
+                          <Ionicons name="checkmark-circle-outline" size={16} color="#16a34a" />
+                          <Text className="ml-1 text-xs" style={{ fontFamily: "SourceSans3_600SemiBold", color: "#16a34a" }}>
+                            Mark as Accepted
+                          </Text>
+                        </Pressable>
                       )}
                       <View className="flex-1" />
                       <ContentActionsAffordance
@@ -502,16 +493,25 @@ export default function QuestionDetailScreen() {
                         </Text>
                       </View>
 
-                      <Pressable
-                        onPress={() => handleUpvoteAnswer(answer.id)}
-                        className="flex-row items-center px-2 py-1 rounded-lg active:opacity-70"
-                      >
-                        <Ionicons name="arrow-up-circle-outline" size={18} color={TEXT_MUTED} />
-                        <Text className="ml-1 text-xs" style={{ fontFamily: "SourceSans3_600SemiBold", color: TEXT_PRIMARY_STRONG }}>
-                          {answer.upvoteCount}
-                        </Text>
-                      </Pressable>
+                      <VotePill
+                        collectionPath="answers"
+                        itemId={answer.id}
+                        initialScore={(answer.upvoteCount || 0) - (answer.downvoteCount || 0)}
+                        onRequireAccount={() => setShowAccountRequired(true)}
+                        size="small"
+                      />
                     </View>
+
+                    {answer.isHidden && answer.authorId === currentUser?.id && (
+                      <View
+                        className="mt-2 self-start px-2 py-1 rounded-md"
+                        style={{ backgroundColor: "#fef3c7" }}
+                      >
+                        <Text style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 11, color: "#78350f" }}>
+                          Hidden pending review - only you can see this answer
+                        </Text>
+                      </View>
+                    )}
                   </View>
                 ))}
               </View>

@@ -50,6 +50,30 @@ function navigateToCtaDeepLink(navigateFn: NavigateFunction, deepLink: string) {
     return;
   }
 
+  const tipMatch = path.match(/^tip\/([^/]+)$/);
+  if (tipMatch) {
+    navigateFn("TipDetail", { tipId: tipMatch[1] });
+    return;
+  }
+
+  const feedbackMatch = path.match(/^feedback\/([^/]+)$/);
+  if (feedbackMatch) {
+    navigateFn("FeedbackDetail", { postId: feedbackMatch[1] });
+    return;
+  }
+
+  const photoMatch = path.match(/^photo\/([^/]+)$/);
+  if (photoMatch) {
+    navigateFn("PhotoDetail", { storyId: photoMatch[1] });
+    return;
+  }
+
+  const gearReviewMatch = path.match(/^gearreview\/([^/]+)$/);
+  if (gearReviewMatch) {
+    navigateFn("GearReviewDetail", { reviewId: gearReviewMatch[1] });
+    return;
+  }
+
   switch (path) {
     case "plan/new":
       navigateFn("CreateTrip");

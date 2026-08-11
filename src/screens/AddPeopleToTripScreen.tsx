@@ -74,6 +74,17 @@ export default function AddPeopleToTripScreen() {
       .map((friend): RosterItem => ({ id: `friend:${friend.friendUid}`, kind: "friend", friend })),
   ];
 
+  // My Campground tagging is meant to make trip planning "start with your
+  // closest circle instead of your whole friends list" (see the "What is
+  // this?" explainer on the Friends screen) - so lead with tagged friends
+  // here instead of mixing everyone together in whatever order they loaded.
+  const isCampgroundTagged = (item: RosterItem) => item.kind === "friend" && item.friend.inCampground;
+  const campgroundCount = roster.filter(isCampgroundTagged).length;
+  const sortedRoster =
+    campgroundCount > 0 && campgroundCount < roster.length
+      ? [...roster.filter(isCampgroundTagged), ...roster.filter((item) => !isCampgroundTagged(item))]
+      : roster;
+
   // Gating modal state
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -267,13 +278,23 @@ export default function AddPeopleToTripScreen() {
               Select friends or guests to add to this trip
             </Text>
 
-            {roster.map(item => {
+            {sortedRoster.map((item, index) => {
               const isSelected = selectedIds.has(item.id);
               const title = item.kind === "contact" ? item.contact.contactName : item.friend.displayName;
               const subtitle = item.kind === "contact" ? item.contact.contactEmail : `@${item.friend.handle}`;
+              const showSectionHeader = campgroundCount > 0 && campgroundCount < sortedRoster.length &&
+                (index === 0 || index === campgroundCount);
               return (
+                <React.Fragment key={item.id}>
+                  {showSectionHeader && (
+                    <Text
+                      className="mb-2 mt-1 text-xs uppercase"
+                      style={{ fontFamily: "SourceSans3_600SemiBold", color: TEXT_MUTED, letterSpacing: 0.5 }}
+                    >
+                      {index === 0 ? "My Campground" : "More Friends & Guests"}
+                    </Text>
+                  )}
                 <Pressable
-                  key={item.id}
                   onPress={() => toggleItem(item.id)}
                   className="mb-3 p-4 rounded-xl border active:opacity-70"
                   style={{
@@ -335,6 +356,7 @@ export default function AddPeopleToTripScreen() {
                     </View>
                   </View>
                 </Pressable>
+                </React.Fragment>
               );
             })}
 

@@ -582,6 +582,24 @@ export default function PhotoDetailScreen() {
   };
   const displayName = getAuthorDisplay();
   const legacyTags = !isNewFormat && photo?.tags ? photo.tags : [];
+  const postCreatedAt = isNewFormat ? photoPost?.createdAt : photo?.createdAt;
+
+  function formatTimeAgo(dateValue: string | any): string {
+    const now = new Date();
+    const date = typeof dateValue === "string" ? new Date(dateValue) : dateValue?.toDate?.() || new Date();
+    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
+
+    if (diffInHours < 1) return "Just now";
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 7) return `${diffInDays}d ago`;
+
+    const diffInWeeks = Math.floor(diffInDays / 7);
+    if (diffInWeeks < 4) return `${diffInWeeks}w ago`;
+
+    return date.toLocaleDateString();
+  }
 
   return (
     <View className="flex-1 bg-parchment">
@@ -671,13 +689,13 @@ export default function PhotoDetailScreen() {
 
             {/* Author and action row */}
             <View className="flex-row items-center justify-between py-3 border-t" style={{ borderColor: BORDER_SOFT }}>
-              <View className="flex-row items-center flex-1">
+              <View className="flex-row items-center flex-1 flex-wrap">
                 <Text className="text-sm" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}>
                   by{" "}
                 </Text>
                 {rawHandle && authorUserId ? (
-                  <HandleLink 
-                    handle={rawHandle} 
+                  <HandleLink
+                    handle={rawHandle}
                     userId={authorUserId}
                     style={{ fontFamily: "SourceSans3_400Regular", fontSize: 14 }}
                   />
@@ -692,8 +710,13 @@ export default function PhotoDetailScreen() {
                     {displayName}
                   </Text>
                 )}
+                {postCreatedAt && (
+                  <Text className="text-sm" style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}>
+                    {" "}&middot; {formatTimeAgo(postCreatedAt)}
+                  </Text>
+                )}
               </View>
-              
+
               {/* Content actions */}
               <ContentActionsAffordance
                 itemId={postId || ""}

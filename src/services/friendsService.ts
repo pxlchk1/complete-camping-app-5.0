@@ -43,23 +43,55 @@ const HIGH_CODEPOINT = "";
 
 // ==================== Search ====================
 
+/**
+ * Search for people to friend by @handle OR display name.
+ *
+ * Firestore has no native full-text/case-insensitive search, so this runs
+ * two prefix-range queries in parallel - one against the (already
+ * lowercase) handle field, one against displayName trying both the raw
+ * input and a capitalized version (names are conventionally capitalized,
+ * handles aren't) - and merges/dedupes the results. Not a substring or
+ * fuzzy match, but a meaningful improvement over handle-only search,
+ * without a schema migration to add a lowercase display-name index.
+ */
 export async function searchUsersByHandle(handlePrefix: string, excludeUserId: string): Promise<User[]> {
-  const normalized = handlePrefix.trim().toLowerCase().replace(/^@+/, "");
-  if (!normalized) return [];
+  const raw = handlePrefix.trim().replace(/^@+/, "");
+  if (!raw) return [];
+
+  const normalizedHandle = raw.toLowerCase();
+  const capitalized = raw.charAt(0).toUpperCase() + raw.slice(1);
 
   const profilesRef = collection(db, "profiles");
-  const q = query(
+
+  const handleQuery = query(
     profilesRef,
-    where("handle", ">=", normalized),
-    where("handle", "<=", normalized + HIGH_CODEPOINT),
+    where("handle", ">=", normalizedHandle),
+    where("handle", "<=", normalizedHandle + HIGH_CODEPOINT),
     orderBy("handle"),
     limit(20)
   );
 
-  const snapshot = await getDocs(q);
-  return snapshot.docs
-    .map((d) => ({ id: d.id, ...d.data() }) as User)
-    .filter((u) => u.id !== excludeUserId);
+  const nameQueries = Array.from(new Set([raw, capitalized])).map((prefix) =>
+    query(
+      profilesRef,
+      where("displayName", ">=", prefix),
+      where("displayName", "<=", prefix + HIGH_CODEPOINT),
+      orderBy("displayName"),
+      limit(20)
+    )
+  );
+
+  const snapshots = await Promise.all([handleQuery, ...nameQueries].map((q) => getDocs(q)));
+
+  const byId = new Map<string, User>();
+  for (const snapshot of snapshots) {
+    for (const d of snapshot.docs) {
+      if (d.id === excludeUserId) continue;
+      byId.set(d.id, { id: d.id, ...d.data() } as User);
+    }
+  }
+
+  return Array.from(byId.values());
 }
 
 // ==================== Friend Requests ====================

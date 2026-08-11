@@ -188,12 +188,6 @@ export async function createAnswer(data: {
   return docRef.id;
 }
 
-export async function upvoteAnswer(answerId: string): Promise<void> {
-  const answerRef = doc(db, "answers", answerId);
-  await updateDoc(answerRef, {
-    upvoteCount: increment(1),
-  });
-}
 
 export async function acceptAnswer(
   questionId: string,
