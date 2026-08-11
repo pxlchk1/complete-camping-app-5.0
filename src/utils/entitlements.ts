@@ -48,8 +48,15 @@ export async function markFirstTripPromptShown(userId: string): Promise<void> {
  * Check if user is premium (has Pro subscription, or is admin/moderator)
  */
 export function isPremiumUser(): boolean {
-  // Admin and moderator users always have premium access
   const userState = useUserStore.getState();
+
+  // An admin previewing as a free user should see exactly what a
+  // non-paid user sees, overriding every bypass below.
+  if (userState.previewAsFreeUser) {
+    return false;
+  }
+
+  // Admin and moderator users always have premium access
   if (userState.isAdministrator() || userState.isModerator()) {
     return true;
   }

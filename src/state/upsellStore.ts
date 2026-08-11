@@ -140,9 +140,9 @@ export const useUpsellStore = create<UpsellState>()(
           return false;
         }
         
-        // 1b. Exclude admin and moderator users
+        // 1b. Exclude admin and moderator users, unless previewing as free
         const userState = useUserStore.getState();
-        if (userState.isAdministrator() || userState.isModerator()) {
+        if ((userState.isAdministrator() || userState.isModerator()) && !userState.previewAsFreeUser) {
           return false;
         }
         
@@ -196,9 +196,9 @@ export const useUpsellStore = create<UpsellState>()(
         // Not for Pro users
         if (state.isTrialOrSubscribed()) return false;
 
-        // Not for admin or moderator
+        // Not for admin or moderator, unless previewing as free
         const userState = useUserStore.getState();
-        if (userState.isAdministrator() || userState.isModerator()) return false;
+        if ((userState.isAdministrator() || userState.isModerator()) && !userState.previewAsFreeUser) return false;
 
         // Must be authenticated (not guest)
         if (!userState.isAuthenticated()) return false;

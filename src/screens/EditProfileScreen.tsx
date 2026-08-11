@@ -112,6 +112,9 @@ export default function EditProfileScreen() {
   const { changePassword, updating: updatingPassword } = useChangePassword();
   const currentUser = useCurrentUser();
   const updateCurrentUser = useUserStore((s) => s.updateCurrentUser);
+  const isAdmin = useUserStore((s) => s.isAdministrator());
+  const previewAsFreeUser = useUserStore((s) => s.previewAsFreeUser);
+  const setPreviewAsFreeUser = useUserStore((s) => s.setPreviewAsFreeUser);
 
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -539,6 +542,11 @@ export default function EditProfileScreen() {
       setTripStoriesVisibility(previous);
       notifyError(toast, "Couldn't update Trip Stories privacy. Please try again.");
     }
+  };
+
+  const handleTogglePreviewAsFreeUser = (value: boolean) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setPreviewAsFreeUser(value);
   };
 
   const handleViewPublicProfile = () => {
@@ -986,6 +994,45 @@ export default function EditProfileScreen() {
                 </View>
               </View>
             </View>
+
+            {/* Admin Tools - visible only to administrators */}
+            {isAdmin && (
+              <View className="mt-8 mb-2">
+                <Text
+                  className="text-lg mb-3"
+                  style={{ fontFamily: "Raleway_700Bold", color: TEXT_PRIMARY_STRONG }}
+                >
+                  Admin Tools
+                </Text>
+
+                <View
+                  className="p-4 rounded-xl border"
+                  style={{ backgroundColor: CARD_BACKGROUND_LIGHT, borderColor: BORDER_SOFT }}
+                >
+                  <View className="flex-row items-center justify-between">
+                    <View className="flex-1 mr-3">
+                      <Text
+                        style={{ fontFamily: "SourceSans3_600SemiBold", color: TEXT_PRIMARY_STRONG }}
+                      >
+                        Preview as Free User
+                      </Text>
+                      <Text
+                        className="text-sm mt-1"
+                        style={{ fontFamily: "SourceSans3_400Regular", color: TEXT_SECONDARY }}
+                      >
+                        See exactly what a non-paid user sees, including upgrade prompts and paywalls. Your admin access itself is unaffected, and this stays on until you turn it off.
+                      </Text>
+                    </View>
+                    <Switch
+                      value={previewAsFreeUser}
+                      onValueChange={handleTogglePreviewAsFreeUser}
+                      trackColor={{ false: BORDER_SOFT, true: EARTH_GREEN }}
+                      thumbColor={PARCHMENT}
+                    />
+                  </View>
+                </View>
+              </View>
+            )}
 
             {/* Danger Zone */}
             <View className="mt-8 mb-2">

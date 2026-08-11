@@ -32,7 +32,7 @@
 import { auth } from '../config/firebase';
 import { useSubscriptionStore } from '../state/subscriptionStore';
 import { useAuthStore } from '../state/authStore';
-import { useUserStore } from '../state/userStore';
+import { useUserStore, isAdminProBypassActive } from '../state/userStore';
 import { SUBSCRIPTIONS_ENABLED, PAYWALL_ENABLED } from '../config/subscriptions';
 import { getPaywallVariantAndTrack, type PaywallVariant } from '../services/proAttemptService';
 
@@ -87,13 +87,15 @@ export function requireProOrFreeTrip(callbacks: AccessGateCallbacks): boolean {
   }
   
   // Check if user is an administrator (admins bypass paywall)
-  const isAdmin = useUserStore.getState().isAdministrator();
+  const isAdmin = isAdminProBypassActive();
   if (isAdmin) {
     return true;
   }
   
   // Check if user is Pro
-  const isPro = useSubscriptionStore.getState().isPro || useUserStore.getState().hasGrantedMembership();
+  // isPro already accounts for admin-granted memberships and the
+  // "preview as free user" override - see subscriptionStore.ts.
+  const isPro = useSubscriptionStore.getState().isPro;
   if (isPro) {
     return true;
   }
@@ -161,12 +163,14 @@ export function getAccessState(): AccessState {
   }
   
   // Check if user is an administrator (admins get full PRO access)
-  const isAdmin = useUserStore.getState().isAdministrator();
+  const isAdmin = isAdminProBypassActive();
   if (isAdmin) {
     return 'PRO';
   }
   
-  const isPro = useSubscriptionStore.getState().isPro || useUserStore.getState().hasGrantedMembership();
+  // isPro already accounts for admin-granted memberships and the
+  // "preview as free user" override - see subscriptionStore.ts.
+  const isPro = useSubscriptionStore.getState().isPro;
   return isPro ? 'PRO' : 'FREE';
 }
 
@@ -175,9 +179,11 @@ export function getAccessState(): AccessState {
  */
 export function useAccessState(): AccessState {
   const user = useAuthStore((s) => s.user);
+  // isPro already accounts for admin-granted memberships and the
+  // "preview as free user" override - see subscriptionStore.ts.
   const isPro = useSubscriptionStore((s) => s.isPro);
-  const hasGrantedMembership = useUserStore((s) => s.hasGrantedMembership());
   const isAdmin = useUserStore((s) => s.isAdministrator());
+  const previewAsFreeUser = useUserStore((s) => s.previewAsFreeUser);
 
   if (!user) {
     return 'NO_ACCOUNT';
@@ -187,12 +193,12 @@ export function useAccessState(): AccessState {
     return 'PRO';
   }
 
-  // Admins get full PRO access
-  if (isAdmin) {
+  // Admins get full PRO access, unless previewing as a free user
+  if (isAdmin && !previewAsFreeUser) {
     return 'PRO';
   }
 
-  return (isPro || hasGrantedMembership) ? 'PRO' : 'FREE';
+  return isPro ? 'PRO' : 'FREE';
 }
 
 // ============================================
@@ -232,7 +238,7 @@ export async function requireProForAction(
   }
   
   // Check if user is an administrator (admins bypass paywall)
-  const isAdmin = useUserStore.getState().isAdministrator();
+  const isAdmin = isAdminProBypassActive();
   if (isAdmin) {
     await action();
     return;
@@ -240,7 +246,9 @@ export async function requireProForAction(
   
   // Check if user is logged in AND has Pro
   const isLoggedIn = !!auth.currentUser;
-  const isPro = useSubscriptionStore.getState().isPro || useUserStore.getState().hasGrantedMembership();
+  // isPro already accounts for admin-granted memberships and the
+  // "preview as free user" override - see subscriptionStore.ts.
+  const isPro = useSubscriptionStore.getState().isPro;
 
   if (!isLoggedIn || !isPro) {
     // GUEST or FREE - track attempt and show PaywallModal
@@ -339,14 +347,16 @@ export function requirePro(callbacks: AccessGateCallbacks): boolean {
   }
   
   // Check if user is an administrator (admins bypass paywall)
-  const isAdmin = useUserStore.getState().isAdministrator();
+  const isAdmin = isAdminProBypassActive();
   if (isAdmin) {
     return true;
   }
   
   // Check if user is logged in AND has Pro
   const isLoggedIn = !!auth.currentUser;
-  const isPro = useSubscriptionStore.getState().isPro || useUserStore.getState().hasGrantedMembership();
+  // isPro already accounts for admin-granted memberships and the
+  // "preview as free user" override - see subscriptionStore.ts.
+  const isPro = useSubscriptionStore.getState().isPro;
 
   if (!isLoggedIn || !isPro) {
     // GUEST or FREE - track attempt and show PaywallModal
@@ -379,14 +389,16 @@ export async function requireProAsync(callbacks: AccessGateCallbacks): Promise<b
   }
   
   // Check if user is an administrator (admins bypass paywall)
-  const isAdmin = useUserStore.getState().isAdministrator();
+  const isAdmin = isAdminProBypassActive();
   if (isAdmin) {
     return true;
   }
   
   // Check if user is logged in AND has Pro
   const isLoggedIn = !!auth.currentUser;
-  const isPro = useSubscriptionStore.getState().isPro || useUserStore.getState().hasGrantedMembership();
+  // isPro already accounts for admin-granted memberships and the
+  // "preview as free user" override - see subscriptionStore.ts.
+  const isPro = useSubscriptionStore.getState().isPro;
 
   if (!isLoggedIn || !isPro) {
     // GUEST or FREE - track attempt and show PaywallModal with correct variant

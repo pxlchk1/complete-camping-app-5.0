@@ -44,9 +44,14 @@ export const useSubscriptionStore = create<SubscriptionState>()(
       // which keeps isPro in sync when a grant lands without needing a
       // fresh RevenueCat fetch.
       setSubscriptionInfo: (customerInfo: CustomerInfo | null) => {
+        // An admin previewing as a free user should see isPro=false
+        // everywhere, regardless of their real entitlement or any
+        // admin-granted membership - see isAdminProBypassActive().
+        const previewAsFreeUser = useUserStore.getState().previewAsFreeUser;
+
         if (!customerInfo) {
           set({
-            isPro: useUserStore.getState().hasGrantedMembership(),
+            isPro: useUserStore.getState().hasGrantedMembership() && !previewAsFreeUser,
             activeEntitlements: [],
             customerInfo: null,
             lastChecked: new Date().toISOString(),
@@ -57,7 +62,9 @@ export const useSubscriptionStore = create<SubscriptionState>()(
         const entitlements = Object.keys(customerInfo.entitlements.active);
         // Check for exact entitlement "Pro" (case-sensitive), or an
         // admin-granted membership
-        const hasPro = Boolean(customerInfo.entitlements.active["Pro"]) || useUserStore.getState().hasGrantedMembership();
+        const hasPro =
+          (Boolean(customerInfo.entitlements.active["Pro"]) || useUserStore.getState().hasGrantedMembership()) &&
+          !previewAsFreeUser;
 
         console.log("[SubscriptionStore] Updated subscription info:", {
           isPro: hasPro,
@@ -130,16 +137,18 @@ export const useSubscriptionStore = create<SubscriptionState>()(
 );
 
 // Keep isPro in sync when an admin grants/revokes a membership (via
-// grantMembership/"Award Subscription") or a live profile listener updates
-// it, without waiting on a fresh RevenueCat fetch. setSubscriptionInfo only
-// runs on RevenueCat events, so a Firestore-only change would otherwise
+// grantMembership/"Award Subscription"), a live profile listener updates
+// it, or an admin flips "preview as free user" - without waiting on a
+// fresh RevenueCat fetch. setSubscriptionInfo only runs on RevenueCat
+// events, so a Firestore-only or local-toggle change would otherwise
 // never be reflected in isPro.
 useUserStore.subscribe((state, prevState) => {
   const membershipTier = state.currentUser?.membershipTier;
   const membershipExpiresAt = state.currentUser?.membershipExpiresAt;
   if (
     membershipTier === prevState.currentUser?.membershipTier &&
-    membershipExpiresAt === prevState.currentUser?.membershipExpiresAt
+    membershipExpiresAt === prevState.currentUser?.membershipExpiresAt &&
+    state.previewAsFreeUser === prevState.previewAsFreeUser
   ) {
     return;
   }
@@ -147,7 +156,7 @@ useUserStore.subscribe((state, prevState) => {
   const { customerInfo } = useSubscriptionStore.getState();
   const revenueCatIsPro = Boolean(customerInfo?.entitlements.active["Pro"]);
   useSubscriptionStore.setState({
-    isPro: revenueCatIsPro || useUserStore.getState().hasGrantedMembership(),
+    isPro: (revenueCatIsPro || useUserStore.getState().hasGrantedMembership()) && !state.previewAsFreeUser,
   });
 });
 
