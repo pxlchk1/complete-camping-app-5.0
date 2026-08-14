@@ -77,10 +77,18 @@ service firebase.storage {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
     
-    // Trip photos - trip member scoped
+    // Trip photos - owner-scoped. Previously "write, delete: if isSignedIn()"
+    // had no ownership check at all, unlike every other path in this file -
+    // any authenticated user could overwrite or delete any trip's photos by
+    // tripId, not just their own. Matches the "only owner can write, members
+    // are read-only" rule already enforced for trip subcollections in
+    // firestore.rules (packingList/meals/itineraryLinks).
     match /trips/{tripId}/{fileName} {
       allow read: if isSignedIn();
-      allow write, delete: if isSignedIn();
+      allow write, delete: if isSignedIn() && (
+        firestore.exists(/databases/(default)/documents/trips/$(tripId))
+        && firestore.get(/databases/(default)/documents/trips/$(tripId)).data.userId == request.auth.uid
+      );
     }
     
     // Merit Badge photos - owner-scoped: meritBadges/{userId}/{badgeId}/{fileName}
