@@ -194,6 +194,11 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
     if (normalized.includes("state") && normalized.includes("park")) return "State Park";
     if (normalized.includes("national") && normalized.includes("park")) return "National Park";
     if (normalized.includes("national") && normalized.includes("forest")) return "National Forest";
+    if (normalized.includes("corps") || normalized.includes("usace") || normalized.includes("army")) return "Army Corps of Engineers";
+    if (normalized.includes("blm")) return "BLM Land";
+    if (normalized.includes("dispersed") || normalized.includes("boondock")) return "Dispersed Camping";
+    if (normalized.includes("municipal") || normalized.includes("county") || normalized.includes("civic")) return "Municipal/County Park";
+    if (normalized.includes("private")) return "Private Campground";
     return "Other";
   }, []);
 
@@ -258,8 +263,8 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
     const samplesByType: Record<string, string[]> = {};
 
     // Normalize park type filter values to canonical format
-    const normalizeParkType = (rawFilter: string | undefined | null): "national_park" | "state_park" | "national_forest" => {
-      if (!rawFilter) return "national_forest"; // default fallback
+    const normalizeParkType = (rawFilter: string | undefined | null): Park["filter"] => {
+      if (!rawFilter) return "private"; // default fallback for missing data
 
       const normalized = rawFilter.toLowerCase().trim().replace(/\s+/g, "_");
 
@@ -273,16 +278,26 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
       if (normalized.includes("national") && normalized.includes("forest")) return "national_forest";
       if (normalized === "national_forest" || normalized === "nationalforest") return "national_forest";
 
-      // Direct matches
-      if (normalized === "state_park") return "state_park";
-      if (normalized === "national_park") return "national_park";
-      if (normalized === "national_forest") return "national_forest";
+      // Army Corps of Engineers ("army_corps_of_engineers", "army corps", "usace", "corps of engineers")
+      if (normalized.includes("corps") || normalized.includes("usace") || normalized.includes("army")) return "army_corps";
+
+      // BLM / Bureau of Land Management
+      if (normalized === "blm" || normalized.includes("blm") || normalized.includes("bureau_of_land")) return "blm";
+
+      // Dispersed / boondocking / primitive roadside camping
+      if (normalized.includes("dispersed") || normalized.includes("boondock")) return "dispersed";
+
+      // Municipal / county / city / civic parks
+      if (normalized.includes("municipal") || normalized.includes("county") || normalized.includes("city_park") || normalized.includes("civic")) return "county_park";
+
+      // Private campgrounds (KOAs, private RV parks/resorts, etc.)
+      if (normalized.includes("private")) return "private";
 
       // Log unexpected values in dev
       if (__DEV__) {
-        console.warn(`[FILTER_DEBUG] ⚠️ Unknown filter value: "${rawFilter}" -> defaulting to national_forest`);
+        console.warn(`[FILTER_DEBUG] ⚠️ Unknown filter value: "${rawFilter}" -> defaulting to private`);
       }
-      return "national_forest";
+      return "private";
     };
 
     querySnapshot.forEach((d) => {
@@ -329,11 +344,21 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
         state_park: fetched.filter(p => p.filter === "state_park").length,
         national_park: fetched.filter(p => p.filter === "national_park").length,
         national_forest: fetched.filter(p => p.filter === "national_forest").length,
+        private: fetched.filter(p => p.filter === "private").length,
+        army_corps: fetched.filter(p => p.filter === "army_corps").length,
+        county_park: fetched.filter(p => p.filter === "county_park").length,
+        blm: fetched.filter(p => p.filter === "blm").length,
+        dispersed: fetched.filter(p => p.filter === "dispersed").length,
       };
       console.log("[FILTER_DEBUG] Counts AFTER normalization:");
       console.log(`  - state_park: ${normalizedCounts.state_park}`);
       console.log(`  - national_park: ${normalizedCounts.national_park}`);
       console.log(`  - national_forest: ${normalizedCounts.national_forest}`);
+      console.log(`  - private: ${normalizedCounts.private}`);
+      console.log(`  - army_corps: ${normalizedCounts.army_corps}`);
+      console.log(`  - county_park: ${normalizedCounts.county_park}`);
+      console.log(`  - blm: ${normalizedCounts.blm}`);
+      console.log(`  - dispersed: ${normalizedCounts.dispersed}`);
       console.log("=============================================\n");
     }
 

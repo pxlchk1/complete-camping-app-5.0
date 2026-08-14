@@ -1,7 +1,16 @@
 import { create } from "zustand";
 import { Park } from "../types/camping";
 
-type ParkFilter = "national_park" | "state_park" | "national_forest" | "all";
+type ParkFilter =
+  | "national_park"
+  | "state_park"
+  | "national_forest"
+  | "private"
+  | "army_corps"
+  | "county_park"
+  | "blm"
+  | "dispersed"
+  | "all";
 
 interface ParksState {
   parks: Park[];

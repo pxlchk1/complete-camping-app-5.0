@@ -20,8 +20,11 @@ export type ParkType =
   | "national_park"
   | "state_park"
   | "national_forest"
-  | "blm_land"
-  | "private";
+  | "private"
+  | "army_corps"
+  | "county_park"
+  | "blm"
+  | "dispersed";
 
 export interface Coordinates {
   latitude: number;
@@ -44,7 +47,17 @@ export interface TripDestination {
   lat: number | null;              // Latitude for Weather
   lng: number | null;              // Longitude for Weather
   formattedAddress: string | null; // Full formatted address for display
-  parkType: "State Park" | "National Park" | "National Forest" | "Other" | null;
+  parkType:
+    | "State Park"
+    | "National Park"
+    | "National Forest"
+    | "Private Campground"
+    | "Army Corps of Engineers"
+    | "Municipal/County Park"
+    | "BLM Land"
+    | "Dispersed Camping"
+    | "Other"
+    | null;
   url?: string | null;             // Reservation URL for "Reserve a Site" button
   updatedAt?: string;              // ISO timestamp when destination was set
 }
@@ -150,7 +163,15 @@ export interface Trip {
 export interface Park {
   id: string;
   name: string;
-  filter: "national_park" | "state_park" | "national_forest";
+  filter:
+    | "national_park"
+    | "state_park"
+    | "national_forest"
+    | "private"
+    | "army_corps"
+    | "county_park"
+    | "blm"
+    | "dispersed";
   address: string;
   state: string;
   latitude: number;

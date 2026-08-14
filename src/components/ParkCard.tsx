@@ -17,6 +17,16 @@ const getTypeIcon = (filter: Park["filter"]): keyof typeof Ionicons.glyphMap => 
       return "flag";
     case "national_forest":
       return "leaf-outline";
+    case "private":
+      return "home";
+    case "army_corps":
+      return "boat";
+    case "county_park":
+      return "business";
+    case "blm":
+      return "earth";
+    case "dispersed":
+      return "trail-sign";
     default:
       return "location";
   }
@@ -30,6 +40,16 @@ const getTypeLabel = (filter: Park["filter"]) => {
       return "National Park";
     case "national_forest":
       return "National Forest";
+    case "private":
+      return "Private Campground";
+    case "army_corps":
+      return "Army Corps of Engineers";
+    case "county_park":
+      return "Municipal/County Park";
+    case "blm":
+      return "BLM Land";
+    case "dispersed":
+      return "Dispersed Camping";
     default:
       return "Park";
   }

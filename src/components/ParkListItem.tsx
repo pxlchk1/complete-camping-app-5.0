@@ -19,6 +19,16 @@ const getParkTypeLabel = (filter: string): string => {
       return "State Park";
     case "national_forest":
       return "National Forest";
+    case "private":
+      return "Private Campground";
+    case "army_corps":
+      return "Army Corps of Engineers";
+    case "county_park":
+      return "Municipal/County Park";
+    case "blm":
+      return "BLM Land";
+    case "dispersed":
+      return "Dispersed Camping";
     default:
       return filter;
   }

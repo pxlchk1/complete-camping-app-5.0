@@ -6,7 +6,16 @@ import { colors, spacing, radius, fonts, fontSizes } from "../theme/theme";
 import { DEEP_FOREST, EARTH_GREEN, CARD_BACKGROUND_LIGHT, BORDER_SOFT, TEXT_PRIMARY_STRONG, TEXT_SECONDARY, PARCHMENT } from "../constants/colors";
 
 export type FilterMode = "distance" | "state";
-export type ParkType = "all" | "state_park" | "national_park" | "national_forest";
+export type ParkType =
+  | "all"
+  | "state_park"
+  | "national_park"
+  | "national_forest"
+  | "private"
+  | "army_corps"
+  | "county_park"
+  | "blm"
+  | "dispersed";
 export type DriveTime = 2 | 4 | 6 | 8 | 12;
 export type SortOption = "distance" | "name";
 
@@ -110,6 +119,11 @@ const PARK_TYPE_OPTIONS: { value: ParkType; label: string; icon: keyof typeof Io
   { value: "state_park", label: "State Parks", icon: "flag" },
   { value: "national_park", label: "National Parks", icon: "shield" },
   { value: "national_forest", label: "National Forests", icon: "leaf-outline" },
+  { value: "private", label: "Private Campgrounds", icon: "home" },
+  { value: "army_corps", label: "Army Corps of Engineers", icon: "boat" },
+  { value: "county_park", label: "Municipal/County Parks", icon: "business" },
+  { value: "blm", label: "BLM Land", icon: "earth" },
+  { value: "dispersed", label: "Dispersed Camping", icon: "trail-sign" },
 ];
 
 export default function ParkFilterBar({
