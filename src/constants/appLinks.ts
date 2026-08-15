@@ -13,7 +13,13 @@ export const PLAY_STORE_PACKAGE = "com.tentandlantern.completecampingapp";
 export const PLAY_STORE_LINK = `https://play.google.com/store/apps/details?id=${PLAY_STORE_PACKAGE}`;
 
 // Deep Link Domain
-export const DEEP_LINK_DOMAIN = "tentandlantern.com";
+// Must match app.json's ios.associatedDomains / android.intentFilters
+// exactly, or the OS never hands these URLs to the app at all - it was
+// previously set to tentandlantern.com, which isn't registered as an
+// associated domain anywhere, so invite links silently never opened the
+// app no matter how correct the in-app routing (App.tsx linking config)
+// was.
+export const DEEP_LINK_DOMAIN = "tentlantern.app";
 
 // Invite Link Base URL
 export const INVITE_LINK_BASE = `https://${DEEP_LINK_DOMAIN}/join`;
@@ -44,18 +50,45 @@ export const APP_NAME = "The Complete Camping App";
 export const APP_SHORT_NAME = "Tent & Lantern";
 
 /**
- * Generate invite share message with App Store link
- * Since deep links aren't configured on the domain, we direct users to the App Store
- * and include instructions to accept the invite within the app.
+ * Generate invite share message with a real tappable deep link, plus the
+ * App Store link and a manual code as fallbacks for anyone who doesn't
+ * have the app yet or taps from a context that won't open it directly.
  */
 export function generateShareInviteMessage(inviterFirstName: string, inviteToken: string): string {
-  return `${inviterFirstName} invited you to join their campground on ${APP_NAME}! 🏕️\n\nDownload the app to accept:\n${APP_STORE_LINK}\n\nYour invite code: ${inviteToken.substring(0, 8)}...`;
+  const inviteLink = getInviteLinkUrl(inviteToken);
+  return `${inviterFirstName} invited you to join their campground on ${APP_NAME}! 🏕️\n\nAccept here: ${inviteLink}\n\nDon't have the app yet? Get it here: ${APP_STORE_LINK}\nThen use invite code: ${inviteToken.substring(0, 8)}`;
 }
 
 /**
  * Generate the copyable invite link text
- * Includes App Store link since deep links aren't configured
  */
 export function getCopyableInviteText(inviterFirstName: string, inviteToken: string): string {
-  return `${inviterFirstName} wants you to join their campground on ${APP_NAME}! 🏕️\n\nDownload the app: ${APP_STORE_LINK}\n\nThen use invite code: ${inviteToken.substring(0, 8)}`;
+  const inviteLink = getInviteLinkUrl(inviteToken);
+  return `${inviterFirstName} wants you to join their campground on ${APP_NAME}! 🏕️\n\nAccept here: ${inviteLink}\n\nDon't have the app yet? Get it here: ${APP_STORE_LINK}\nThen use invite code: ${inviteToken.substring(0, 8)}`;
+}
+
+// Trip Share Invite Link Base URL - same pattern as campground invites,
+// separate path so redeemTripShareInvite (not redeemCampgroundInvite)
+// handles it.
+export const TRIP_SHARE_LINK_BASE = `https://${DEEP_LINK_DOMAIN}/trip-invite`;
+
+/**
+ * Generate the full trip share invite link from a token
+ */
+export function getTripShareInviteLinkUrl(token: string): string {
+  return `${TRIP_SHARE_LINK_BASE}?token=${token}`;
+}
+
+/**
+ * Generate the copyable trip share invite text, with a real tappable link
+ */
+export function getCopyableTripShareInviteText(
+  inviterFirstName: string,
+  tripName: string,
+  inviteToken: string,
+  permission: "view" | "edit"
+): string {
+  const permissionLabel = permission === "edit" ? "plan and edit" : "view";
+  const inviteLink = getTripShareInviteLinkUrl(inviteToken);
+  return `${inviterFirstName} invited you to ${permissionLabel} their trip "${tripName}" on ${APP_NAME}! 🏕️\n\nAccept here: ${inviteLink}\n\nDon't have the app yet? Get it here: ${APP_STORE_LINK}\nThen use invite code: ${inviteToken.substring(0, 8)}`;
 }

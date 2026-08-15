@@ -11,6 +11,7 @@ import {
   Pressable,
   ActivityIndicator,
   Alert,
+  Share,
 } from "react-native";
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
@@ -19,6 +20,11 @@ import { auth } from "../config/firebase";
 import { getCampgroundContacts, createLinkedContactFromFriend } from "../services/campgroundContactsService";
 import { addTripParticipantsWithRoles } from "../services/tripParticipantsService";
 import { getFriends } from "../services/friendsService";
+import {
+  createTripShareInvite,
+  generateTripShareMessage,
+  TripSharePermission,
+} from "../services/tripShareInviteService";
 import { CampgroundContact } from "../types/campground";
 import { Friend } from "../types/friends";
 import { RootStackParamList, RootStackNavigationProp } from "../navigation/types";
@@ -61,6 +67,10 @@ export default function AddPeopleToTripScreen() {
   const [contacts, setContacts] = useState<CampgroundContact[]>([]);
   const [friends, setFriends] = useState<Friend[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Roster item ids (matches selectedIds' keys) granted edit access instead
+  // of the default view-only. Owner decides per person - see
+  // setMemberEditPermission in tripsStore.ts and editorIds on Trip.
+  const [editPermissionIds, setEditPermissionIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -133,6 +143,26 @@ export default function AddPeopleToTripScreen() {
       const newSet = new Set(prev);
       if (newSet.has(itemId)) {
         newSet.delete(itemId);
+        // Deselecting someone also clears any edit permission they'd been
+        // given, so it doesn't linger if they get re-selected later.
+        setEditPermissionIds((editPrev) => {
+          const editSet = new Set(editPrev);
+          editSet.delete(itemId);
+          return editSet;
+        });
+      } else {
+        newSet.add(itemId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleEditPermission = (itemId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setEditPermissionIds((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(itemId)) {
+        newSet.delete(itemId);
       } else {
         newSet.add(itemId);
       }
@@ -192,8 +222,26 @@ export default function AddPeopleToTripScreen() {
       if (linkedUserIds.length > 0 && trip) {
         const existingMemberIds = trip.memberIds || [];
         const newMemberIds = Array.from(new Set([...existingMemberIds, ...linkedUserIds]));
+
+        // Of the people just added, which ones were granted edit access
+        // (owner's per-person choice) rather than the view-only default?
+        const newEditorUids = selectedItems
+          .filter((item) => editPermissionIds.has(item.id))
+          .map((item) => (item.kind === "friend" ? item.friend.friendUid : item.contact.contactUserId))
+          .filter((uid): uid is string => !!uid);
+
+        const existingEditorIds = trip.editorIds || [];
+        const newEditorIds = Array.from(new Set([...existingEditorIds, ...newEditorUids]));
+
+        const updates: { memberIds?: string[]; editorIds?: string[] } = {};
         if (newMemberIds.length !== existingMemberIds.length) {
-          await updateTrip(tripId, { memberIds: newMemberIds });
+          updates.memberIds = newMemberIds;
+        }
+        if (newEditorIds.length !== existingEditorIds.length) {
+          updates.editorIds = newEditorIds;
+        }
+        if (Object.keys(updates).length > 0) {
+          await updateTrip(tripId, updates);
         }
       }
 
@@ -219,6 +267,51 @@ export default function AddPeopleToTripScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     // Navigate to AddCamper screen to add a new person to campground
     navigation.navigate("AddCamper" as any);
+  };
+
+  const [sharingLink, setSharingLink] = useState(false);
+
+  const handleShareViaLink = () => {
+    if (!requirePro({
+      openAccountModal: () => setShowAccountModal(true),
+      openPaywallModal: (variant) => navigation.navigate("Paywall", { triggerKey: PaywallPlacement.ShareTrip, variant }),
+    })) {
+      return;
+    }
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Alert.alert(
+      "Share trip link",
+      "What can they do with this trip?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "View only", onPress: () => createAndShareInvite("view") },
+        { text: "Can plan and edit", onPress: () => createAndShareInvite("edit") },
+      ]
+    );
+  };
+
+  const createAndShareInvite = async (permission: TripSharePermission) => {
+    const user = auth.currentUser;
+    if (!user || !trip) return;
+
+    try {
+      setSharingLink(true);
+      const inviterName = user.displayName || "A friend";
+      const result = await createTripShareInvite({
+        tripId,
+        inviterName,
+        permission,
+      });
+
+      const message = generateTripShareMessage(inviterName, trip.name, result.token, permission);
+      await Share.share({ message });
+    } catch (error: any) {
+      console.error("Error sharing trip invite:", error);
+      Alert.alert("Error", error.message || "Failed to create share link");
+    } finally {
+      setSharingLink(false);
+    }
   };
 
   if (loading) {
@@ -355,6 +448,43 @@ export default function AddPeopleToTripScreen() {
                       {isSelected && <Ionicons name="checkmark" size={16} color={EARTH_GREEN} />}
                     </View>
                   </View>
+
+                  {isSelected && (
+                    <Pressable
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        toggleEditPermission(item.id);
+                      }}
+                      className="flex-row items-center mt-3 pt-3"
+                      style={{ borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.25)" }}
+                      accessibilityRole="button"
+                      accessibilityLabel={editPermissionIds.has(item.id) ? "Can edit this trip" : "Can view this trip"}
+                    >
+                      <View
+                        className="w-5 h-5 rounded items-center justify-center mr-2"
+                        style={{
+                          borderWidth: 1.5,
+                          borderColor: PARCHMENT,
+                          backgroundColor: editPermissionIds.has(item.id) ? PARCHMENT : "transparent",
+                        }}
+                      >
+                        {editPermissionIds.has(item.id) && (
+                          <Ionicons name="checkmark" size={13} color={EARTH_GREEN} />
+                        )}
+                      </View>
+                      <Text
+                        style={{
+                          fontFamily: "SourceSans3_400Regular",
+                          fontSize: 13,
+                          color: PARCHMENT,
+                        }}
+                      >
+                        {editPermissionIds.has(item.id)
+                          ? "Can plan and edit this trip"
+                          : "Can view only — tap to allow editing"}
+                      </Text>
+                    </Pressable>
+                  )}
                 </Pressable>
                 </React.Fragment>
               );
@@ -379,6 +509,26 @@ export default function AddPeopleToTripScreen() {
                     ? `Add ${selectedIds.size} ${selectedIds.size === 1 ? "person" : "people"} to trip`
                     : "Select people to add"}
                 </Text>
+              )}
+            </Pressable>
+
+            <Pressable
+              onPress={handleShareViaLink}
+              disabled={sharingLink}
+              className="mt-3 mb-8 py-3 rounded-lg border active:opacity-70 flex-row items-center justify-center"
+              style={{ borderColor: DEEP_FOREST }}
+            >
+              {sharingLink ? (
+                <ActivityIndicator size="small" color={DEEP_FOREST} />
+              ) : (
+                <>
+                  <Ionicons name="link-outline" size={18} color={DEEP_FOREST} style={{ marginRight: 8 }} />
+                  <Text
+                    style={{ fontFamily: "SourceSans3_600SemiBold", color: DEEP_FOREST }}
+                  >
+                    Share trip via link
+                  </Text>
+                </>
               )}
             </Pressable>
           </>

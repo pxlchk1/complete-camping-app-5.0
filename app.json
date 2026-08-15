@@ -54,7 +54,12 @@
             {
               "scheme": "https",
               "host": "tentlantern.app",
-              "pathPrefix": "/invite"
+              "pathPrefix": "/join"
+            },
+            {
+              "scheme": "https",
+              "host": "tentlantern.app",
+              "pathPrefix": "/trip-invite"
             }
           ],
           "category": [

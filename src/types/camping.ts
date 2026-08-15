@@ -106,7 +106,16 @@ export interface Trip {
   
   /** Member user IDs who can view this trip (for sharing via My Campground) */
   memberIds?: string[];
-  
+
+  /**
+   * Subset of memberIds who can also EDIT trip content (notes, meals,
+   * weather, destination, packing summary - whatever the owner grants).
+   * Every uid in editorIds must also be in memberIds. Owner sets this
+   * per-person when sharing (see AddPeopleToTripScreen / tripShareInviteService).
+   * Members not listed here remain read-only.
+   */
+  editorIds?: string[];
+
   /** @deprecated Use tripDestination.name instead */
   locationName?: string; // Custom location name
   /** @deprecated Use tripDestination.sourceType instead */

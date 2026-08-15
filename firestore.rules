@@ -111,24 +111,54 @@ service cloud.firestore {
         );
     }
 
+    // --- Privilege-escalation guards (security fix) ---
+    // isAdmin(), isModerator(), and isSubscribed() above all read these
+    // exact fields off users/{uid} and profiles/{uid}. Previously, the
+    // owner of either document could update it with NO restriction on
+    // which fields changed - meaning any signed-in user could grant
+    // themselves admin access or a free subscription just by writing
+    // isAdmin/role/membershipTier/subscriptionStatus to their own doc via
+    // the normal Firestore client SDK. These helpers close that gap.
+    //
+    // `keys` is a set of field names - pass request.resource.data.keys()
+    // on create, or request.resource.data.diff(resource.data).affectedKeys()
+    // on update (only the fields actually being changed).
+    function hasAnyPrivilegedKey(keys) {
+      return keys.hasAny([
+        'isAdmin', 'isModerator', 'membershipTier',
+        'subscriptionStatus', 'subscriptionProvider', 'entitlements',
+        'membershipExpiresAt', 'isBanned', 'bannedAt', 'bannedBy', 'banReason'
+      ]);
+    }
+
+    // `role` itself is fine for a user to write (new accounts are created
+    // client-side with role: 'user' - see onboardingSteps.ts), but a
+    // self-write must never be able to set it to a privileged value.
+    function setsPrivilegedRole(data) {
+      return 'role' in data && data.role in ['admin', 'administrator', 'moderator'];
+    }
+
     // Users collection
     match /users/{userId} {
       allow read: if isSignedIn() || isAdmin();
-      allow create: if request.auth != null && request.auth.uid == userId;
-      // Owner may update their own doc EXCEPT the privilege/entitlement
-      // fields below - those are only ever meant to be set server-side
-      // (Cloud Function / Admin SDK, which bypasses these rules entirely).
-      // Previously any owner-writable field included these, so a user
-      // could self-grant Pro (subscriptionStatus/membershipTier) or even
-      // full admin (role/isAdmin) by writing directly to their own doc.
-      allow update: if isSignedIn() && (
-        isAdmin() ||
-        (request.auth.uid == userId &&
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-            "role", "isAdmin", "isModerator", "membershipTier",
-            "subscriptionStatus", "subscriptionProvider", "entitlements"
-          ]))
-      );
+
+      allow create: if request.auth != null && request.auth.uid == userId
+        && !hasAnyPrivilegedKey(request.resource.data.keys())
+        && !setsPrivilegedRole(request.resource.data);
+
+      // Note: no isAdmin() bypass for the privileged/subscription fields
+      // here on purpose. The app's own admin flows (grantMembership,
+      // banUser, updateUserRole in userService.ts) only ever write role/
+      // membershipTier to the `profiles` collection, never to `users` -
+      // so `users/{uid}` never needs a client-side privileged write at
+      // all. subscriptionStatus/subscriptionProvider/entitlements on this
+      // collection are now written exclusively by the RevenueCat webhook
+      // Cloud Function (handleRevenueCatWebhook, functions/src/index.ts)
+      // using the Admin SDK, which bypasses these rules entirely.
+      allow update: if isSignedIn() && (request.auth.uid == userId || isAdmin())
+        && !hasAnyPrivilegedKey(request.resource.data.diff(resource.data).affectedKeys())
+        && !setsPrivilegedRole(request.resource.data);
+
       allow delete: if isSignedIn() && request.auth.uid == userId;
 
       // Daily Usage subcollection (for photo limits, etc.)
@@ -204,23 +234,25 @@ service cloud.firestore {
     match /profiles/{userId} {
       // Allow anyone to read profiles (public profiles)
       allow read: if true;
-      allow create: if request.auth != null && request.auth.uid == userId;
-      // Admins need to update other users' profiles for ban/unban, grant
-      // membership, and role changes (Admin Panel actions) - isAdmin()
-      // covers that unconditionally. The owner may update their own
-      // profile EXCEPT the admin-controlled fields below (role, ban
-      // status, membership tier): previously any owner-writable field
-      // included these, so a user could self-grant admin (role/isAdmin),
-      // free Pro (membershipTier), or un-ban themselves (isBanned) by
-      // writing directly to their own profile doc.
+
+      allow create: if request.auth != null && request.auth.uid == userId
+        && !hasAnyPrivilegedKey(request.resource.data.keys())
+        && !setsPrivilegedRole(request.resource.data);
+
+      // Admins keep full write access (bypasses the field guard below) -
+      // this is required for ban/unban, grant membership, and role
+      // changes in the Admin Panel (userService.ts: grantMembership,
+      // banUser, unbanUser, updateUserRole), which all legitimately write
+      // isAdmin/role/membershipTier to OTHER users' profiles. A non-admin
+      // editing their OWN profile may still update it (bio, photo, etc.)
+      // but can never touch the privileged/subscription fields themselves.
       allow update: if isSignedIn() && (
         isAdmin() ||
-        (request.auth.uid == userId &&
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-            "role", "isAdmin", "isModerator", "membershipTier", "membershipExpiresAt",
-            "isBanned", "bannedAt", "bannedBy", "banReason"
-          ]))
+        (request.auth.uid == userId
+          && !hasAnyPrivilegedKey(request.resource.data.diff(resource.data).affectedKeys())
+          && !setsPrivilegedRole(request.resource.data))
       );
+
       allow delete: if isSignedIn() && request.auth.uid == userId;
     }
 
@@ -232,14 +264,39 @@ service cloud.firestore {
         return isSignedIn() && get(/databases/$(database)/documents/trips/$(tripId)).data.userId == request.auth.uid;
       }
 
+      // Editors are a subset of members the owner has granted edit rights
+      // to (see editorIds on the Trip type / setMemberEditPermission).
+      function isTripEditorForSubcollection() {
+        return isSignedIn() && request.auth.uid in
+          get(/databases/$(database)/documents/trips/$(tripId)).data.editorIds;
+      }
+
+      // Ownership/sharing-management fields - only the trip owner may ever
+      // change these, even though editors can edit trip content. Without
+      // this guard a granted editor could rewrite memberIds/editorIds
+      // themselves or hand the trip to a different owner.
+      function tripOwnershipFieldsUnchanged() {
+        return !request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['userId', 'memberIds', 'editorIds']);
+      }
+
       // Owner or trip member can read
       allow read: if isSignedIn() && (
         request.auth.uid == resource.data.userId ||
         request.auth.uid in resource.data.memberIds
       );
       allow create: if isSignedIn() && request.auth.uid == request.resource.data.userId;
-      // Only owner can update or delete - members are READ-ONLY
-      allow update, delete: if isSignedIn() && request.auth.uid == resource.data.userId;
+
+      // Owner can change anything, including sharing (memberIds/editorIds).
+      // A granted editor (editorIds) can update trip content fields (notes,
+      // meals, weather, destination, packing summary, etc.) but never the
+      // ownership/sharing fields themselves. Everyone else stays READ-ONLY.
+      allow update: if isSignedIn() && (
+        request.auth.uid == resource.data.userId ||
+        (request.auth.uid in resource.data.editorIds && tripOwnershipFieldsUnchanged())
+      );
+      // Only the owner can delete
+      allow delete: if isSignedIn() && request.auth.uid == resource.data.userId;
 
       // Participants subcollection - only trip owner can manage
       match /participants/{participantId} {
@@ -252,34 +309,34 @@ service cloud.firestore {
         allow create, update, delete: if isTripOwnerForSubcollection();
       }
 
-      // Packing list subcollection - members can READ, only owner can WRITE
+      // Packing list subcollection - members can READ, owner or a granted
+      // editor can WRITE
       match /packingList/{itemId} {
         allow read: if isSignedIn() && (
           isTripOwnerForSubcollection() ||
           request.auth.uid in get(/databases/$(database)/documents/trips/$(tripId)).data.memberIds
         );
-        // Only owner can write - members are READ-ONLY
-        allow write: if isTripOwnerForSubcollection();
+        allow write: if isTripOwnerForSubcollection() || isTripEditorForSubcollection();
       }
 
-      // Meals subcollection - members can READ, only owner can WRITE
+      // Meals subcollection - members can READ, owner or a granted editor
+      // can WRITE
       match /meals/{mealId} {
         allow read: if isSignedIn() && (
           isTripOwnerForSubcollection() ||
           request.auth.uid in get(/databases/$(database)/documents/trips/$(tripId)).data.memberIds
         );
-        // Only owner can write - members are READ-ONLY
-        allow write: if isTripOwnerForSubcollection();
+        allow write: if isTripOwnerForSubcollection() || isTripEditorForSubcollection();
       }
 
-      // Itinerary Links subcollection - members can READ, only owner can WRITE
+      // Itinerary Links subcollection - members can READ, owner or a
+      // granted editor can WRITE
       match /itineraryLinks/{linkId} {
         allow read: if isSignedIn() && (
           isTripOwnerForSubcollection() ||
           request.auth.uid in get(/databases/$(database)/documents/trips/$(tripId)).data.memberIds
         );
-        // Only owner can write - members are READ-ONLY
-        allow write: if isTripOwnerForSubcollection();
+        allow write: if isTripOwnerForSubcollection() || isTripEditorForSubcollection();
       }
     }
 
@@ -633,6 +690,19 @@ service cloud.firestore {
     // Campground Invites (managed by Cloud Functions)
     // Inviter can read their own invites, recipients can query by token
     match /campgroundInvites/{id} {
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.inviterUid ||
+        request.auth.uid == resource.data.acceptedUid
+      );
+      // Write operations are handled by Cloud Functions only
+      allow create, update, delete: if false;
+    }
+
+    // Trip Share Invites - "share this specific trip with anyone via a
+    // link" (mirrors campgroundInvites). Carries a permission ("view" or
+    // "edit") chosen by the inviter at creation time; redeeming adds the
+    // accepting user to the trip's memberIds (and editorIds if "edit").
+    match /tripShareInvites/{id} {
       allow read: if isSignedIn() && (
         request.auth.uid == resource.data.inviterUid ||
         request.auth.uid == resource.data.acceptedUid

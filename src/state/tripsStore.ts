@@ -46,7 +46,14 @@ interface TripsState {
   getTripsByStatus: (status: TripStatus) => Trip[];
   isSharedTrip: (tripId: string) => boolean;
   canEditTrip: (tripId: string) => boolean;
-  
+
+  /**
+   * Owner-only: grant or revoke edit access for a member who already has
+   * view access (already in memberIds). Firestore rules enforce that only
+   * the owner can touch editorIds - this just writes it via updateTrip.
+   */
+  setMemberEditPermission: (tripId: string, memberUid: string, canEdit: boolean) => Promise<void>;
+
   // Convenience update methods (Firebase-synced)
   updateTripPacking: (id: string, packing: Trip["packing"]) => Promise<void>;
   updateTripMeals: (id: string, meals: Trip["meals"]) => Promise<void>;
@@ -141,7 +148,7 @@ export const useTripsStore = create<TripsState>()((set, get) => ({
     // silently — callers rely on try/catch to know whether the update
     // actually happened, and previously got a false "success" here.
     if (!get().canEditTrip(id)) {
-      throw new Error("Only the trip owner can make changes to this trip.");
+      throw new Error("You don't have edit access to this trip. Ask the trip owner to grant you edit permission.");
     }
 
     try {
@@ -240,7 +247,28 @@ export const useTripsStore = create<TripsState>()((set, get) => ({
     const userId = auth.currentUser?.uid;
     const trip = get().getTripById(tripId);
     if (!trip || !userId) return false;
-    return trip.userId === userId;
+    if (trip.userId === userId) return true;
+    // Owner can grant specific shared members edit rights per-share
+    // (see editorIds on the Trip type) - everyone else with memberIds
+    // access stays read-only.
+    return (trip.editorIds || []).includes(userId);
+  },
+
+  setMemberEditPermission: async (tripId, memberUid, canEdit) => {
+    const trip = get().getTripById(tripId);
+    if (!trip) throw new Error("Trip not found");
+
+    const memberIds = trip.memberIds || [];
+    if (!memberIds.includes(memberUid)) {
+      throw new Error("That person needs view access to this trip before they can be given edit access.");
+    }
+
+    const currentEditorIds = trip.editorIds || [];
+    const newEditorIds = canEdit
+      ? Array.from(new Set([...currentEditorIds, memberUid]))
+      : currentEditorIds.filter((uid) => uid !== memberUid);
+
+    await get().updateTrip(tripId, { editorIds: newEditorIds });
   },
 
   updateTripPacking: async (id, packing) => {

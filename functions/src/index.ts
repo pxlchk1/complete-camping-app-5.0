@@ -16,6 +16,12 @@ admin.initializeApp();
 const sendgridApiKey = defineSecret("SENDGRID_API_KEY");
 const sendgridFromEmail = defineSecret("SENDGRID_FROM_EMAIL");
 
+// RevenueCat webhook shared secret (set via:
+// firebase functions:secrets:set REVENUECAT_WEBHOOK_AUTHORIZATION)
+// Must match the "Authorization header value" configured for this
+// endpoint under RevenueCat > Project Settings > Integrations > Webhooks.
+const revenueCatWebhookAuth = defineSecret("REVENUECAT_WEBHOOK_AUTHORIZATION");
+
 // ============================================
 // CAMPGROUND INVITE TYPES
 // ============================================
@@ -48,9 +54,15 @@ function generateInviteToken(): string {
   return crypto.randomBytes(32).toString("hex");
 }
 
-// App Links Configuration - Update when app is published
-const DEEP_LINK_DOMAIN = "tentandlantern.com";
+// App Links Configuration - must match app.json's ios.associatedDomains /
+// android.intentFilters exactly (see src/constants/appLinks.ts for the
+// client-side copy of this same fix and why it matters).
+const DEEP_LINK_DOMAIN = "tentlantern.app";
 const INVITE_LINK_BASE = `https://${DEEP_LINK_DOMAIN}/join`;
+// Trip Share Invite Link Base URL - same pattern as campground invites,
+// separate path so redeemTripShareInvite (not redeemCampgroundInvite)
+// handles it. Must match src/constants/appLinks.ts's TRIP_SHARE_LINK_BASE.
+const TRIP_SHARE_LINK_BASE = `https://${DEEP_LINK_DOMAIN}/trip-invite`;
 
 /**
  * Get invite link URL
@@ -429,6 +441,324 @@ export const redeemCampgroundInvite = functions.https.onCall(
         "internal",
         "Failed to redeem invite"
       );
+    }
+  }
+);
+
+// ============================================
+// TRIP SHARE INVITES
+// ============================================
+
+function getTripShareInviteLink(token: string): string {
+  return `${TRIP_SHARE_LINK_BASE}?token=${token}`;
+}
+
+interface TripShareInvite {
+  inviterUid: string;
+  inviterName: string;
+  tripId: string;
+  tripName: string;
+  permission: "view" | "edit";
+  inviteeEmail?: string;
+  token: string;
+  status: "pending" | "accepted" | "revoked" | "expired";
+  createdAt: admin.firestore.FieldValue;
+  expiresAt: admin.firestore.Timestamp;
+  acceptedAt?: admin.firestore.FieldValue;
+  acceptedUid?: string;
+}
+
+/**
+ * Create a trip share invite. Only the trip owner may create one, verified
+ * server-side against the trip doc (not just trusted from the client).
+ */
+export const createTripShareInvite = functions.https.onCall(
+  async (
+    data: {
+      tripId: string;
+      inviterName: string;
+      permission: "view" | "edit";
+      inviteeEmail?: string;
+    },
+    context
+  ) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "Must be authenticated to create invites");
+    }
+
+    const { tripId, inviterName, permission, inviteeEmail } = data;
+
+    if (!tripId || !inviterName || (permission !== "view" && permission !== "edit")) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Missing or invalid fields: tripId, inviterName, permission ('view' or 'edit')"
+      );
+    }
+
+    try {
+      const db = admin.firestore();
+      const tripDoc = await db.collection("trips").doc(tripId).get();
+
+      if (!tripDoc.exists) {
+        throw new functions.https.HttpsError("not-found", "Trip not found");
+      }
+      if (tripDoc.data()?.userId !== context.auth.uid) {
+        throw new functions.https.HttpsError(
+          "permission-denied",
+          "Only the trip owner can share this trip"
+        );
+      }
+
+      const token = generateInviteToken();
+      const expiresAt = admin.firestore.Timestamp.fromDate(
+        new Date(Date.now() + 14 * 24 * 60 * 60 * 1000) // 14 days
+      );
+
+      const inviteData: TripShareInvite = {
+        inviterUid: context.auth.uid,
+        inviterName,
+        tripId,
+        tripName: tripDoc.data()?.name || "a trip",
+        permission,
+        token,
+        status: "pending",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        expiresAt,
+      };
+      if (inviteeEmail) {
+        inviteData.inviteeEmail = inviteeEmail.toLowerCase();
+      }
+
+      const docRef = await db.collection("tripShareInvites").add(inviteData);
+
+      functions.logger.info("Created trip share invite", {
+        inviteId: docRef.id,
+        inviterUid: context.auth.uid,
+        tripId,
+        permission,
+      });
+
+      return {
+        success: true,
+        inviteId: docRef.id,
+        token,
+        inviteLink: getTripShareInviteLink(token),
+      };
+    } catch (error: unknown) {
+      if (error instanceof functions.https.HttpsError) throw error;
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      functions.logger.error("Error creating trip share invite", { error: errorMessage });
+      throw new functions.https.HttpsError("internal", "Failed to create invite");
+    }
+  }
+);
+
+/**
+ * Email a trip share invite via SendGrid. Same parchment/deep-forest
+ * branded template style as the campground invite email.
+ */
+export const sendTripShareInviteEmail = functions
+  .runWith({ secrets: [sendgridApiKey, sendgridFromEmail] })
+  .https.onCall(async (data: { inviteId: string }, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "Must be authenticated to send invites");
+    }
+
+    const { inviteId } = data;
+    if (!inviteId) {
+      throw new functions.https.HttpsError("invalid-argument", "inviteId is required");
+    }
+
+    try {
+      const db = admin.firestore();
+      const inviteRef = db.collection("tripShareInvites").doc(inviteId);
+      const inviteDoc = await inviteRef.get();
+
+      if (!inviteDoc.exists) {
+        throw new functions.https.HttpsError("not-found", "Invite not found");
+      }
+      const invite = inviteDoc.data() as TripShareInvite;
+
+      if (invite.status !== "pending") {
+        throw new functions.https.HttpsError("failed-precondition", `Invite is ${invite.status}, not pending`);
+      }
+      if (invite.inviterUid !== context.auth.uid) {
+        throw new functions.https.HttpsError("permission-denied", "You can only send your own invites");
+      }
+      if (!invite.inviteeEmail) {
+        throw new functions.https.HttpsError("failed-precondition", "Invite has no email address");
+      }
+
+      const now = admin.firestore.Timestamp.now();
+      if (invite.expiresAt.toMillis() < now.toMillis()) {
+        await inviteRef.update({ status: "expired" });
+        throw new functions.https.HttpsError("failed-precondition", "Invite has expired");
+      }
+
+      sgMail.setApiKey(sendgridApiKey.value());
+
+      const inviteLink = getTripShareInviteLink(invite.token);
+      const firstName = getFirstName(invite.inviterName);
+      const permissionLabel = invite.permission === "edit" ? "plan and edit" : "view";
+
+      const html = `
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#EEE7D9;">
+  <tr>
+    <td align="center" style="padding:32px 16px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px; background:#F4F2EC; border-radius:12px;">
+        <tr>
+          <td style="padding:32px; font-family:Raleway, Arial, sans-serif; color:#3D2817;">
+            <h1 style="font-size:22px; margin:0 0 16px;">${firstName} shared a trip with you</h1>
+            <p style="font-size:16px; line-height:1.5; margin:0 0 24px;">
+              You've been invited to ${permissionLabel} "${invite.tripName}" on ${"Complete Camping App"}.
+            </p>
+            <table role="presentation" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="background:#1A4C39; border-radius:8px;">
+                  <a href="${inviteLink}" style="display:inline-block; padding:14px 28px; color:#EEE7D9; font-family:Raleway, Arial, sans-serif; font-size:16px; text-decoration:none;">
+                    View trip
+                  </a>
+                </td>
+              </tr>
+            </table>
+            <p style="font-size:13px; color:#7A8A82; margin:24px 0 0;">
+              If the button doesn't work, copy this link: ${inviteLink}
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>`;
+
+      await sgMail.send({
+        to: invite.inviteeEmail,
+        from: {
+          email: "noreply@tentandlantern.com",
+          name: "Complete Camping App",
+        },
+        subject: `${firstName} shared a trip with you on Complete Camping App`,
+        html,
+      });
+
+      await inviteRef.update({
+        lastSentAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastSendMethod: "email",
+        lastSendError: admin.firestore.FieldValue.delete(),
+      });
+
+      functions.logger.info("Sent trip share invite email", { inviteId, to: invite.inviteeEmail });
+      return { success: true, message: "Email sent successfully" };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      functions.logger.error("Error sending trip share invite email", { inviteId, error: errorMessage });
+
+      try {
+        await admin.firestore().collection("tripShareInvites").doc(inviteId).update({
+          lastSendError: errorMessage,
+        });
+      } catch {
+        // Ignore update error
+      }
+
+      if (error instanceof functions.https.HttpsError) throw error;
+      throw new functions.https.HttpsError("internal", "Failed to send invite email");
+    }
+  });
+
+/**
+ * Redeem a trip share invite by token. Adds the accepting user to the
+ * trip's memberIds (always) and editorIds (only if the invite was for
+ * "edit"). Runs via the Admin SDK, so it can write editorIds/memberIds
+ * even though firestore.rules blocks clients from touching those fields
+ * directly - that's the point, this function IS the trusted path.
+ */
+export const redeemTripShareInvite = functions.https.onCall(
+  async (data: { token: string }, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "Must be authenticated to redeem invites");
+    }
+
+    const { token } = data;
+    if (!token) {
+      throw new functions.https.HttpsError("invalid-argument", "token is required");
+    }
+
+    try {
+      const db = admin.firestore();
+
+      const invitesSnapshot = await db
+        .collection("tripShareInvites")
+        .where("token", "==", token)
+        .where("status", "==", "pending")
+        .limit(1)
+        .get();
+
+      if (invitesSnapshot.empty) {
+        throw new functions.https.HttpsError("not-found", "Invalid or expired invite");
+      }
+
+      const inviteDoc = invitesSnapshot.docs[0];
+      const invite = inviteDoc.data() as TripShareInvite;
+
+      const now = admin.firestore.Timestamp.now();
+      if (invite.expiresAt.toMillis() < now.toMillis()) {
+        await inviteDoc.ref.update({ status: "expired" });
+        throw new functions.https.HttpsError("failed-precondition", "Invite has expired");
+      }
+
+      if (invite.inviterUid === context.auth.uid) {
+        throw new functions.https.HttpsError("failed-precondition", "Cannot accept your own invite");
+      }
+
+      const tripRef = db.collection("trips").doc(invite.tripId);
+      const tripDoc = await tripRef.get();
+      if (!tripDoc.exists) {
+        await inviteDoc.ref.update({ status: "revoked" });
+        throw new functions.https.HttpsError("not-found", "This trip no longer exists");
+      }
+
+      const tripData = tripDoc.data() || {};
+      const memberIds: string[] = tripData.memberIds || [];
+      const editorIds: string[] = tripData.editorIds || [];
+      const uid = context.auth.uid;
+
+      const updates: Record<string, unknown> = {};
+      if (!memberIds.includes(uid)) {
+        updates.memberIds = [...memberIds, uid];
+      }
+      if (invite.permission === "edit" && !editorIds.includes(uid)) {
+        updates.editorIds = [...editorIds, uid];
+      }
+      if (Object.keys(updates).length > 0) {
+        await tripRef.update(updates);
+      }
+
+      await inviteDoc.ref.update({
+        status: "accepted",
+        acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+        acceptedUid: uid,
+      });
+
+      functions.logger.info("Redeemed trip share invite", {
+        inviteId: inviteDoc.id,
+        acceptedBy: uid,
+        tripId: invite.tripId,
+        permission: invite.permission,
+      });
+
+      return {
+        success: true,
+        message: `You've joined "${invite.tripName}"!`,
+        tripId: invite.tripId,
+        tripName: invite.tripName,
+        permission: invite.permission,
+      };
+    } catch (error: unknown) {
+      if (error instanceof functions.https.HttpsError) throw error;
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      functions.logger.error("Error redeeming trip share invite", { error: errorMessage });
+      throw new functions.https.HttpsError("internal", "Failed to redeem invite");
     }
   }
 );
@@ -2901,6 +3231,107 @@ export const handleSendGridWebhook = functions.https.onRequest(async (req, res) 
 
   res.status(200).send("OK");
 });
+
+// ============================================
+// REVENUECAT WEBHOOK (server-side subscription sync)
+// ============================================
+
+/**
+ * Receives RevenueCat webhook events and syncs subscription status to
+ * users/{uid} using the Admin SDK. This is the ONLY place subscription
+ * status should be written - client-side writes to these fields are
+ * blocked by firestore.rules to prevent self-granted Pro access.
+ */
+export const handleRevenueCatWebhook = functions
+  .runWith({ secrets: [revenueCatWebhookAuth] })
+  .https.onRequest(async (req, res) => {
+    if (req.method !== "POST") {
+      res.status(405).send("Method Not Allowed");
+      return;
+    }
+
+    const expectedAuth = revenueCatWebhookAuth.value();
+    const receivedAuth = req.headers["authorization"];
+    if (!expectedAuth || receivedAuth !== expectedAuth) {
+      functions.logger.warn("RevenueCat webhook: rejected request with missing/invalid Authorization header");
+      res.status(401).send("Unauthorized");
+      return;
+    }
+
+    const event = req.body?.event;
+    if (!event || typeof event.app_user_id !== "string") {
+      res.status(400).send("Invalid payload");
+      return;
+    }
+
+    const uid: string = event.app_user_id;
+
+    // RevenueCat auto-generates anonymous IDs for users who haven't been
+    // identified yet - these never correspond to a Firebase uid, so there
+    // is no user doc to sync.
+    if (uid.startsWith("$RCAnonymousID:")) {
+      res.status(200).send("Ignored anonymous user");
+      return;
+    }
+
+    const entitlementIds: string[] = Array.isArray(event.entitlement_ids) ? event.entitlement_ids : [];
+    const hasPro = entitlementIds.includes("Pro");
+    const eventType: string = event.type || "";
+
+    let subscriptionStatus: "active" | "expired" | "canceled" | "none" = "none";
+    let membershipTier = "freeMember";
+
+    if (eventType === "EXPIRATION") {
+      subscriptionStatus = "expired";
+    } else if (eventType === "CANCELLATION") {
+      // User canceled but may still be within their paid period - RevenueCat
+      // sends CANCELLATION at the moment of cancellation, not expiration, so
+      // still honor an active Pro entitlement if present.
+      subscriptionStatus = hasPro ? "active" : "canceled";
+      membershipTier = hasPro ? "subscribed" : "freeMember";
+    } else if (hasPro) {
+      // INITIAL_PURCHASE, RENEWAL, UNCANCELLATION, PRODUCT_CHANGE,
+      // NON_RENEWING_PURCHASE, or any other event type with an active
+      // Pro entitlement.
+      subscriptionStatus = "active";
+      membershipTier = "subscribed";
+    }
+
+    try {
+      const db = admin.firestore();
+      const userRef = db.collection("users").doc(uid);
+      const userSnap = await userRef.get();
+
+      if (!userSnap.exists) {
+        functions.logger.warn("RevenueCat webhook: no matching users/{uid} doc, skipping", { uid, eventType });
+        res.status(200).send("No matching user");
+        return;
+      }
+
+      await userRef.update({
+        membershipTier,
+        subscriptionProvider: "revenuecat",
+        subscriptionStatus,
+        entitlements: entitlementIds,
+        subscriptionUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      functions.logger.info("RevenueCat webhook: synced subscription", {
+        uid,
+        eventType,
+        subscriptionStatus,
+        membershipTier,
+      });
+      res.status(200).send("OK");
+    } catch (error) {
+      functions.logger.error("RevenueCat webhook: failed to sync", {
+        uid,
+        eventType,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+      res.status(500).send("Internal error");
+    }
+  });
 
 // ============================================
 // ADMIN: UPDATE PROFILE STATS AND BADGES

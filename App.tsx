@@ -55,6 +55,13 @@ const linking: LinkingOptions<RootStackParamList> = {
           token: (token: string) => token,
         },
       },
+      // Trip share invite format: /trip-invite?token=<token>
+      AcceptTripInvite: {
+        path: 'trip-invite',
+        parse: {
+          token: (token: string) => token,
+        },
+      },
     },
   },
 };

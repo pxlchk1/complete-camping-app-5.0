@@ -116,6 +116,7 @@ export type RootStackParamList = {
 
   // Invitation
   AcceptInvite: { token: string };
+  AcceptTripInvite: { token: string };
 
   // Merit Badges
   MeritBadges: undefined;

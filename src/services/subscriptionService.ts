@@ -7,8 +7,7 @@ import Purchases, { PurchasesPackage } from "react-native-purchases";
 import * as RevenueCat from "../lib/revenuecatClient";
 import { useSubscriptionStore } from "../state/subscriptionStore";
 import { useAuthStore } from "../state/authStore";
-import { auth, db } from "../config/firebase";
-import { doc, updateDoc, getDoc, serverTimestamp } from "firebase/firestore";
+import { auth } from "../config/firebase";
 import { SUBSCRIPTIONS_ENABLED } from "../config/subscriptions";
 import { trackSubscriptionStatusChecked } from "./analyticsService";
 import { getCurrentSessionNumber } from "./sessionService";
@@ -312,86 +311,36 @@ export const getOfferings = async () => {
 };
 
 /**
- * Sync RevenueCat subscription status to Firestore users/{uid}
- * Maps entitlement "Pro" to membership tiers and subscription status
- * Only writes to Firestore when values change to minimize updates
+ * Historically this function mirrored RevenueCat's on-device SDK result
+ * straight into Firestore users/{uid} (membershipTier, subscriptionStatus,
+ * entitlements) from the client. That write path is now blocked by
+ * firestore.rules on purpose: any signed-in user could call the same
+ * Firestore write directly with fabricated values and grant themselves a
+ * free subscription, since nothing verified the write actually came from
+ * a real RevenueCat entitlement.
+ *
+ * subscriptionStatus/membershipTier/entitlements on users/{uid} are now
+ * written exclusively by the handleRevenueCatWebhook Cloud Function
+ * (functions/src/index.ts), which RevenueCat calls server-to-server after
+ * verifying the purchase, and which writes via the Admin SDK (bypasses
+ * Firestore rules). That webhook needs to be configured in the RevenueCat
+ * dashboard - see the comment on handleRevenueCatWebhook for setup steps.
+ *
+ * This function is kept as a no-op (rather than deleted) so existing call
+ * sites don't need to change. It no longer writes to Firestore. The
+ * RevenueCat SDK itself remains the source of truth for immediate
+ * client-side UI gating (see fetchOfferingsSafe / getCustomerInfo) -
+ * only the Firestore mirror used by security rules has moved server-side.
  */
 export const syncSubscriptionToFirestore = async (): Promise<void> => {
   const user = auth.currentUser;
   if (!user) {
-    console.log("[SubscriptionService] No user logged in, skipping Firestore sync");
+    console.log("[SubscriptionService] No user logged in, skipping sync");
     return;
   }
-
-  try {
-    const customerInfo = await RevenueCat.getCustomerInfo();
-    if (!customerInfo) {
-      console.log("[SubscriptionService] No customer info available");
-      return;
-    }
-
-    // Check for exact entitlement "Pro" (case-sensitive)
-    const hasPro = Boolean(customerInfo.entitlements.active["Pro"]);
-    const activeEntitlements = Object.keys(customerInfo.entitlements.active);
-    
-    // Determine membership tier and subscription status
-    let membershipTier = "freeMember";
-    let subscriptionStatus: "active" | "expired" | "canceled" | "none" = "none";
-
-    if (hasPro) {
-      // User has active Pro entitlement
-      membershipTier = "subscribed";
-      subscriptionStatus = "active";
-    } else {
-      // Check if subscription existed but is now expired/canceled
-      const allEntitlements = customerInfo.entitlements.all;
-      const proEntitlement = allEntitlements["Pro"];
-      
-      if (proEntitlement) {
-        const expirationDate = proEntitlement.expirationDate;
-        if (expirationDate) {
-          const isExpired = new Date(expirationDate) < new Date();
-          subscriptionStatus = isExpired ? "expired" : "canceled";
-        } else {
-          subscriptionStatus = "expired";
-        }
-      }
-    }
-
-    // Get current Firestore data to check if update is needed
-    const userRef = doc(db, "users", user.uid);
-    const userSnap = await getDoc(userRef);
-    const currentData = userSnap.data();
-
-    // Only write if values changed
-    const needsUpdate = 
-      currentData?.membershipTier !== membershipTier ||
-      currentData?.subscriptionStatus !== subscriptionStatus ||
-      JSON.stringify(currentData?.entitlements || []) !== JSON.stringify(activeEntitlements);
-
-    if (!needsUpdate) {
-      console.log("[SubscriptionService] Firestore already up to date, skipping write");
-      return;
-    }
-
-    // Update Firestore with new subscription data
-    await updateDoc(userRef, {
-      membershipTier,
-      subscriptionProvider: "revenuecat",
-      subscriptionStatus,
-      entitlements: activeEntitlements,
-      subscriptionUpdatedAt: serverTimestamp(),
-    });
-
-    console.log("[SubscriptionService] Synced to Firestore:", {
-      membershipTier,
-      subscriptionStatus,
-      entitlements: activeEntitlements,
-      originalAppUserId: customerInfo.originalAppUserId,
-    });
-  } catch (error) {
-    console.error("[SubscriptionService] Failed to sync to Firestore:", error);
-    // Don't throw - this is a background sync operation
-  }
+  console.log(
+    "[SubscriptionService] Firestore subscription sync is now handled server-side " +
+      "by the RevenueCat webhook Cloud Function, not the client. No write performed."
+  );
 };
 

@@ -102,6 +102,7 @@ const GatedAdminCommunicationsScreen = withAdminGate(AdminCommunicationsScreen);
 
 // Invite screens
 import AcceptInviteScreen from "../screens/AcceptInviteScreen";
+import AcceptTripInviteScreen from "../screens/AcceptTripInviteScreen";
 
 // Merit Badges screens
 import MeritBadgesScreen from "../screens/MeritBadgesScreen";
@@ -202,6 +203,13 @@ export default function RootNavigator() {
       <Stack.Screen
         name="AcceptInvite"
         component={AcceptInviteScreen}
+        options={{ headerShown: false, presentation: 'modal' }}
+      />
+
+      {/* Accept Trip Invite (from deep link: /trip-invite?token=...) */}
+      <Stack.Screen
+        name="AcceptTripInvite"
+        component={AcceptTripInviteScreen}
         options={{ headerShown: false, presentation: 'modal' }}
       />
 

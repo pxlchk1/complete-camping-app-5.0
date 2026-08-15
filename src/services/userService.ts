@@ -334,6 +334,22 @@ export async function updateEmailSubscriberStatus(
   });
 }
 
+/**
+ * NOTE: not currently called anywhere in the app - account creation goes
+ * through bootstrapNewAccount() in src/onboarding/onboardingSteps.ts
+ * instead. Kept here for backward compatibility, but fixed as part of the
+ * same pass that closed the privilege-escalation bug in firestore.rules:
+ * this used to grant admin (membershipTier: "isAdmin", role:
+ * "administrator") to any signup whose email or handle matched a
+ * hardcoded string - a check enforced only in client JS, which anyone
+ * could bypass by calling this function directly, or simply registering
+ * with a matching handle. firestore.rules now blocks self-writes to
+ * these fields regardless, so this write would fail anyway - but the
+ * hardcoded bypass has been removed here too so the function is safe if
+ * it's ever wired back up. The very first admin account needs to be
+ * granted manually (Firebase Console > Firestore > profiles/{uid} - set
+ * isAdmin: true or role: "administrator"), not through self-signup.
+ */
 export async function createUserProfile(data: {
   userId: string;
   email: string;
@@ -341,19 +357,15 @@ export async function createUserProfile(data: {
   handle: string;
 }): Promise<void> {
   const userRef = doc(db, "profiles", data.userId);
-  
-  // Check if this is the admin account
-  const isAdmin = data.email.toLowerCase() === "alana@tentandlantern.com" || 
-                  data.handle.toLowerCase() === "tentandlantern";
-  
-  // Create profile
+
+  // Create profile with safe, non-privileged defaults only
   await setDoc(userRef, {
     email: data.email,
     displayName: data.displayName,
     handle: data.handle,
     joinedAt: serverTimestamp(),
-    membershipTier: isAdmin ? "isAdmin" : "freeMember",
-    role: isAdmin ? "administrator" : "user",
+    membershipTier: "freeMember",
+    role: "user",
     stats: {
       gearReviewsCount: 0,
       photosCount: 0,
