@@ -80,6 +80,24 @@ function getFirstName(fullName: string): string {
   return firstName || "A friend";
 }
 
+/**
+ * Escape user-controlled strings before interpolating them into raw HTML
+ * email bodies (e.g. sendTripShareInviteEmail below). Display names and
+ * trip names are fully attacker-controllable - without this, a user could
+ * embed markup/links into an email sent from our address to someone else
+ * (stored HTML injection / phishing vector). Not needed for the other
+ * emails in this file, which go through SendGrid dynamic templates that
+ * auto-escape Handlebars variables.
+ */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 // ============================================
 // CREATE INVITE FUNCTION
 // ============================================
@@ -599,6 +617,8 @@ export const sendTripShareInviteEmail = functions
 
       const inviteLink = getTripShareInviteLink(invite.token);
       const firstName = getFirstName(invite.inviterName);
+      const safeFirstName = escapeHtml(firstName);
+      const safeTripName = escapeHtml(invite.tripName);
       const permissionLabel = invite.permission === "edit" ? "plan and edit" : "view";
 
       const html = `
@@ -608,9 +628,9 @@ export const sendTripShareInviteEmail = functions
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px; background:#F4F2EC; border-radius:12px;">
         <tr>
           <td style="padding:32px; font-family:Raleway, Arial, sans-serif; color:#3D2817;">
-            <h1 style="font-size:22px; margin:0 0 16px;">${firstName} shared a trip with you</h1>
+            <h1 style="font-size:22px; margin:0 0 16px;">${safeFirstName} shared a trip with you</h1>
             <p style="font-size:16px; line-height:1.5; margin:0 0 24px;">
-              You've been invited to ${permissionLabel} "${invite.tripName}" on ${"Complete Camping App"}.
+              You've been invited to ${permissionLabel} "${safeTripName}" on ${"Complete Camping App"}.
             </p>
             <table role="presentation" cellpadding="0" cellspacing="0">
               <tr>
