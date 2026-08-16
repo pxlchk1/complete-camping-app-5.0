@@ -6,6 +6,7 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import sgMail from "@sendgrid/mail";
+import sgClient from "@sendgrid/client";
 import { defineSecret } from "firebase-functions/params";
 import * as crypto from "crypto";
 
@@ -3708,10 +3709,10 @@ export const sendAdminTestEmail = functions
 
         // Normalize body: strip any <br> tags, fix double-escaped newlines
         const normalizeEmailBody = (input: string) => {
-          if (!input) return '';
+          if (!input) return "";
           return input
-            .replace(/<br\s*\/?>/gi, '\n')
-            .replace(/\\n/g, '\n');
+            .replace(/<br\s*\/?>/gi, "\n")
+            .replace(/\\n/g, "\n");
         };
 
         const body = normalizeEmailBody(data.templateData.body);
@@ -4368,9 +4369,8 @@ export const sendgridSubscribeToDrip = functions
 
         // Use SendGrid Marketing API to upsert contact and add to list
         const apiKey = sendgridApiKey.value();
-        
-        // Import SendGrid client dynamically to use Marketing API
-        const client = require("@sendgrid/client");
+
+        const client = sgClient;
         client.setApiKey(apiKey);
 
         // Upsert contact and add to list in one API call
@@ -4404,8 +4404,10 @@ export const sendgridSubscribeToDrip = functions
           throw new Error(`SendGrid API returned status ${response.statusCode}`);
         }
 
-        // Extract job_id from response (contacts are processed async)
-        const jobId = response.body?.job_id;
+        // Extract job_id from response (contacts are processed async).
+        // @sendgrid/client types response.body as a bare `object` - the
+        // Marketing API's actual runtime shape isn't represented there.
+        const jobId = (response.body as { job_id?: string } | undefined)?.job_id;
 
         // Update Firestore with successful subscription
         const now = admin.firestore.FieldValue.serverTimestamp();
