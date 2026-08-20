@@ -75,9 +75,9 @@
         "projectId": "587deb41-d7a9-474f-8baf-09024d0a6ef1"
       },
       "googleSignIn": {
-        "iosClientId": "",
+        "iosClientId": "566740556205-28t1up2n4tl16fuacoedivgqahttge9r.apps.googleusercontent.com",
         "androidClientId": "",
-        "webClientId": ""
+        "webClientId": "566740556205-picf68kukm5ih28chn9g1ugnneeeuq90.apps.googleusercontent.com"
       }
     },
     "updates": {

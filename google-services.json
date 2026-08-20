@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "566740556205",
+    "project_id": "tentandlanternapp",
+    "storage_bucket": "tentandlanternapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:566740556205:android:7921c18872ec2ca0096924",
+        "android_client_info": {
+          "package_name": "com.tentlanternchild.completecampingcompanion"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "566740556205-picf68kukm5ih28chn9g1ugnneeeuq90.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCeUErmNYf5zLaZQ-o18446WDsNhGuYXa0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "566740556205-picf68kukm5ih28chn9g1ugnneeeuq90.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "566740556205-28t1up2n4tl16fuacoedivgqahttge9r.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.tentlanternchild.completecampingcompanion",
+                "app_store_id": "6752673528"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
