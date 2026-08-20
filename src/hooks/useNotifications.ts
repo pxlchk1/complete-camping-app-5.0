@@ -4,6 +4,7 @@
  */
 
 import { useEffect, useRef, useCallback } from "react";
+import { Platform } from "react-native";
 import * as Notifications from "expo-notifications";
 import { auth } from "../config/firebase";
 import {
@@ -226,6 +227,18 @@ export function useNotificationListeners(
   }, [handleNotificationResponse]);
 
   useEffect(() => {
+    // Android requires a notification channel or it falls back to a
+    // generic system "Miscellaneous" channel with no custom name/color.
+    // No iOS equivalent - setNotificationChannelAsync is a no-op there.
+    if (Platform.OS === "android") {
+      Notifications.setNotificationChannelAsync("default", {
+        name: "Tent & Lantern",
+        importance: Notifications.AndroidImportance.DEFAULT,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: "#1A4C39",
+      });
+    }
+
     // Register push token when user is authenticated
     const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
       if (user) {

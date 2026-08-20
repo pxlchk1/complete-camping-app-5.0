@@ -8,6 +8,14 @@ bun.lockb
 # Expo local state
 .expo/
 
+# Android native project - unlike ios/ (checked in because two packages
+# needed hand-patched podspecs, see patch-ios-podspecs.js), Android has no
+# equivalent native patch to preserve, so it stays on Expo's managed path:
+# generated fresh by `expo prebuild`/EAS Build from app.json each time,
+# never hand-edited or committed. Run `expo run:android` locally and it
+# regenerates this automatically.
+/android/
+
 # Build output
 /dist/
 
@@ -24,9 +32,16 @@ bun.lockb
 
 # Secrets - NEVER commit these
 serviceAccountKey.json
+google-play-service-account.json
 GoogleService-Info.plist
 !ios/CompleteCampingApp/GoogleService-Info.plist
 google-services.json
+# Android's google-services.json lives at the project root (unlike iOS's,
+# which is baked directly into the checked-in ios/ project) - Expo's
+# android.googleServicesFile config plugin copies it into the generated
+# android/ folder automatically at prebuild time. Tracked deliberately,
+# once Alana adds an Android app to the Firebase project and downloads it.
+!/google-services.json
 *.pem
 *.p12
 *.key

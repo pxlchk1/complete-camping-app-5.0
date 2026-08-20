@@ -46,6 +46,7 @@
       "versionCode": 114,
       "edgeToEdgeEnabled": true,
       "package": "com.tentlanternchild.completecampingcompanion",
+      "googleServicesFile": "./google-services.json",
       "intentFilters": [
         {
           "action": "VIEW",
@@ -72,6 +73,11 @@
     "extra": {
       "eas": {
         "projectId": "587deb41-d7a9-474f-8baf-09024d0a6ef1"
+      },
+      "googleSignIn": {
+        "iosClientId": "",
+        "androidClientId": "",
+        "webClientId": ""
       }
     },
     "updates": {

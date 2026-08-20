@@ -1,10 +1,13 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, ImageBackground, TouchableOpacity, Platform, ActivityIndicator, TextInput, KeyboardAvoidingView, ScrollView, Linking, Modal, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as Crypto from "expo-crypto";
-import { OAuthProvider, signInWithCredential, signInWithEmailAndPassword, createUserWithEmailAndPassword, fetchSignInMethodsForEmail, linkWithCredential, sendEmailVerification } from "firebase/auth";
+import * as Google from "expo-auth-session/providers/google";
+import * as WebBrowser from "expo-web-browser";
+import Constants from "expo-constants";
+import { OAuthProvider, GoogleAuthProvider, signInWithCredential, signInWithEmailAndPassword, createUserWithEmailAndPassword, fetchSignInMethodsForEmail, linkWithCredential, sendEmailVerification } from "firebase/auth";
 import { auth, db } from "../config/firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { useAuthStore } from "../state/authStore";
@@ -14,6 +17,19 @@ import { bootstrapNewAccount, getOnboardingErrorMessage, isPermissionDeniedError
 import { identifyUser } from "../services/subscriptionService";
 import { validateHandle, isAdminEmail } from "../constants/reservedHandles";
 import { reserveHandle, normalizeHandle } from "../services/handleService";
+
+// Required once at module scope so the browser-based OAuth redirect
+// resolves back into the app instead of leaving the user stranded in
+// the browser tab (see expo-auth-session docs).
+WebBrowser.maybeCompleteAuthSession();
+
+// Google OAuth client IDs - created in Google Cloud Console (same project
+// as Firebase) and set via app.json's extra.googleSignIn. Empty until
+// configured; the button below degrades to a clear error rather than a
+// silent failure or crash when these aren't set yet.
+const googleSignInConfig = Constants.expoConfig?.extra?.googleSignIn as
+  | { iosClientId?: string; androidClientId?: string; webClientId?: string }
+  | undefined;
 
 export default function AuthLanding({ navigation, route }: { navigation: any; route?: any }) {
   const returnTo = Boolean(route?.params?.returnTo);
@@ -39,7 +55,7 @@ export default function AuthLanding({ navigation, route }: { navigation: any; ro
   const [showLinkingModal, setShowLinkingModal] = useState(false);
   const [linkingEmail, setLinkingEmail] = useState("");
   const [linkingPassword, setLinkingPassword] = useState("");
-  const [pendingAppleCredential, setPendingAppleCredential] = useState<any>(null);
+  const [pendingOAuthCredential, setPendingOAuthCredential] = useState<any>(null);
   const [linkingError, setLinkingError] = useState("");
   // Retry state for when Auth succeeds but Firestore fails
   const [pendingOnboardingRetry, setPendingOnboardingRetry] = useState<{
@@ -50,6 +66,120 @@ export default function AuthLanding({ navigation, route }: { navigation: any; ro
   } | null>(null);
   const setUser = useAuthStore((s) => s.setUser);
   const setCurrentUser = useUserStore((s) => s.setCurrentUser);
+
+  // Google.useAuthRequest's internal client-id check throws a hard error
+  // (not a warning) if the platform-appropriate id is `undefined` - and
+  // since hooks run unconditionally on every render regardless of the
+  // Android-only button gating below, that would crash this whole screen
+  // on every platform the moment it loads, before any client ID is
+  // configured. `?? ""` guarantees a defined (if empty) string always,
+  // so the hook itself never throws; handleGoogleSignIn below is what
+  // actually checks for a real, non-empty value before doing anything.
+  const [googleRequest, googleResponse, promptGoogleSignIn] = Google.useAuthRequest({
+    iosClientId: googleSignInConfig?.iosClientId ?? "",
+    androidClientId: googleSignInConfig?.androidClientId ?? "",
+    webClientId: googleSignInConfig?.webClientId ?? "",
+  });
+
+  useEffect(() => {
+    if (googleResponse?.type === "success") {
+      const { id_token } = googleResponse.params;
+      if (id_token) {
+        completeGoogleSignIn(id_token).catch((error: any) => {
+          console.error("Google Sign In Error:", error);
+          setError(error?.message || "Failed to sign in with Google. Please try again.");
+          setLoading(false);
+        });
+      } else {
+        setLoading(false);
+      }
+    } else if (googleResponse?.type === "error") {
+      console.error("Google Sign In Error:", googleResponse.error);
+      setError("Failed to sign in with Google. Please try again.");
+      setLoading(false);
+    } else if (googleResponse?.type === "cancel" || googleResponse?.type === "dismiss") {
+      setLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [googleResponse]);
+
+  const handleGoogleSignIn = async () => {
+    if (!googleSignInConfig?.webClientId && !googleSignInConfig?.androidClientId && !googleSignInConfig?.iosClientId) {
+      setError("Google Sign In isn't set up yet. Try Sign In with email instead.");
+      return;
+    }
+    setError("");
+    setLoading(true);
+    const result = await promptGoogleSignIn();
+    if (result.type !== "success") {
+      setLoading(false);
+    }
+  };
+
+  const completeGoogleSignIn = async (idToken: string) => {
+    const firebaseCredential = GoogleAuthProvider.credential(idToken);
+    let firebaseUser;
+
+    try {
+      const userCredential = await signInWithCredential(auth, firebaseCredential);
+      firebaseUser = userCredential.user;
+    } catch (error: any) {
+      // Same account-conflict handling as Apple: if this email already has
+      // a password (or other non-Google) sign-in method, Firebase itself
+      // rejects the sign-in with this error and tells us the email -
+      // prompt to link rather than silently failing or creating a second,
+      // disconnected account.
+      if (error?.code === "auth/account-exists-with-different-credential" && error?.customData?.email) {
+        setPendingOAuthCredential({ credential: firebaseCredential });
+        setLinkingEmail(error.customData.email);
+        setShowLinkingModal(true);
+        setLoading(false);
+        return;
+      }
+      console.error("Complete Google Sign In Error:", error);
+      throw error;
+    }
+
+    try {
+      const userDoc = await getDoc(doc(db, "profiles", firebaseUser.uid));
+
+      if (!userDoc.exists()) {
+        const rawHandle = firebaseUser.displayName || "user";
+        const normalizedHandle = rawHandle.toLowerCase().replace(/[^a-z0-9]/g, "");
+        const displayName = firebaseUser.displayName || "Anonymous User";
+        const email = firebaseUser.email || "";
+
+        await firebaseUser.getIdToken(true);
+
+        const result = await bootstrapNewAccount({
+          userId: firebaseUser.uid,
+          email,
+          displayName,
+          handle: normalizedHandle,
+          photoURL: firebaseUser.photoURL,
+        });
+
+        if (!result.success) {
+          console.error("[Google Auth] Bootstrap failed:", result.error, result.debugInfo);
+          if (result.emailInUse) {
+            throw new Error("That email is already in use. Try signing in instead.");
+          }
+          throw new Error(result.error || "We couldn't finish setting up your account. Please try again.");
+        }
+      }
+
+      await loadUserProfile(firebaseUser.uid);
+    } catch (error: any) {
+      console.error("Complete Google Sign In Error:", error);
+      if (isPermissionDeniedError(error)) {
+        throw new Error(getOnboardingErrorMessage(error));
+      }
+      if (isEmailInUseError(error)) {
+        throw new Error("That email is already in use. Try signing in instead.");
+      }
+      throw error;
+    }
+  };
 
   const handleAppleSignIn = async () => {
     try {
@@ -117,7 +247,7 @@ export default function AuthLanding({ navigation, route }: { navigation: any; ro
           rawNonce: nonce,
         });
 
-        setPendingAppleCredential({ credential: firebaseCredential, appleInfo: appleCredential });
+        setPendingOAuthCredential({ credential: firebaseCredential, appleInfo: appleCredential });
         setLinkingEmail(emailNormalized);
         setShowLinkingModal(true);
         setLoading(false);
@@ -226,19 +356,19 @@ export default function AuthLanding({ navigation, route }: { navigation: any; ro
         linkingPassword
       );
 
-      console.log("[Account Linking] Password sign-in successful, linking Apple account");
+      console.log("[Account Linking] Password sign-in successful, linking OAuth account");
 
-      // Step 2: Link Apple credential to this account
+      // Step 2: Link the pending Apple/Google credential to this account
       const linkedUser = await linkWithCredential(
         passwordCredential.user,
-        pendingAppleCredential.credential
+        pendingOAuthCredential.credential
       );
 
-      console.log("[Account Linking] Successfully linked Apple to existing account");
+      console.log("[Account Linking] Successfully linked OAuth provider to existing account");
 
       // Close modal and complete sign-in
       setShowLinkingModal(false);
-      setPendingAppleCredential(null);
+      setPendingOAuthCredential(null);
       setLinkingPassword("");
       setLinkingEmail("");
 
@@ -252,9 +382,9 @@ export default function AuthLanding({ navigation, route }: { navigation: any; ro
       } else if (error.code === "auth/invalid-credential") {
         setLinkingError("Incorrect password. Please try again.");
       } else if (error.code === "auth/provider-already-linked") {
-        setLinkingError("This Apple account is already linked to another account.");
+        setLinkingError("This account is already linked to another account.");
       } else if (error.code === "auth/credential-already-in-use") {
-        setLinkingError("This Apple account is already in use by another account.");
+        setLinkingError("This account is already in use by another account.");
       } else {
         setLinkingError("Failed to link accounts. Please try again.");
       }
@@ -886,6 +1016,24 @@ export default function AuthLanding({ navigation, route }: { navigation: any; ro
               </TouchableOpacity>
             )}
 
+            {/* 3b. Sign in with Google - Android's equivalent to Apple Sign In above */}
+            {Platform.OS === "android" && (
+              <TouchableOpacity
+                style={styles.googleButton}
+                onPress={handleGoogleSignIn}
+                disabled={loading || !googleRequest}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#1A4C39" />
+                ) : (
+                  <>
+                    <Ionicons name="logo-google" size={22} color="#1A4C39" style={styles.appleIcon} />
+                    <Text style={styles.googleButtonText}>Sign in with Google</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
+
             {/* 4. Explore the App - Lowest priority */}
             <TouchableOpacity
               style={styles.ghostButton}
@@ -916,7 +1064,7 @@ export default function AuthLanding({ navigation, route }: { navigation: any; ro
         animationType="fade"
         onRequestClose={() => {
           setShowLinkingModal(false);
-          setPendingAppleCredential(null);
+          setPendingOAuthCredential(null);
           setLinkingPassword("");
           setLinkingError("");
         }}
@@ -925,7 +1073,7 @@ export default function AuthLanding({ navigation, route }: { navigation: any; ro
           <View style={styles.modalContainer}>
             <Text style={styles.modalTitle}>Link your accounts</Text>
             <Text style={styles.modalMessage}>
-              An account already exists with this email. Enter your password to link your Apple account.
+              An account already exists with this email. Enter your password to link your accounts.
             </Text>
 
             <View style={styles.linkingEmailContainer}>
@@ -956,7 +1104,7 @@ export default function AuthLanding({ navigation, route }: { navigation: any; ro
                 style={styles.modalCancelButton}
                 onPress={() => {
                   setShowLinkingModal(false);
-                  setPendingAppleCredential(null);
+                  setPendingOAuthCredential(null);
                   setLinkingPassword("");
                   setLinkingError("");
                 }}
@@ -1118,6 +1266,25 @@ const styles = StyleSheet.create({
     fontFamily: "SourceSans3_600SemiBold",
     fontSize: 18,
     color: "#FFFFFF",
+    textAlign: "center"
+  },
+
+  googleButton: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#DADCE0",
+    paddingVertical: 14,
+    borderRadius: 10,
+    marginBottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center"
+  },
+
+  googleButtonText: {
+    fontFamily: "SourceSans3_600SemiBold",
+    fontSize: 18,
+    color: "#1A4C39",
     textAlign: "center"
   },
 
