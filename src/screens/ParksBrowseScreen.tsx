@@ -509,7 +509,10 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
       setParkType("all" as ParkType);
       setError(null);
       setParks([]);
-      setHasSearched(false);
+      // Returning to distance mode with a location we already have should
+      // immediately re-browse with it, not drop back to a dead empty state
+      // that only a fresh "Use my location" tap can recover from.
+      setHasSearched(newMode === "distance" && !!userLocation);
     }
   };
 
