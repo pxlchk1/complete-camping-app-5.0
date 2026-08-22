@@ -136,6 +136,11 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
 
   // Get route params for trip context (when opened from TripDetailScreen)
   const route = useRoute<ParksBrowseScreenRouteProp>();
+  // Reached two ways: as the "Parks" tab inside PlanTopTabsNavigator (whose
+  // hero header already applies the top safe-area inset), or as the
+  // standalone root-stack "ParksBrowse" route (no chrome above it, needs
+  // its own inset). Route name tells them apart at runtime.
+  const safeAreaEdges = (route.name as string) === "Parks" ? [] : (["top"] as const);
   const tripIdFromRoute = route.params?.tripId;
   const returnTo = route.params?.returnTo;
   const selectedParkIdFromRoute = route.params?.selectedParkId;
@@ -718,7 +723,7 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
   const showInitialState = !hasSearched && !isLoading && parks.length === 0;
 
   return (
-    <SafeAreaView style={styles.root} edges={["top"]}>
+    <SafeAreaView style={styles.root} edges={safeAreaEdges}>
       {/* Add to Trip Modal */}
       <Modal
         visible={showAddToTrip}

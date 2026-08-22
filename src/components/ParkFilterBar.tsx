@@ -114,16 +114,14 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: "name", label: "name" },
 ];
 
+// Backlogged for a future release: private, army_corps, county_park, blm,
+// dispersed. Still valid ParkType values (existing campgrounds of those
+// types still appear in "All Parks"), just not offered as filter choices.
 const PARK_TYPE_OPTIONS: { value: ParkType; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { value: "all", label: "All Parks", icon: "leaf" },
   { value: "state_park", label: "State Parks", icon: "flag" },
   { value: "national_park", label: "National Parks", icon: "shield" },
   { value: "national_forest", label: "National Forests", icon: "leaf-outline" },
-  { value: "private", label: "Private Campgrounds", icon: "home" },
-  { value: "army_corps", label: "Army Corps of Engineers", icon: "boat" },
-  { value: "county_park", label: "Municipal/County Parks", icon: "business" },
-  { value: "blm", label: "BLM Land", icon: "earth" },
-  { value: "dispersed", label: "Dispersed Camping", icon: "trail-sign" },
 ];
 
 export default function ParkFilterBar({

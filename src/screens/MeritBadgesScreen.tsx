@@ -24,8 +24,9 @@ import * as Haptics from "expo-haptics";
 import { auth } from "../config/firebase";
 import { RootStackParamList } from "../navigation/types";
 import {
-  getBadgesByCategory,
-  getBadgeProgressStats,
+  getBadgesWithProgress,
+  groupBadgesByCategory,
+  computeBadgeProgressStats,
   getPendingClaimsForWitness,
 } from "../services/meritBadgesService";
 import {
@@ -78,25 +79,27 @@ export default function MeritBadgesScreen() {
       else setLoading(true);
       setLoadError(false);
 
-      const [categoryData, statsData] = await Promise.all([
-        getBadgesByCategory(user.uid),
-        getBadgeProgressStats(user.uid),
-      ]);
+      // One fetch instead of two - getBadgesByCategory/getBadgeProgressStats
+      // each independently re-fetched the same catalog+earned+pending data,
+      // doubling the network cost for no reason.
+      const badgesWithProgress = await getBadgesWithProgress(user.uid);
+      setCategories(groupBadgesByCategory(badgesWithProgress));
+      setStats(computeBadgeProgressStats(badgesWithProgress));
 
-      setCategories(categoryData);
-      setStats(statsData);
+      // Badges are ready to show now - the witness-request count is a
+      // secondary banner, not essential content, so it loads in the
+      // background instead of holding up the whole screen.
+      setLoading(false);
+      setRefreshing(false);
 
-      // Load witness request count
-      try {
-        const pending = await getPendingClaimsForWitness(user.uid);
-        setWitnessCount(pending.length);
-      } catch {
-        // Silently fail - not critical
-      }
+      getPendingClaimsForWitness(user.uid)
+        .then((pending) => setWitnessCount(pending.length))
+        .catch(() => {
+          // Silently fail - not critical
+        });
     } catch (error) {
       console.error("[MeritBadgesScreen] Load error:", error);
       setLoadError(true);
-    } finally {
       setLoading(false);
       setRefreshing(false);
     }

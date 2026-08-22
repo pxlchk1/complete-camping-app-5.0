@@ -612,24 +612,24 @@ export async function getBadgesWithProgress(userId: string): Promise<BadgeWithPr
 }
 
 /**
- * Get badges grouped by category
+ * Group already-fetched badges-with-progress by category. Pure/sync so a
+ * caller that also needs stats (computeBadgeProgressStats below) can derive
+ * both from one getBadgesWithProgress call instead of fetching it twice.
  */
-export async function getBadgesByCategory(userId: string): Promise<BadgeCategoryGroup[]> {
-  const badgesWithProgress = await getBadgesWithProgress(userId);
-  
+export function groupBadgesByCategory(badgesWithProgress: BadgeWithProgress[]): BadgeCategoryGroup[] {
   const groups: Map<BadgeCategoryId, BadgeWithProgress[]> = new Map();
-  
+
   for (const badge of badgesWithProgress) {
     const categoryBadges = groups.get(badge.categoryId) || [];
     categoryBadges.push(badge);
     groups.set(badge.categoryId, categoryBadges);
   }
-  
+
   // Convert to array and sort by category order
   const result: BadgeCategoryGroup[] = [];
   const sortedCategories = Object.entries(BADGE_CATEGORIES)
     .sort(([, a], [, b]) => a.sortOrder - b.sortOrder);
-  
+
   for (const [categoryId, meta] of sortedCategories) {
     const badges = groups.get(categoryId as BadgeCategoryId) || [];
     if (badges.length > 0) {
@@ -640,28 +640,27 @@ export async function getBadgesByCategory(userId: string): Promise<BadgeCategory
       });
     }
   }
-  
+
   return result;
 }
 
 /**
- * Calculate progress statistics
+ * Calculate progress statistics from already-fetched badges-with-progress.
+ * Pure/sync counterpart to groupBadgesByCategory - see its comment.
  */
-export async function getBadgeProgressStats(userId: string): Promise<BadgeProgressStats> {
-  const badgesWithProgress = await getBadgesWithProgress(userId);
-  
+export function computeBadgeProgressStats(badgesWithProgress: BadgeWithProgress[]): BadgeProgressStats {
   const totalBadges = badgesWithProgress.length;
   const earnedBadges = badgesWithProgress.filter(b => b.displayState === "earned").length;
-  
+
   const coreBadges = badgesWithProgress.filter(b => !b.seasonWindow);
   const coreEarned = coreBadges.filter(b => b.displayState === "earned").length;
-  
+
   const seasonalBadges = badgesWithProgress.filter(b => b.seasonWindow && !b.isLimitedEdition);
   const seasonalEarned = seasonalBadges.filter(b => b.displayState === "earned").length;
-  
+
   const limitedBadges = badgesWithProgress.filter(b => b.isLimitedEdition);
   const limitedEarned = limitedBadges.filter(b => b.displayState === "earned").length;
-  
+
   return {
     totalBadges,
     earnedBadges,
@@ -672,6 +671,22 @@ export async function getBadgeProgressStats(userId: string): Promise<BadgeProgre
     seasonalTotal: seasonalBadges.length,
     limitedEarned,
   };
+}
+
+/**
+ * Get badges grouped by category
+ */
+export async function getBadgesByCategory(userId: string): Promise<BadgeCategoryGroup[]> {
+  const badgesWithProgress = await getBadgesWithProgress(userId);
+  return groupBadgesByCategory(badgesWithProgress);
+}
+
+/**
+ * Calculate progress statistics
+ */
+export async function getBadgeProgressStats(userId: string): Promise<BadgeProgressStats> {
+  const badgesWithProgress = await getBadgesWithProgress(userId);
+  return computeBadgeProgressStats(badgesWithProgress);
 }
 
 /**
