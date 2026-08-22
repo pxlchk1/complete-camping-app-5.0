@@ -6,7 +6,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -26,6 +25,7 @@ import * as Haptics from "expo-haptics";
 
 import { auth } from "../../config/firebase";
 import { getGearReviewById, updateGearReview } from "../../services/gearReviewsService";
+import { useToast } from "../../components/ToastManager";
 import {
   BORDER_SOFT,
   CARD_BACKGROUND_LIGHT,
@@ -62,6 +62,7 @@ export default function EditGearReviewScreen() {
   const navigation = useNavigation<RootStackNavigationProp>();
   const route = useRoute<any>();
   const reviewId = (route?.params as RouteParams)?.reviewId;
+  const { showError, showSuccess } = useToast();
 
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState<GearCategory>("tent");
@@ -82,7 +83,7 @@ export default function EditGearReviewScreen() {
   useEffect(() => {
     async function loadReview() {
       if (!reviewId) {
-        Alert.alert("Error", "No review ID provided");
+        showError("No review ID provided");
         navigation.goBack();
         return;
       }
@@ -91,14 +92,14 @@ export default function EditGearReviewScreen() {
         setLoading(true);
         const review = await getGearReviewById(reviewId);
         if (!review) {
-          Alert.alert("Error", "Review not found");
+          showError("Review not found");
           navigation.goBack();
           return;
         }
 
         // Check if current user owns this review
         if (review.authorId !== auth.currentUser?.uid) {
-          Alert.alert("Error", "You can only edit your own reviews");
+          showError("You can only edit your own reviews");
           navigation.goBack();
           return;
         }
@@ -114,7 +115,7 @@ export default function EditGearReviewScreen() {
         setTags(review.tags || []);
       } catch (error) {
         console.error("[EditGearReview] Load failed:", error);
-        Alert.alert("Error", "Failed to load review");
+        showError("Failed to load review");
         navigation.goBack();
       } finally {
         setLoading(false);
@@ -176,14 +177,14 @@ export default function EditGearReviewScreen() {
   // Photo picker and upload
   const pickPhoto = useCallback(async () => {
     if (allPhotos.length >= MAX_PHOTOS) {
-      Alert.alert("Limit reached", `You can add up to ${MAX_PHOTOS} photos.`);
+      showError(`You can add up to ${MAX_PHOTOS} photos.`);
       return;
     }
 
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
-        Alert.alert("Permission Required", "Please allow access to your photo library to add images.");
+        showError("Please allow access to your photo library to add images.");
         return;
       }
 
@@ -199,7 +200,7 @@ export default function EditGearReviewScreen() {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       }
     } catch {
-      Alert.alert("Error", "Failed to pick image");
+      showError("Failed to pick image");
     }
   }, [allPhotos.length]);
 
@@ -238,7 +239,7 @@ export default function EditGearReviewScreen() {
 
     const user = auth.currentUser;
     if (!user?.uid) {
-      Alert.alert("Sign in required", "Please sign in to edit this review.");
+      showError("Please sign in to edit this review.");
       return;
     }
 
@@ -248,7 +249,7 @@ export default function EditGearReviewScreen() {
     const trimmedBrand = brand.trim();
 
     if (!trimmedGearName || !trimmedSummary || !trimmedBody || rating <= 0) {
-      Alert.alert("Missing info", "Please fill out all required fields and select a rating.");
+      showError("Please fill out all required fields and select a rating.");
       return;
     }
 
@@ -270,7 +271,7 @@ export default function EditGearReviewScreen() {
             : uploadError?.code === "storage/quota-exceeded"
             ? "Storage quota exceeded. Please try a smaller image."
             : "Failed to upload photo. Please check your connection and try again.";
-          Alert.alert("Photo Upload Failed", errorMessage);
+          showError(errorMessage);
           setSubmitting(false);
           return;
         } finally {
@@ -294,7 +295,7 @@ export default function EditGearReviewScreen() {
       });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      Alert.alert("Updated!", "Your gear review has been updated.");
+      showSuccess("Your gear review has been updated.");
       navigation.goBack();
     } catch (e: any) {
       console.error("[EditGearReview] submit failed:", e);
@@ -302,7 +303,7 @@ export default function EditGearReviewScreen() {
       const errorMessage = e?.code === "permission-denied"
         ? "You don't have permission to update this review."
         : e?.message || "Please try again in a moment.";
-      Alert.alert("Couldn't update", errorMessage);
+      showError(errorMessage);
     } finally {
       setSubmitting(false);
     }

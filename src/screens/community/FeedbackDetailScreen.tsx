@@ -4,12 +4,14 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, Alert } from "react-native";
+import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform } from "react-native";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import ModalHeader from "../../components/ModalHeader";
 import VotePill from "../../components/VotePill";
 import AccountRequiredModal from "../../components/AccountRequiredModal";
+import ConfirmationModal from "../../components/ConfirmationModal";
+import { useToast } from "../../components/ToastManager";
 import { ContentActionsAffordance } from "../../components/contentActions";
 import HiddenReviewBanner from "../../components/HiddenReviewBanner";
 import { useContentActions } from "../../hooks/useContentActions";
@@ -57,6 +59,8 @@ export default function FeedbackDetailScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [authorName, setAuthorName] = useState<string | null>(null);
   const [showAccountRequired, setShowAccountRequired] = useState(false);
+  const [pendingPostAction, setPendingPostAction] = useState<"delete" | "remove" | null>(null);
+  const { show, showError, showSuccess } = useToast();
 
   // Permission checks for content actions
   const canModerate = currentUser ? canModerateContent(currentUser as User) : false;
@@ -70,57 +74,26 @@ export default function FeedbackDetailScreen() {
 
   // Content action handlers for the post
   const handleDeletePost = async () => {
-    Alert.alert(
-      "Delete Feedback",
-      "Are you sure you want to delete this feedback? This action cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            const result = await deleteFeedback(postId);
-            if (result.success) {
-              Alert.alert("Success", "Feedback deleted successfully");
-              navigation.goBack();
-            } else {
-              console.error("[FeedbackDetail] Delete failed:", result.error);
-              Alert.alert(
-                "Error",
-                result.error?.message || "Failed to delete feedback"
-              );
-            }
-          },
-        },
-      ]
-    );
+    setPendingPostAction("delete");
   };
 
   const handleRemovePost = async () => {
-    Alert.alert(
-      "Remove Feedback",
-      "Are you sure you want to remove this feedback? This moderation action cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: async () => {
-            const result = await deleteFeedback(postId);
-            if (result.success) {
-              Alert.alert("Success", "Feedback removed successfully");
-              navigation.goBack();
-            } else {
-              console.error("[FeedbackDetail] Remove failed:", result.error);
-              Alert.alert(
-                "Error",
-                result.error?.message || "Failed to remove feedback"
-              );
-            }
-          },
-        },
-      ]
-    );
+    setPendingPostAction("remove");
+  };
+
+  const confirmPendingPostAction = async () => {
+    const mode = pendingPostAction;
+    setPendingPostAction(null);
+    if (!mode) return;
+
+    const result = await deleteFeedback(postId);
+    if (result.success) {
+      showSuccess(mode === "delete" ? "Feedback deleted successfully" : "Feedback removed successfully");
+      navigation.goBack();
+    } else {
+      console.error(`[FeedbackDetail] ${mode} failed:`, result.error);
+      showError(result.error?.message || `Failed to ${mode} feedback`);
+    }
   };
 
   useEffect(() => {
@@ -167,7 +140,7 @@ export default function FeedbackDetailScreen() {
     }
 
     // Require email verification
-    const isVerified = await requireEmailVerification("comment on feedback");
+    const isVerified = await requireEmailVerification("comment on feedback", { show, showError, showSuccess });
     if (!isVerified) return;
 
     if (!currentUser || !commentText.trim() || submitting) return;
@@ -414,7 +387,7 @@ export default function FeedbackDetailScreen() {
                             setComments(prev => prev.filter(c => c.id !== comment.id));
                           } else {
                             console.error("[FeedbackDetail] Delete comment failed:", result.error);
-                            Alert.alert("Error", result.error?.message || "Failed to delete comment");
+                            showError(result.error?.message || "Failed to delete comment");
                           }
                         }}
                         onRequestRemove={async () => {
@@ -423,7 +396,7 @@ export default function FeedbackDetailScreen() {
                             setComments(prev => prev.filter(c => c.id !== comment.id));
                           } else {
                             console.error("[FeedbackDetail] Remove comment failed:", result.error);
-                            Alert.alert("Error", result.error?.message || "Failed to remove comment");
+                            showError(result.error?.message || "Failed to remove comment");
                           }
                         }}
                         layout="commentRow"
@@ -495,6 +468,23 @@ export default function FeedbackDetailScreen() {
           navigation.navigate("Auth");
         }}
         onMaybeLater={() => setShowAccountRequired(false)}
+      />
+
+      <ConfirmationModal
+        visible={!!pendingPostAction}
+        title={pendingPostAction === "remove" ? "Remove Feedback" : "Delete Feedback"}
+        message={
+          pendingPostAction === "remove"
+            ? "Are you sure you want to remove this feedback? This moderation action cannot be undone."
+            : "Are you sure you want to delete this feedback? This action cannot be undone."
+        }
+        primary={{
+          label: pendingPostAction === "remove" ? "Remove" : "Delete",
+          iconName: "trash",
+          onPress: confirmPendingPostAction,
+        }}
+        secondary={{ label: "Cancel", onPress: () => setPendingPostAction(null) }}
+        onClose={() => setPendingPostAction(null)}
       />
     </View>
   );

@@ -13,10 +13,11 @@
  */
 
 import React, { useState, useCallback, useMemo } from "react";
-import { View, Pressable, Text, Modal, ActionSheetIOS, Platform, Alert } from "react-native";
+import { View, Pressable, Text, Modal, ActionSheetIOS, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useToast } from "../ToastManager";
+import ConfirmationModal from "../ConfirmationModal";
 import {
   PARCHMENT,
   BORDER_SOFT,
@@ -107,6 +108,8 @@ export function ContentActionsMenu({
 }: ContentActionsMenuProps) {
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  const [removeConfirmVisible, setRemoveConfirmVisible] = useState(false);
   const { showSuccess, showError } = useToast();
 
   // Compute permissions
@@ -122,60 +125,44 @@ export function ContentActionsMenu({
   );
 
   const confirmDelete = useCallback(() => {
-    Alert.alert(
-      copy.deleteTitle,
-      copy.deleteBody,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: copy.deleteConfirm,
-          style: "destructive",
-          onPress: async () => {
-            if (!onRequestDelete) return;
-            setLoading(true);
-            try {
-              await onRequestDelete();
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              showSuccess("Deleted");
-            } catch (error) {
-              console.error(`[ContentActions] Delete failed for ${itemType}:${itemId}`, error);
-              showError("Failed to delete");
-            } finally {
-              setLoading(false);
-            }
-          },
-        },
-      ]
-    );
-  }, [onRequestDelete, copy, itemType, itemId, showSuccess, showError]);
+    setDeleteConfirmVisible(true);
+  }, []);
 
   const confirmRemove = useCallback(() => {
-    Alert.alert(
-      copy.removeTitle,
-      copy.removeBody,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: copy.removeConfirm,
-          style: "destructive",
-          onPress: async () => {
-            if (!onRequestRemove) return;
-            setLoading(true);
-            try {
-              await onRequestRemove();
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              showSuccess("Removed");
-            } catch (error) {
-              console.error(`[ContentActions] Remove failed for ${itemType}:${itemId}`, error);
-              showError("Failed to remove");
-            } finally {
-              setLoading(false);
-            }
-          },
-        },
-      ]
-    );
-  }, [onRequestRemove, copy, itemType, itemId, showSuccess, showError]);
+    setRemoveConfirmVisible(true);
+  }, []);
+
+  const handleConfirmedDelete = useCallback(async () => {
+    setDeleteConfirmVisible(false);
+    if (!onRequestDelete) return;
+    setLoading(true);
+    try {
+      await onRequestDelete();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showSuccess("Deleted");
+    } catch (error) {
+      console.error(`[ContentActions] Delete failed for ${itemType}:${itemId}`, error);
+      showError("Failed to delete");
+    } finally {
+      setLoading(false);
+    }
+  }, [onRequestDelete, itemType, itemId, showSuccess, showError]);
+
+  const handleConfirmedRemove = useCallback(async () => {
+    setRemoveConfirmVisible(false);
+    if (!onRequestRemove) return;
+    setLoading(true);
+    try {
+      await onRequestRemove();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showSuccess("Removed");
+    } catch (error) {
+      console.error(`[ContentActions] Remove failed for ${itemType}:${itemId}`, error);
+      showError("Failed to remove");
+    } finally {
+      setLoading(false);
+    }
+  }, [onRequestRemove, itemType, itemId, showSuccess, showError]);
 
   const handleEdit = useCallback(() => {
     setShowModal(false);
@@ -351,6 +338,24 @@ export function ContentActionsMenu({
           </Pressable>
         </Modal>
       )}
+
+      <ConfirmationModal
+        visible={deleteConfirmVisible}
+        title={copy.deleteTitle}
+        message={copy.deleteBody}
+        primary={{ label: copy.deleteConfirm, iconName: "trash", onPress: handleConfirmedDelete }}
+        secondary={{ label: "Cancel", onPress: () => setDeleteConfirmVisible(false) }}
+        onClose={() => setDeleteConfirmVisible(false)}
+      />
+
+      <ConfirmationModal
+        visible={removeConfirmVisible}
+        title={copy.removeTitle}
+        message={copy.removeBody}
+        primary={{ label: copy.removeConfirm, iconName: "trash", onPress: handleConfirmedRemove }}
+        secondary={{ label: "Cancel", onPress: () => setRemoveConfirmVisible(false) }}
+        onClose={() => setRemoveConfirmVisible(false)}
+      />
     </>
   );
 }

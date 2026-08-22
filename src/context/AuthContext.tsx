@@ -5,12 +5,12 @@
  */
 
 import React, { createContext, useContext, useEffect, useState, useRef, ReactNode } from "react";
-import { Alert } from "react-native";
 import { auth } from "../config/firebase";
 import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
 import { useAuthStore } from "../state/authStore";
 import { useTripsStore } from "../state/tripsStore";
 import { checkPendingInvitesOnLogin } from "../services/campgroundInviteService";
+import { useToast } from "../components/ToastManager";
 
 interface AuthContextType {
   user: FirebaseUser | null;
@@ -31,6 +31,7 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const { showSuccess } = useToast();
   const setStoreUser = useAuthStore((state) => state.setUser);
   const signOutStore = useAuthStore((state) => state.signOut);
   const loadTrips = useTripsStore((state) => state.loadTrips);
@@ -73,11 +74,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
             const result = await checkPendingInvitesOnLogin();
             if (result.processed > 0) {
               console.log("[Auth] Pending invites processed:", result);
-              // Show alert to user about the accepted invites
-              Alert.alert(
-                "Welcome to the campground! 🏕️",
-                result.message
-              );
+              // Show toast to user about the accepted invites
+              showSuccess(result.message);
             }
           } catch (error) {
             console.error("[Auth] Error checking pending invites:", error);

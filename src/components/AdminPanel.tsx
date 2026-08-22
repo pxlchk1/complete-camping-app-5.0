@@ -10,7 +10,6 @@ import {
   TextInput,
   Pressable,
   ActivityIndicator,
-  Alert,
   ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -23,6 +22,7 @@ import {
   grantMembership,
   updateUserRole,
 } from "../services/userService";
+import { useToast } from "./ToastManager";
 import { MembershipDuration } from "../types/user";
 import {
   DEEP_FOREST,
@@ -37,6 +37,7 @@ interface AdminPanelProps {
 }
 
 export default function AdminPanel({ currentUserId }: AdminPanelProps) {
+  const { showError, showSuccess, show } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [activeSection, setActiveSection] = useState<"membership" | "ban" | "role">("membership");
@@ -60,7 +61,7 @@ export default function AdminPanel({ currentUserId }: AdminPanelProps) {
 
   const handleGrantMembership = async () => {
     if (!searchQuery.trim()) {
-      Alert.alert("Error", "Please enter a user handle or email");
+      showError("Please enter a user handle or email");
       return;
     }
 
@@ -73,20 +74,19 @@ export default function AdminPanel({ currentUserId }: AdminPanelProps) {
       }
 
       if (!user) {
-        Alert.alert("Error", "User not found");
+        showError("User not found");
         return;
       }
 
       await grantMembership(currentUserId, user.id, membershipDuration);
 
-      Alert.alert(
-        "Success",
+      showSuccess(
         `Granted ${membershipDuration.replace("_", " ")} membership to ${user.displayName}`
       );
       setSearchQuery("");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error: any) {
-      Alert.alert("Error", error.message || "Failed to grant membership");
+      showError(error.message || "Failed to grant membership");
     } finally {
       setLoading(false);
     }
@@ -94,12 +94,12 @@ export default function AdminPanel({ currentUserId }: AdminPanelProps) {
 
   const handleBanUser = async () => {
     if (!searchQuery.trim()) {
-      Alert.alert("Error", "Please enter a user handle or email");
+      showError("Please enter a user handle or email");
       return;
     }
 
     if (!banReason.trim()) {
-      Alert.alert("Error", "Please provide a ban reason");
+      showError("Please provide a ban reason");
       return;
     }
 
@@ -111,23 +111,23 @@ export default function AdminPanel({ currentUserId }: AdminPanelProps) {
       }
 
       if (!user) {
-        Alert.alert("Error", "User not found");
+        showError("User not found");
         return;
       }
 
       if (user.id === currentUserId) {
-        Alert.alert("Error", "You cannot ban yourself");
+        showError("You cannot ban yourself");
         return;
       }
 
       await banUser(currentUserId, user.id, banReason.trim());
 
-      Alert.alert("Success", `Banned user: ${user.displayName}`);
+      showSuccess(`Banned user: ${user.displayName}`);
       setSearchQuery("");
       setBanReason("");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error: any) {
-      Alert.alert("Error", error.message || "Failed to ban user");
+      showError(error.message || "Failed to ban user");
     } finally {
       setLoading(false);
     }
@@ -135,7 +135,7 @@ export default function AdminPanel({ currentUserId }: AdminPanelProps) {
 
   const handleUnbanUser = async () => {
     if (!searchQuery.trim()) {
-      Alert.alert("Error", "Please enter a user handle or email");
+      showError("Please enter a user handle or email");
       return;
     }
 
@@ -147,22 +147,22 @@ export default function AdminPanel({ currentUserId }: AdminPanelProps) {
       }
 
       if (!user) {
-        Alert.alert("Error", "User not found");
+        showError("User not found");
         return;
       }
 
       if (!user.isBanned) {
-        Alert.alert("Info", "This user is not banned");
+        show("This user is not banned");
         return;
       }
 
       await unbanUser(currentUserId, user.id);
 
-      Alert.alert("Success", `Unbanned user: ${user.displayName}`);
+      showSuccess(`Unbanned user: ${user.displayName}`);
       setSearchQuery("");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error: any) {
-      Alert.alert("Error", error.message || "Failed to unban user");
+      showError(error.message || "Failed to unban user");
     } finally {
       setLoading(false);
     }
@@ -170,7 +170,7 @@ export default function AdminPanel({ currentUserId }: AdminPanelProps) {
 
   const handleUpdateRole = async () => {
     if (!searchQuery.trim()) {
-      Alert.alert("Error", "Please enter a user handle or email");
+      showError("Please enter a user handle or email");
       return;
     }
 
@@ -182,22 +182,22 @@ export default function AdminPanel({ currentUserId }: AdminPanelProps) {
       }
 
       if (!user) {
-        Alert.alert("Error", "User not found");
+        showError("User not found");
         return;
       }
 
       if (user.id === currentUserId) {
-        Alert.alert("Error", "You cannot change your own role");
+        showError("You cannot change your own role");
         return;
       }
 
       await updateUserRole(currentUserId, user.id, newRole);
 
-      Alert.alert("Success", `Updated ${user.displayName} to ${newRole}`);
+      showSuccess(`Updated ${user.displayName} to ${newRole}`);
       setSearchQuery("");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error: any) {
-      Alert.alert("Error", error.message || "Failed to update role");
+      showError(error.message || "Failed to update role");
     } finally {
       setLoading(false);
     }

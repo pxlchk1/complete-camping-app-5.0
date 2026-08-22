@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, ImageBackground, TouchableOpacity, Platform, ActivityIndicator, TextInput, KeyboardAvoidingView, ScrollView, Linking, Modal, Alert } from "react-native";
+import { View, Text, StyleSheet, ImageBackground, TouchableOpacity, Platform, ActivityIndicator, TextInput, KeyboardAvoidingView, ScrollView, Linking, Modal } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import * as AppleAuthentication from "expo-apple-authentication";
@@ -17,6 +17,7 @@ import { bootstrapNewAccount, getOnboardingErrorMessage, isPermissionDeniedError
 import { identifyUser } from "../services/subscriptionService";
 import { validateHandle, isAdminEmail } from "../constants/reservedHandles";
 import { reserveHandle, normalizeHandle } from "../services/handleService";
+import { useToast } from "../components/ToastManager";
 
 // Required once at module scope so the browser-based OAuth redirect
 // resolves back into the app instead of leaving the user stranded in
@@ -32,6 +33,7 @@ const googleSignInConfig = Constants.expoConfig?.extra?.googleSignIn as
   | undefined;
 
 export default function AuthLanding({ navigation, route }: { navigation: any; route?: any }) {
+  const { showSuccess } = useToast();
   const returnTo = Boolean(route?.params?.returnTo);
   // After a successful sign-in/sign-up: go back to whichever screen sent the
   // user here (e.g. an invite-acceptance flow) when returnTo is set,
@@ -495,11 +497,7 @@ export default function AuthLanding({ navigation, route }: { navigation: any; ro
       // Send verification email
       try {
         await sendEmailVerification(currentUser);
-        Alert.alert(
-          "Verify Your Email",
-          "We've sent a verification link to your email address. Please check your inbox.",
-          [{ text: "OK" }]
-        );
+        showSuccess("We\u2019ve sent a verification link to your email address. Please check your inbox.");
       } catch (verifyError) {
         // Non-blocking
       }
@@ -639,13 +637,9 @@ export default function AuthLanding({ navigation, route }: { navigation: any; ro
         // Send email verification
         try {
           await sendEmailVerification(userCredential.user);
-          
+
           // Notify user about verification email
-          Alert.alert(
-            "Verify Your Email",
-            "We've sent a verification link to your email address. Please check your inbox and verify your email to complete your account setup.",
-            [{ text: "OK" }]
-          );
+          showSuccess("We\u2019ve sent a verification link to your email address. Please check your inbox and verify your email to complete your account setup.");
         } catch (verifyError) {
           console.warn("[Email Auth] Failed to send verification email:", verifyError);
           // Don't block sign-up if verification email fails

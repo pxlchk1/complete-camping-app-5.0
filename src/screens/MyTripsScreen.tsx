@@ -137,6 +137,17 @@ export default function MyTripsScreen() {
     setShowCreate(true);
   };
 
+  // Respond to a create-trip request from elsewhere (e.g. the Plan Trip
+  // intro modal's "Plan Your First Trip" CTA) via the shared store.
+  const requestCreateTrip = usePlanTabStore((s) => s.requestCreateTrip);
+  const setRequestCreateTrip = usePlanTabStore((s) => s.setRequestCreateTrip);
+  useEffect(() => {
+    if (requestCreateTrip) {
+      setRequestCreateTrip(false);
+      handleCreateTrip();
+    }
+  }, [requestCreateTrip]);
+
   const handleGuestLogin = () => {
     nav.navigate("Auth");
   };

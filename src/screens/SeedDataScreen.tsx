@@ -1,11 +1,13 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, Alert } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { seedCommunityData } from "../scripts/seedCommunityData";
 import { seedBadgeDefinitions } from "../services/meritBadgesService";
+import { useToast } from "../components/ToastManager";
 
 export default function SeedDataScreen({ navigation }: any) {
+  const { showError, showSuccess } = useToast();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -23,15 +25,11 @@ export default function SeedDataScreen({ navigation }: any) {
       const result = await seedBadgeDefinitions();
       setBadgeResult(result);
 
-      Alert.alert(
-        "Success!",
-        `Seeded badges:\n• ${result.created} created\n• ${result.skipped} skipped`,
-        [{ text: "OK" }]
-      );
+      showSuccess(`Seeded badges: ${result.created} created, ${result.skipped} skipped`);
     } catch (err: any) {
       console.error("Badge seed error:", err);
       setBadgeError(err.message || "Failed to seed badges");
-      Alert.alert("Error", err.message || "Failed to seed badges");
+      showError(err.message || "Failed to seed badges");
     } finally {
       setBadgeLoading(false);
     }
@@ -46,15 +44,11 @@ export default function SeedDataScreen({ navigation }: any) {
       const seedResult = await seedCommunityData();
       setResult(seedResult);
 
-      Alert.alert(
-        "Success!",
-        `Seeded community data:\n• ${seedResult.counts.tips} tips\n• ${seedResult.counts.gearReviews} gear reviews\n• ${seedResult.counts.questions} questions\n• ${seedResult.counts.feedback} feedback posts`,
-        [{ text: "OK" }]
-      );
+      showSuccess(`Seeded community data: ${seedResult.counts.tips} tips, ${seedResult.counts.gearReviews} gear reviews, ${seedResult.counts.questions} questions, ${seedResult.counts.feedback} feedback posts`);
     } catch (err: any) {
       console.error("Seed error:", err);
       setError(err.message || "Failed to seed data");
-      Alert.alert("Error", err.message || "Failed to seed data");
+      showError(err.message || "Failed to seed data");
     } finally {
       setLoading(false);
     }

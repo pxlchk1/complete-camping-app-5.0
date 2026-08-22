@@ -10,11 +10,12 @@
  */
 
 import React, { useCallback, useState } from "react";
-import { View, StyleSheet, ActionSheetIOS, Platform, Alert } from "react-native";
+import { View, StyleSheet, ActionSheetIOS, Platform } from "react-native";
 import * as Haptics from "expo-haptics";
 import { ContentActionsMenu, ContentItemType, ConfirmCopy } from "./ContentActionsMenu";
 import { ModerationChip, ModerationRoleLabel } from "./ModerationChip";
 import { useToast } from "../ToastManager";
+import ConfirmationModal from "../ConfirmationModal";
 
 export type LayoutVariant = "cardHeader" | "commentRow" | "compact";
 export type AlignmentVariant = "topRight" | "inlineRight";
@@ -74,6 +75,7 @@ export function ContentActionsAffordance({
 }: ContentActionsAffordanceProps) {
   const { showSuccess, showError } = useToast();
   const [loading, setLoading] = useState(false);
+  const [removeConfirmVisible, setRemoveConfirmVisible] = useState(false);
 
   // Compute permissions
   const isOwner = Boolean(currentUserId && createdByUserId === currentUserId);
@@ -113,38 +115,30 @@ export function ContentActionsAffordance({
   }, [onRequestRemove, roleLabel]);
 
   const confirmRemove = useCallback(() => {
-    const copy = {
-      title: confirmCopy?.removeTitle || "Remove This?",
-      body: confirmCopy?.removeBody || "This removes it for everyone. This can't be undone.",
-      confirm: confirmCopy?.removeConfirm || "Remove",
-    };
+    setRemoveConfirmVisible(true);
+  }, []);
 
-    Alert.alert(
-      copy.title,
-      copy.body,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: copy.confirm,
-          style: "destructive",
-          onPress: async () => {
-            if (!onRequestRemove) return;
-            setLoading(true);
-            try {
-              await onRequestRemove();
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              showSuccess("Removed");
-            } catch (error) {
-              console.error(`[ContentActionsAffordance] Remove failed for ${itemType}:${itemId}`, error);
-              showError("Failed to remove");
-            } finally {
-              setLoading(false);
-            }
-          },
-        },
-      ]
-    );
-  }, [onRequestRemove, confirmCopy, itemType, itemId, showSuccess, showError]);
+  const removeCopy = {
+    title: confirmCopy?.removeTitle || "Remove This?",
+    body: confirmCopy?.removeBody || "This removes it for everyone. This can't be undone.",
+    confirm: confirmCopy?.removeConfirm || "Remove",
+  };
+
+  const handleConfirmedRemove = useCallback(async () => {
+    setRemoveConfirmVisible(false);
+    if (!onRequestRemove) return;
+    setLoading(true);
+    try {
+      await onRequestRemove();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showSuccess("Removed");
+    } catch (error) {
+      console.error(`[ContentActionsAffordance] Remove failed for ${itemType}:${itemId}`, error);
+      showError("Failed to remove");
+    } finally {
+      setLoading(false);
+    }
+  }, [onRequestRemove, itemType, itemId, showSuccess, showError]);
 
   // Determine layout styles
   const containerStyle = [
@@ -185,6 +179,15 @@ export function ContentActionsAffordance({
           iconColor={iconColor}
         />
       )}
+
+      <ConfirmationModal
+        visible={removeConfirmVisible}
+        title={removeCopy.title}
+        message={removeCopy.body}
+        primary={{ label: removeCopy.confirm, iconName: "trash", onPress: handleConfirmedRemove }}
+        secondary={{ label: "Cancel", onPress: () => setRemoveConfirmVisible(false) }}
+        onClose={() => setRemoveConfirmVisible(false)}
+      />
     </View>
   );
 }

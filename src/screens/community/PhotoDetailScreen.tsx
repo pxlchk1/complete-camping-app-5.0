@@ -17,7 +17,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Dimensions,
-  Alert,
   Keyboard,
 } from "react-native";
 import { useRoute, useNavigation } from "@react-navigation/native";
@@ -112,7 +111,7 @@ export default function PhotoDetailScreen() {
   // Edit handler - only for new format posts and owners
   const handleEditPhoto = () => {
     if (!isNewFormat || !photoPost) {
-      Alert.alert("Cannot Edit", "This photo format doesn't support editing.");
+      notifyError(toast, "This photo format doesn\u2019t support editing.");
       return;
     }
     setShowEditModal(true);
@@ -314,12 +313,16 @@ export default function PhotoDetailScreen() {
   const handleSubmitComment = async () => {
     if (submitting) return;
     if (!currentUser) {
-      Alert.alert("Sign in required", "Please sign in to comment.");
+      setShowAccountRequired(true);
       return;
     }
 
     // Require email verification for posting comments
-    const isVerified = await requireEmailVerification("comment on photos");
+    const isVerified = await requireEmailVerification("comment on photos", {
+      show: (msg) => toast.show(msg),
+      showError: (msg) => notifyError(toast, msg),
+      showSuccess: (msg) => notifySuccess(toast, msg),
+    });
     if (!isVerified) return;
 
     if (!commentText.trim()) return;
@@ -350,7 +353,7 @@ export default function PhotoDetailScreen() {
       }
     } catch (error) {
       console.error("Error posting comment:", error);
-      Alert.alert("Error", "Failed to post comment. Please try again.");
+      notifyError(toast, "Failed to post comment. Please try again.");
     } finally {
       setSubmitting(false);
     }

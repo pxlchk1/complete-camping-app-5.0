@@ -1,7 +1,6 @@
 import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -23,6 +22,7 @@ import { auth } from "../../config/firebase";
 import { createGearReview } from "../../services/gearReviewsService";
 import { useCurrentUser } from "../../state/userStore";
 import { requireEmailVerification } from "../../utils/authHelper";
+import { useToast } from "../../components/ToastManager";
 import {
   BORDER_SOFT,
   CARD_BACKGROUND_LIGHT,
@@ -54,6 +54,7 @@ const MAX_PHOTOS = 3;
 export default function CreateGearReviewScreen() {
   const navigation = useNavigation<RootStackNavigationProp>();
   const currentUser = useCurrentUser();
+  const { show, showError, showSuccess } = useToast();
 
   const [category, setCategory] = useState<GearCategory>("tent");
   const [gearName, setGearName] = useState("");
@@ -118,14 +119,14 @@ export default function CreateGearReviewScreen() {
   // Photo picker and upload
   const pickPhoto = useCallback(async () => {
     if (photos.length >= MAX_PHOTOS) {
-      Alert.alert("Limit reached", `You can add up to ${MAX_PHOTOS} photos.`);
+      showError(`You can add up to ${MAX_PHOTOS} photos.`);
       return;
     }
 
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
-        Alert.alert("Permission Required", "Please allow access to your photo library to add images.");
+        showError("Please allow access to your photo library to add images.");
         return;
       }
 
@@ -141,7 +142,7 @@ export default function CreateGearReviewScreen() {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       }
     } catch {
-      Alert.alert("Error", "Failed to pick image");
+      showError("Failed to pick image");
     }
   }, [photos.length]);
 
@@ -173,22 +174,19 @@ export default function CreateGearReviewScreen() {
 
     const user = auth.currentUser;
     if (!user?.uid) {
-      Alert.alert("Sign in required", "Please sign in to post a gear review.");
+      showError("Please sign in to post a gear review.");
       return;
     }
 
     // Require a handle to post reviews (no anonymous)
     const authorHandle = currentUser?.handle;
     if (!authorHandle) {
-      Alert.alert(
-        "Profile Required",
-        "Please set up your profile with a @handle before posting a review."
-      );
+      showError("Please set up your profile with a @handle before posting a review.");
       return;
     }
 
     // Require email verification for posting content
-    const isVerified = await requireEmailVerification("post gear reviews");
+    const isVerified = await requireEmailVerification("post gear reviews", { show, showError, showSuccess });
     if (!isVerified) return;
 
     const trimmedGearName = gearName.trim();
@@ -197,7 +195,7 @@ export default function CreateGearReviewScreen() {
     const trimmedBrand = brand.trim();
 
     if (!trimmedGearName || !trimmedSummary || !trimmedBody || rating <= 0) {
-      Alert.alert("Missing info", "Please fill out all required fields and select a rating.");
+      showError("Please fill out all required fields and select a rating.");
       return;
     }
 
@@ -219,7 +217,7 @@ export default function CreateGearReviewScreen() {
             : uploadError?.code === "storage/quota-exceeded"
             ? "Storage quota exceeded. Please try a smaller image."
             : "Failed to upload photo. Please check your connection and try again.";
-          Alert.alert("Photo Upload Failed", errorMessage);
+          showError(errorMessage);
           setSubmitting(false);
           return;
         } finally {
@@ -248,7 +246,7 @@ export default function CreateGearReviewScreen() {
       });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      Alert.alert("Posted!", "Your gear review has been posted.");
+      showSuccess("Your gear review has been posted.");
       navigation.goBack();
     } catch (e: any) {
       console.error("[CreateGearReview] submit failed:", e);
@@ -256,7 +254,7 @@ export default function CreateGearReviewScreen() {
       const errorMessage = e?.code === "permission-denied"
         ? "You don't have permission to post reviews."
         : e?.message || "Please try again in a moment.";
-      Alert.alert("Couldn't post", errorMessage);
+      showError(errorMessage);
     } finally {
       setSubmitting(false);
     }

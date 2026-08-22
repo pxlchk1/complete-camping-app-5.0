@@ -15,7 +15,6 @@ import {
   ScrollView,
   Pressable,
   TextInput,
-  Alert,
   ActivityIndicator,
   RefreshControl,
 } from "react-native";
@@ -34,6 +33,7 @@ import {
   DocumentSnapshot,
 } from "firebase/firestore";
 import ModalHeader from "../components/ModalHeader";
+import { useToast } from "../components/ToastManager";
 import {
   PARCHMENT,
   CARD_BACKGROUND_LIGHT,
@@ -81,6 +81,7 @@ async function mergeProfileStatus(users: User[]): Promise<User[]> {
 }
 
 export default function AdminUsersScreen() {
+  const { showError, show } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<User[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
@@ -140,7 +141,7 @@ export default function AdminUsersScreen() {
       setHasMore(snapshot.docs.length === PAGE_SIZE);
     } catch (error) {
       console.error("Error loading users:", error);
-      Alert.alert("Error", "Failed to load users");
+      showError("Failed to load users");
     } finally {
       setLoading(false);
       setLoadingMore(false);
@@ -193,11 +194,11 @@ export default function AdminUsersScreen() {
       setSearchResults(results);
 
       if (results.length === 0) {
-        Alert.alert("No results", "No users found matching your search");
+        show("No users found matching your search");
       }
     } catch (error) {
       console.error("Error searching users:", error);
-      Alert.alert("Error", "Failed to search users");
+      showError("Failed to search users");
     } finally {
       setLoading(false);
     }

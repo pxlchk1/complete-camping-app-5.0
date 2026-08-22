@@ -13,7 +13,6 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
-  Alert,
   Image,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
@@ -27,6 +26,8 @@ import { RootStackNavigationProp } from "../navigation/types";
 import ModalHeader from "../components/ModalHeader";
 import { trackGearItemAdded } from "../services/analyticsService";
 import { trackCoreAction } from "../services/userActionTrackerService";
+import { useToast } from "../components/ToastManager";
+import ConfirmationModal from "../components/ConfirmationModal";
 import {
   DEEP_FOREST,
   EARTH_GREEN,
@@ -50,13 +51,15 @@ export default function AddGearScreen() {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [showPhotoOptions, setShowPhotoOptions] = useState(false);
+  const { showError } = useToast();
 
   const handlePickImage = async () => {
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
       if (!permissionResult.granted) {
-        Alert.alert("Permission Required", "Please allow access to your photos to add gear images.");
+        showError("Please allow access to your photos to add gear images.");
         return;
       }
 
@@ -73,7 +76,7 @@ export default function AddGearScreen() {
       }
     } catch (error) {
       console.error("Error picking image:", error);
-      Alert.alert("Error", "Failed to pick image");
+      showError("Failed to pick image");
     }
   };
 
@@ -82,7 +85,7 @@ export default function AddGearScreen() {
       const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
 
       if (!permissionResult.granted) {
-        Alert.alert("Permission Required", "Please allow camera access to take photos.");
+        showError("Please allow camera access to take photos.");
         return;
       }
 
@@ -98,19 +101,19 @@ export default function AddGearScreen() {
       }
     } catch (error) {
       console.error("Error taking photo:", error);
-      Alert.alert("Error", "Failed to take photo");
+      showError("Failed to take photo");
     }
   };
 
   const handleSubmit = async () => {
     const user = auth.currentUser;
     if (!user) {
-      Alert.alert("Error", "You must be signed in to add gear");
+      showError("You must be signed in to add gear");
       return;
     }
 
     if (!name.trim()) {
-      Alert.alert("Name Required", "Please enter a name for this gear");
+      showError("Please enter a name for this gear");
       return;
     }
 
@@ -149,7 +152,7 @@ export default function AddGearScreen() {
       navigation.goBack();
     } catch (error: any) {
       console.error("Error adding gear:", error);
-      Alert.alert("Error", error.message || "Failed to add gear");
+      showError(error.message || "Failed to add gear");
     } finally {
       setSubmitting(false);
     }
@@ -174,17 +177,7 @@ export default function AddGearScreen() {
           {/* Photo Picker */}
           <View className="mb-4 items-center">
             <Pressable
-              onPress={() => {
-                Alert.alert(
-                  "Add Photo",
-                  "Choose a photo for your gear",
-                  [
-                    { text: "Cancel", style: "cancel" },
-                    { text: "Take Photo", onPress: handleTakePhoto },
-                    { text: "Choose from Library", onPress: handlePickImage },
-                  ]
-                );
-              }}
+              onPress={() => setShowPhotoOptions(true)}
               className="w-32 h-32 rounded-xl items-center justify-center active:opacity-70"
               style={{ backgroundColor: CARD_BACKGROUND_LIGHT, borderColor: BORDER_SOFT, borderWidth: 1 }}
             >
@@ -398,6 +391,29 @@ export default function AddGearScreen() {
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <ConfirmationModal
+        visible={showPhotoOptions}
+        title="Add Photo"
+        message="Choose a photo for your gear"
+        primary={{
+          label: "Take Photo",
+          iconName: "camera",
+          onPress: () => {
+            setShowPhotoOptions(false);
+            handleTakePhoto();
+          },
+        }}
+        secondary={{
+          label: "Choose from Library",
+          iconName: "images",
+          onPress: () => {
+            setShowPhotoOptions(false);
+            handlePickImage();
+          },
+        }}
+        onClose={() => setShowPhotoOptions(false)}
+      />
     </View>
   );
 }

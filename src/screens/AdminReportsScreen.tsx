@@ -4,12 +4,14 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, RefreshControl } from "react-native";
+import { View, Text, ScrollView, Pressable, ActivityIndicator, RefreshControl } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { db } from "../config/firebase";
 import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, getDoc, serverTimestamp, orderBy, limit, startAfter, DocumentSnapshot } from "firebase/firestore";
 import ModalHeader from "../components/ModalHeader";
+import ConfirmationModal from "../components/ConfirmationModal";
+import { useToast } from "../components/ToastManager";
 import {
   PARCHMENT,
   CARD_BACKGROUND_LIGHT,
@@ -35,6 +37,7 @@ interface Report {
 const PAGE_SIZE = 50;
 
 export default function AdminReportsScreen() {
+  const { showError, showSuccess } = useToast();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [reports, setReports] = useState<Report[]>([]);
@@ -43,6 +46,7 @@ export default function AdminReportsScreen() {
   const [lastDoc, setLastDoc] = useState<DocumentSnapshot | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [pendingRemoval, setPendingRemoval] = useState<Report | null>(null);
 
   useEffect(() => {
     loadReports();
@@ -87,8 +91,8 @@ export default function AdminReportsScreen() {
       const isPermissionError = errorMessage.includes("permission") || errorMessage.includes("Permission");
 
       if (!isIndexError && !isPermissionError) {
-        // Only show alert for unexpected errors, not missing indexes or empty collections
-        Alert.alert("Error", "Failed to load reports");
+        // Only show a toast for unexpected errors, not missing indexes or empty collections
+        showError("Failed to load reports");
       }
       // Set empty array so UI shows empty state instead of loading forever
       if (!loadMore) setReports([]);
@@ -121,54 +125,48 @@ export default function AdminReportsScreen() {
       setReports(reports.filter(r => r.id !== reportId));
     } catch (error) {
       console.error("Error dismissing report:", error);
-      Alert.alert("Error", "Failed to dismiss report");
+      showError("Failed to dismiss report");
     }
   };
 
-  const handleRemoveContent = async (report: Report) => {
-    Alert.alert(
-      "Remove Content",
-      "Are you sure you want to remove this content? This action cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              // Delete the reported content
-              const contentCollectionMap: Record<string, string> = {
-                tip: "tips",
-                story: "stories",
-                question: "questions",
-                answer: "answers",
-                gearReview: "gearReviews",
-                feedback: "feedbackPosts",
-              };
+  const handleRemoveContent = (report: Report) => {
+    setPendingRemoval(report);
+  };
 
-              const collectionName = contentCollectionMap[report.contentType];
-              if (collectionName) {
-                await deleteDoc(doc(db, collectionName, report.contentId));
-              }
+  const confirmRemoveContent = async () => {
+    if (!pendingRemoval) return;
+    const report = pendingRemoval;
+    setPendingRemoval(null);
+    try {
+      // Delete the reported content
+      const contentCollectionMap: Record<string, string> = {
+        tip: "tips",
+        story: "stories",
+        question: "questions",
+        answer: "answers",
+        gearReview: "gearReviews",
+        feedback: "feedbackPosts",
+      };
 
-              // Update report status
-              await updateDoc(doc(db, "reports", report.id), {
-                status: "reviewed",
-                action: "content_removed",
-                reviewedAt: serverTimestamp(),
-              });
+      const collectionName = contentCollectionMap[report.contentType];
+      if (collectionName) {
+        await deleteDoc(doc(db, collectionName, report.contentId));
+      }
 
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              setReports(reports.filter(r => r.id !== report.id));
-              Alert.alert("Success", "Content removed successfully");
-            } catch (error) {
-              console.error("Error removing content:", error);
-              Alert.alert("Error", "Failed to remove content");
-            }
-          },
-        },
-      ]
-    );
+      // Update report status
+      await updateDoc(doc(db, "reports", report.id), {
+        status: "reviewed",
+        action: "content_removed",
+        reviewedAt: serverTimestamp(),
+      });
+
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setReports(reports.filter(r => r.id !== report.id));
+      showSuccess("Content removed successfully");
+    } catch (error) {
+      console.error("Error removing content:", error);
+      showError("Failed to remove content");
+    }
   };
 
   if (loading) {
@@ -339,6 +337,15 @@ export default function AdminReportsScreen() {
           )}
         </View>
       </ScrollView>
+
+      <ConfirmationModal
+        visible={!!pendingRemoval}
+        title="Remove Content"
+        message="Are you sure you want to remove this content? This action cannot be undone."
+        primary={{ label: "Remove", iconName: "trash", onPress: confirmRemoveContent }}
+        secondary={{ label: "Cancel", onPress: () => setPendingRemoval(null) }}
+        onClose={() => setPendingRemoval(null)}
+      />
     </View>
   );
 }

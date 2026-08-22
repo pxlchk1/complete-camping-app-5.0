@@ -11,7 +11,6 @@ import {
   Pressable,
   FlatList,
   ActivityIndicator,
-  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -21,6 +20,7 @@ import { Trip, useTripsStore } from "../state/tripsStore";
 import { GearItem } from "../types/gear";
 import { usePackingStore } from "../state/packingStore";
 import { getPackingSectionForGear } from "../utils/gearToPackingCategory";
+import { useToast } from "./ToastManager";
 import {
   DEEP_FOREST,
   EARTH_GREEN,
@@ -44,6 +44,7 @@ export default function TripPickerModal({
   gearItem,
   onSuccess,
 }: TripPickerModalProps) {
+  const { show } = useToast();
   const trips = useTripsStore((state) => state.trips);
   const packingLists = usePackingStore((state) => state.packingLists);
   const addGearItemToList = usePackingStore((state) => state.addGearItemToList);
@@ -73,10 +74,7 @@ export default function TripPickerModal({
     const targetList = packingLists.find((list) => list.tripId === tripId && !list.isTemplate);
 
     if (!targetList) {
-      Alert.alert(
-        "No packing list yet",
-        "Create a packing list for this trip first, then you can add gear to it from here."
-      );
+      show("Create a packing list for this trip first, then you can add gear to it from here.");
       setAdding(false);
       setSelectedTripId(null);
       return;
@@ -86,7 +84,7 @@ export default function TripPickerModal({
     const result = addGearItemToList(targetList.id, { id: gearItem.id, name: gearItem.name }, sectionTitle);
 
     if (result.alreadyExists) {
-      Alert.alert("Already in packing list", `${gearItem.name} is already on this trip's list`);
+      show(`${gearItem.name} is already on this trip\u2019s list`);
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onSuccess?.();

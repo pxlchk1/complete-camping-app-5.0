@@ -15,6 +15,11 @@ interface PlanTabState {
   // When set, Weather screen will navigate back to TripDetail after adding weather
   weatherPickerTripId: string | null;
   setWeatherPickerTripId: (tripId: string | null) => void;
+
+  // Set true to ask MyTripsScreen to open its create-trip flow (e.g. from the
+  // Plan Trip intro modal's final slide). MyTripsScreen resets it after acting on it.
+  requestCreateTrip: boolean;
+  setRequestCreateTrip: (request: boolean) => void;
 }
 
 export const usePlanTabStore = create<PlanTabState>((set) => ({
@@ -26,4 +31,7 @@ export const usePlanTabStore = create<PlanTabState>((set) => ({
   
   weatherPickerTripId: null,
   setWeatherPickerTripId: (tripId) => set({ weatherPickerTripId: tripId }),
+
+  requestCreateTrip: false,
+  setRequestCreateTrip: (request) => set({ requestCreateTrip: request }),
 }));

@@ -11,10 +11,11 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { View, Text, ScrollView, Pressable, Alert, Modal } from "react-native";
+import { View, Text, ScrollView, Pressable, Modal } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
+import { useToast } from "./ToastManager";
 
 import {
   LNTQuestion,
@@ -43,6 +44,7 @@ interface LNTQuizProps {
 
 export default function LNTQuizComponent({ onComplete, onBack }: LNTQuizProps) {
   const insets = useSafeAreaInsets();
+  const { showError } = useToast();
 
   // Quiz state
   const [questions, setQuestions] = useState<LNTQuestion[]>([]);
@@ -116,7 +118,7 @@ export default function LNTQuizComponent({ onComplete, onBack }: LNTQuizProps) {
   // Handle submit answer (show explanation)
   const handleSubmitAnswer = useCallback(() => {
     if (!isAnswered) {
-      Alert.alert("Select an Answer", "Please select an answer before continuing.");
+      showError("Please select an answer before continuing.");
       return;
     }
 

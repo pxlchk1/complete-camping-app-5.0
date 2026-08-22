@@ -10,7 +10,6 @@ import {
   ScrollView,
   Pressable,
   ActivityIndicator,
-  Alert,
   Share,
 } from "react-native";
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from "@react-navigation/native";
@@ -32,6 +31,8 @@ import { useTripsStore } from "../state/tripsStore";
 import ModalHeader from "../components/ModalHeader";
 import { requirePro } from "../utils/gating";
 import AccountRequiredModal from "../components/AccountRequiredModal";
+import ConfirmationModal from "../components/ConfirmationModal";
+import { useToast } from "../components/ToastManager";
 import UpsellModal from "../components/UpsellModal";
 import { useUpsellStore, UPSELL_COPY } from "../state/upsellStore";
 import { useUserStore } from "../state/userStore";
@@ -61,6 +62,7 @@ export default function AddPeopleToTripScreen() {
   const route = useRoute<RouteProp<RootStackParamList, "AddPeopleToTrip">>();
   const { tripId } = route.params;
 
+  const { showError } = useToast();
   const trip = useTripsStore((s) => s.getTripById(tripId));
   const updateTrip = useTripsStore((s) => s.updateTrip);
 
@@ -117,7 +119,7 @@ export default function AddPeopleToTripScreen() {
   const loadRoster = async () => {
     const user = auth.currentUser;
     if (!user) {
-      Alert.alert("Error", "You must be signed in");
+      showError("You must be signed in");
       navigation.goBack();
       return;
     }
@@ -131,7 +133,7 @@ export default function AddPeopleToTripScreen() {
       setFriends(friendsData);
     } catch (error: any) {
       console.error("Error loading trip roster:", error);
-      Alert.alert("Error", "Failed to load your friends and guests");
+      showError("Failed to load your friends and guests");
     } finally {
       setLoading(false);
     }
@@ -172,7 +174,7 @@ export default function AddPeopleToTripScreen() {
 
   const handleSubmit = async () => {
     if (selectedIds.size === 0) {
-      Alert.alert("No Selection", "Please select at least one person to add");
+      showError("Please select at least one person to add");
       return;
     }
 
@@ -257,7 +259,7 @@ export default function AddPeopleToTripScreen() {
       }
     } catch (error: any) {
       console.error("Error adding participants:", error);
-      Alert.alert("Error", error.message || "Failed to add people to trip");
+      showError(error.message || "Failed to add people to trip");
     } finally {
       setSubmitting(false);
     }
@@ -270,6 +272,7 @@ export default function AddPeopleToTripScreen() {
   };
 
   const [sharingLink, setSharingLink] = useState(false);
+  const [showSharePermissionOptions, setShowSharePermissionOptions] = useState(false);
 
   const handleShareViaLink = () => {
     if (!requirePro({
@@ -280,15 +283,7 @@ export default function AddPeopleToTripScreen() {
     }
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    Alert.alert(
-      "Share trip link",
-      "What can they do with this trip?",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "View only", onPress: () => createAndShareInvite("view") },
-        { text: "Can plan and edit", onPress: () => createAndShareInvite("edit") },
-      ]
-    );
+    setShowSharePermissionOptions(true);
   };
 
   const createAndShareInvite = async (permission: TripSharePermission) => {
@@ -308,7 +303,7 @@ export default function AddPeopleToTripScreen() {
       await Share.share({ message });
     } catch (error: any) {
       console.error("Error sharing trip invite:", error);
-      Alert.alert("Error", error.message || "Failed to create share link");
+      showError(error.message || "Failed to create share link");
     } finally {
       setSharingLink(false);
     }
@@ -569,6 +564,29 @@ export default function AddPeopleToTripScreen() {
           recordModalDismissal();
           navigation.goBack();
         }}
+      />
+
+      <ConfirmationModal
+        visible={showSharePermissionOptions}
+        title="Share trip link"
+        message="What can they do with this trip?"
+        primary={{
+          label: "View only",
+          iconName: "eye",
+          onPress: () => {
+            setShowSharePermissionOptions(false);
+            createAndShareInvite("view");
+          },
+        }}
+        secondary={{
+          label: "Can plan and edit",
+          iconName: "create",
+          onPress: () => {
+            setShowSharePermissionOptions(false);
+            createAndShareInvite("edit");
+          },
+        }}
+        onClose={() => setShowSharePermissionOptions(false)}
       />
     </View>
   );

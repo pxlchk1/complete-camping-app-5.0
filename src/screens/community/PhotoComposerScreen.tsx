@@ -14,7 +14,6 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Alert,
   Keyboard,
   TouchableWithoutFeedback,
 } from "react-native";
@@ -31,6 +30,7 @@ import { RootStackNavigationProp } from "../../navigation/types";
 import { createPhotoPost } from "../../services/photoPostsService";
 import { getConnectDisplayHandle } from "../../services/handleService";
 import { requireEmailVerification } from "../../utils/authHelper";
+import { useToast } from "../../components/ToastManager";
 import { recordPhotoUpload, canUploadPhotoToday } from "../../services/photoLimitService";
 import {
   PhotoPostType,
@@ -94,6 +94,7 @@ export default function PhotoComposerScreen() {
   const currentUser = useCurrentUser();
   const trips = useTripsStore((s) => s.trips);
   const loadTrips = useTripsStore((s) => s.loadTrips);
+  const { show, showError, showSuccess } = useToast();
 
   // Trips may not be loaded yet if the user reached this screen without
   // visiting the Plan tab this session - the trip-tagging picker below
@@ -149,7 +150,7 @@ export default function PhotoComposerScreen() {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
       if (!permissionResult.granted) {
-        Alert.alert("Permission Required", "Please allow access to your photo library to upload images.");
+        showError("Please allow access to your photo library to upload images.");
         return;
       }
 
@@ -208,7 +209,7 @@ export default function PhotoComposerScreen() {
     if (!currentUser || !imageUri || !postType || !caption.trim() || uploading) return;
 
     // Require email verification for posting content
-    const isVerified = await requireEmailVerification("share photos");
+    const isVerified = await requireEmailVerification("share photos", { show, showError, showSuccess });
     if (!isVerified) return;
 
     if (caption.length < 10) {

@@ -20,7 +20,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Modal,
-  Alert,
   Switch,
   Linking,
 } from "react-native";
@@ -194,19 +193,19 @@ export default function EditProfileScreen() {
 
     // Validate first name
     if (!displayName.trim()) {
-      Alert.alert("Required Field", "Please enter your first name");
+      notifyError(toast, "Please enter your first name");
       return;
     }
 
     if (displayName.length < 1 || displayName.length > 50) {
-      Alert.alert("Invalid Name", "First name must be between 1 and 50 characters");
+      notifyError(toast, "First name must be between 1 and 50 characters");
       return;
     }
 
     // Validate handle (shared rules — see constants/reservedHandles.ts)
     const handleError = validateHandle(handle, isAdminEmail(user.email));
     if (handleError) {
-      Alert.alert("Invalid Handle", handleError);
+      notifyError(toast, handleError);
       return;
     }
     const cleanHandle = handle.trim().toLowerCase();
@@ -221,7 +220,7 @@ export default function EditProfileScreen() {
         const reserved = await reserveHandle(user.uid, cleanHandle);
         if (!reserved) {
           setSaving(false);
-          Alert.alert("Handle Taken", "This handle is already taken. Please choose a different one.");
+          notifyError(toast, "This handle is already taken. Please choose a different one.");
           return;
         }
       }
@@ -276,9 +275,9 @@ export default function EditProfileScreen() {
     } catch (error: any) {
       console.error("[EditProfile] Error saving:", error);
       if (error.code === "permission-denied") {
-        Alert.alert("Error", "You do not have permission to update these settings. Please try signing out and back in.");
+        notifyError(toast, "You do not have permission to update these settings. Please try signing out and back in.");
       } else {
-        Alert.alert("Error", error.message || "Failed to save profile");
+        notifyError(toast, error.message || "Failed to save profile");
       }
     } finally {
       setSaving(false);
@@ -370,7 +369,7 @@ export default function EditProfileScreen() {
       }
     } catch (error) {
       console.error("[EditProfile] Error uploading cover photo:", error);
-      Alert.alert("Upload Failed", "Failed to save cover photo. Please try again.");
+      notifyError(toast, "Failed to save cover photo. Please try again.");
     } finally {
       setUploadingCover(false);
     }
@@ -384,7 +383,7 @@ export default function EditProfileScreen() {
     // confirmation gesture for this destructive action; no extra
     // native alert is stacked on top of it.
     if (deleteConfirmEmail.toLowerCase() !== user.email.toLowerCase()) {
-      Alert.alert("Email Mismatch", "The email you entered doesn't match your account email.");
+      notifyError(toast, "The email you entered doesn\u2019t match your account email.");
       return;
     }
 
@@ -413,12 +412,9 @@ export default function EditProfileScreen() {
       console.error("[EditProfile] Error deleting account:", error);
 
       if (error.code === "auth/requires-recent-login") {
-        Alert.alert(
-          "Re-authentication Required",
-          "For security, please sign out and sign back in, then try again."
-        );
+        notifyError(toast, "For security, please sign out and sign back in, then try again.");
       } else {
-        Alert.alert("Delete Failed", "Unable to delete account. Please contact support.");
+        notifyError(toast, "Unable to delete account. Please contact support.");
       }
     } finally {
       setDeleting(false);
@@ -435,7 +431,7 @@ export default function EditProfileScreen() {
       }
     } catch (error) {
       console.error("[EditProfile] Error opening subscription management:", error);
-      Alert.alert("Error", "Unable to open subscription management.");
+      notifyError(toast, "Unable to open subscription management.");
     }
   };
 
@@ -563,7 +559,7 @@ export default function EditProfileScreen() {
     const result = await changePassword(currentPassword, newPassword, confirmPassword);
 
     if (!result.success) {
-      Alert.alert("Couldn't Update Password", result.error);
+      notifyError(toast, result.error);
       return;
     }
 

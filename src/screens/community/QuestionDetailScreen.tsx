@@ -6,12 +6,13 @@
  */
 
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, Alert } from "react-native";
+import { View, Text, Pressable, ScrollView, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform } from "react-native";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import ModalHeader from "../../components/ModalHeader";
 import VotePill from "../../components/VotePill";
 import AccountRequiredModal from "../../components/AccountRequiredModal";
+import ConfirmationModal from "../../components/ConfirmationModal";
 import { ContentActionsAffordance } from "../../components/contentActions";
 import HiddenReviewBanner from "../../components/HiddenReviewBanner";
 import { requireEmailVerification } from "../../utils/authHelper";
@@ -65,6 +66,7 @@ export default function QuestionDetailScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [authorName, setAuthorName] = useState<string | null>(null);
   const [showAccountRequired, setShowAccountRequired] = useState(false);
+  const [pendingQuestionAction, setPendingQuestionAction] = useState<"delete" | "remove" | null>(null);
 
   // Permission checks for content actions
   const canModerate = currentUser ? canModerateContent(currentUser as User) : false;
@@ -86,57 +88,26 @@ export default function QuestionDetailScreen() {
 
   // Content action handlers
   const handleDeleteQuestion = async () => {
-    Alert.alert(
-      "Delete Question",
-      "Are you sure you want to delete this question? This action cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            const result = await deleteQuestion(questionId);
-            if (result.success) {
-              Alert.alert("Success", "Question deleted successfully");
-              navigation.goBack();
-            } else {
-              console.error("[QuestionDetail] Delete failed:", result.error);
-              Alert.alert(
-                "Error",
-                result.error?.message || "Failed to delete question"
-              );
-            }
-          },
-        },
-      ]
-    );
+    setPendingQuestionAction("delete");
   };
 
   const handleRemoveQuestion = async () => {
-    Alert.alert(
-      "Remove Question",
-      "Are you sure you want to remove this question? This moderation action cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: async () => {
-            const result = await deleteQuestion(questionId);
-            if (result.success) {
-              Alert.alert("Success", "Question removed successfully");
-              navigation.goBack();
-            } else {
-              console.error("[QuestionDetail] Remove failed:", result.error);
-              Alert.alert(
-                "Error",
-                result.error?.message || "Failed to remove question"
-              );
-            }
-          },
-        },
-      ]
-    );
+    setPendingQuestionAction("remove");
+  };
+
+  const confirmPendingQuestionAction = async () => {
+    const mode = pendingQuestionAction;
+    setPendingQuestionAction(null);
+    if (!mode) return;
+
+    const result = await deleteQuestion(questionId);
+    if (result.success) {
+      notifySuccess(toast, mode === "delete" ? "Question deleted successfully" : "Question removed successfully");
+      navigation.goBack();
+    } else {
+      console.error(`[QuestionDetail] ${mode} failed:`, result.error);
+      notifyError(toast, result.error?.message || `Failed to ${mode} question`);
+    }
   };
 
   useEffect(() => {
@@ -208,7 +179,11 @@ export default function QuestionDetailScreen() {
     }
 
     // Require email verification for posting answers
-    const isVerified = await requireEmailVerification("answer questions");
+    const isVerified = await requireEmailVerification("answer questions", {
+      show: (msg) => toast.show(msg),
+      showError: (msg) => notifyError(toast, msg),
+      showSuccess: (msg) => notifySuccess(toast, msg),
+    });
     if (!isVerified) return;
     
     if (!answerText.trim() || submitting) return;
@@ -448,7 +423,7 @@ export default function QuestionDetailScreen() {
                             setAnswers(prev => prev.filter(a => a.id !== answer.id));
                           } else {
                             console.error("[QuestionDetail] Delete answer failed:", result.error);
-                            Alert.alert("Error", result.error?.message || "Failed to delete answer");
+                            notifyError(toast, result.error?.message || "Failed to delete answer");
                           }
                         }}
                         onRequestRemove={async () => {
@@ -457,7 +432,7 @@ export default function QuestionDetailScreen() {
                             setAnswers(prev => prev.filter(a => a.id !== answer.id));
                           } else {
                             console.error("[QuestionDetail] Remove answer failed:", result.error);
-                            Alert.alert("Error", result.error?.message || "Failed to remove answer");
+                            notifyError(toast, result.error?.message || "Failed to remove answer");
                           }
                         }}
                         layout="commentRow"
@@ -576,6 +551,23 @@ export default function QuestionDetailScreen() {
           navigation.navigate("Auth");
         }}
         onMaybeLater={() => setShowAccountRequired(false)}
+      />
+
+      <ConfirmationModal
+        visible={!!pendingQuestionAction}
+        title={pendingQuestionAction === "remove" ? "Remove Question" : "Delete Question"}
+        message={
+          pendingQuestionAction === "remove"
+            ? "Are you sure you want to remove this question? This moderation action cannot be undone."
+            : "Are you sure you want to delete this question? This action cannot be undone."
+        }
+        primary={{
+          label: pendingQuestionAction === "remove" ? "Remove" : "Delete",
+          iconName: "trash",
+          onPress: confirmPendingQuestionAction,
+        }}
+        secondary={{ label: "Cancel", onPress: () => setPendingQuestionAction(null) }}
+        onClose={() => setPendingQuestionAction(null)}
       />
     </View>
   );

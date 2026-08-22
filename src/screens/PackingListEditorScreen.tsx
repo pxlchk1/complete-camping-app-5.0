@@ -11,7 +11,6 @@ import {
   ScrollView,
   Pressable,
   TextInput,
-  Alert,
   Modal,
   KeyboardAvoidingView,
   Platform,
@@ -50,6 +49,8 @@ import { useUpsellStore, UPSELL_COPY } from "../state/upsellStore";
 import { useUserStore } from "../state/userStore";
 import { trackUpsellModalViewed, trackUpsellCtaClicked } from "../services/analyticsService";
 import { PaywallPlacement } from "../config/paywallPlacements";
+import ConfirmationModal from "../components/ConfirmationModal";
+import { useToast } from "../components/ToastManager";
 
 type PackingListEditorRouteProp = RouteProp<{ PackingListEditor: { listId: string } }, "PackingListEditor">;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -70,27 +71,21 @@ interface SwipeableItemProps {
 function SwipeableItem({ item, listId, sectionId, onToggle, onDelete, onEdit }: SwipeableItemProps) {
   const translateX = useSharedValue(0);
   const [isArmed, setIsArmed] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const handleDelete = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Alert.alert(
-      "Delete Item?",
-      `Remove "${item.name}" from this list?`,
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-          onPress: () => {
-            translateX.value = withSpring(0);
-          },
-        },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: onDelete,
-        },
-      ]
-    );
+    setShowDeleteConfirm(true);
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteConfirm(false);
+    translateX.value = withSpring(0);
+  };
+
+  const confirmDelete = () => {
+    setShowDeleteConfirm(false);
+    onDelete();
   };
 
   const panGesture = Gesture.Pan()
@@ -220,6 +215,15 @@ function SwipeableItem({ item, listId, sectionId, onToggle, onDelete, onEdit }: 
           )}
         </Animated.View>
       </GestureDetector>
+
+      <ConfirmationModal
+        visible={showDeleteConfirm}
+        title="Delete Item?"
+        message={`Remove "${item.name}" from this list?`}
+        primary={{ label: "Delete", iconName: "trash", onPress: confirmDelete }}
+        secondary={{ label: "Cancel", onPress: cancelDelete }}
+        onClose={cancelDelete}
+      />
     </View>
   );
 }
@@ -260,6 +264,12 @@ export default function PackingListEditorScreen() {
   // Bulk selection state
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [pendingDeleteSection, setPendingDeleteSection] = useState<{ id: string; title: string } | null>(null);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showUseAsNewListConfirm, setShowUseAsNewListConfirm] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const { show } = useToast();
 
   // Upsell state
   const { hasUsedFreeTrip, setHasUsedFreeTrip } = useUserStore();
@@ -324,29 +334,19 @@ export default function PackingListEditorScreen() {
   }, []);
 
   const handleDeleteSelected = useCallback(() => {
-    const count = selectedKeys.size;
-    if (count === 0) return;
+    if (selectedKeys.size === 0) return;
+    setShowBulkDeleteConfirm(true);
+  }, [selectedKeys]);
 
-    Alert.alert(
-      "Delete Items",
-      `Remove ${count} selected item${count === 1 ? "" : "s"} from this list?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => {
-            selectedKeys.forEach((key) => {
-              const [sectionId, itemId] = key.split(":");
-              deleteItem(listId, sectionId, itemId);
-            });
-            setSelectedKeys(new Set());
-            setSelectionMode(false);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          },
-        },
-      ]
-    );
+  const confirmDeleteSelected = useCallback(() => {
+    setShowBulkDeleteConfirm(false);
+    selectedKeys.forEach((key) => {
+      const [sectionId, itemId] = key.split(":");
+      deleteItem(listId, sectionId, itemId);
+    });
+    setSelectedKeys(new Set());
+    setSelectionMode(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, [selectedKeys, listId, deleteItem]);
 
   // Handle edit item
@@ -402,39 +402,25 @@ export default function PackingListEditorScreen() {
 
   // Handle delete section
   const handleDeleteSection = useCallback((sectionId: string, sectionTitle: string) => {
-    Alert.alert(
-      "Delete Section",
-      `Delete "${sectionTitle}" and all its items?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => {
-            deleteSection(listId, sectionId);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          },
-        },
-      ]
-    );
-  }, [listId, deleteSection]);
+    setPendingDeleteSection({ id: sectionId, title: sectionTitle });
+  }, []);
+
+  const confirmDeleteSection = useCallback(() => {
+    if (!pendingDeleteSection) return;
+    deleteSection(listId, pendingDeleteSection.id);
+    setPendingDeleteSection(null);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, [listId, deleteSection, pendingDeleteSection]);
 
   // Handle reset list
   const handleResetList = useCallback(() => {
-    Alert.alert(
-      "Reset List",
-      "Mark all items as unpacked?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Reset",
-          onPress: () => {
-            uncheckAllItems(listId);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          },
-        },
-      ]
-    );
+    setShowResetConfirm(true);
+  }, []);
+
+  const confirmResetList = useCallback(() => {
+    setShowResetConfirm(false);
+    uncheckAllItems(listId);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, [listId, uncheckAllItems]);
 
   // Handle share/export
@@ -459,56 +445,28 @@ export default function PackingListEditorScreen() {
 
     await Clipboard.setStringAsync(text);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    Alert.alert("Copied!", "Packing list copied to clipboard");
-  }, [list, progress]);
+    show("Packing list copied to clipboard");
+  }, [list, progress, show]);
 
   // Handle use as template (copy to new list)
   const handleUseAsNewList = useCallback(() => {
     if (!list) return;
-    
-    Alert.alert(
-      "Create New List",
-      `Create a new packing list from "${list.name}"?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Create",
-          onPress: () => {
-            const newListId = copyTemplateToTrip(listId);
-            if (newListId) {
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              navigation.replace("PackingListEditor" as any, { listId: newListId });
-            }
-          },
-        },
-      ]
-    );
-  }, [list, listId, copyTemplateToTrip, navigation]);
+    setShowUseAsNewListConfirm(true);
+  }, [list]);
+
+  const confirmUseAsNewList = useCallback(() => {
+    setShowUseAsNewListConfirm(false);
+    const newListId = copyTemplateToTrip(listId);
+    if (newListId) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      navigation.replace("PackingListEditor" as any, { listId: newListId });
+    }
+  }, [listId, copyTemplateToTrip, navigation]);
 
   // More menu - different options based on whether it's a template
   const handleMoreMenu = useCallback(() => {
-    const isTemplate = list?.isTemplate;
-    
-    const options: any[] = [
-      { text: "Select Items to Delete", onPress: () => setSelectionMode(true) },
-      { text: "Add Section", onPress: () => setShowAddSection(true) },
-      { text: "Reset All Items", onPress: handleResetList },
-      { text: "Share List", onPress: handleShare },
-    ];
-
-    if (isTemplate) {
-      // Template-specific options
-      options.push({ text: "Create List from Template", onPress: handleUseAsNewList });
-    }
-
-    options.push({ text: "Cancel", style: "cancel" });
-
-    Alert.alert(
-      isTemplate ? "Template Options" : "Options",
-      undefined,
-      options
-    );
-  }, [list, handleResetList, handleShare, handleUseAsNewList]);
+    setShowMoreMenu(true);
+  }, []);
 
   if (!list) {
     return (
@@ -1059,6 +1017,136 @@ export default function PackingListEditorScreen() {
             setShowPackingModal(false);
             recordModalDismissal();
           }}
+        />
+
+        {/* More Menu Action Sheet */}
+        <Modal
+          visible={showMoreMenu}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowMoreMenu(false)}
+        >
+          <Pressable
+            className="flex-1 justify-end"
+            style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+            onPress={() => setShowMoreMenu(false)}
+          >
+            <View className="bg-white rounded-t-3xl px-4 pt-4" style={{ paddingBottom: insets.bottom + 16 }}>
+              <Text
+                className="text-center mb-2"
+                style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 13, color: EARTH_GREEN }}
+              >
+                {list.isTemplate ? "Template Options" : "Options"}
+              </Text>
+              <Pressable
+                className="py-4 border-t items-center"
+                style={{ borderColor: BORDER_SOFT }}
+                onPress={() => {
+                  setShowMoreMenu(false);
+                  setSelectionMode(true);
+                }}
+              >
+                <Text style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 16, color: DEEP_FOREST }}>
+                  Select Items to Delete
+                </Text>
+              </Pressable>
+              <Pressable
+                className="py-4 border-t items-center"
+                style={{ borderColor: BORDER_SOFT }}
+                onPress={() => {
+                  setShowMoreMenu(false);
+                  setShowAddSection(true);
+                }}
+              >
+                <Text style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 16, color: DEEP_FOREST }}>
+                  Add Section
+                </Text>
+              </Pressable>
+              <Pressable
+                className="py-4 border-t items-center"
+                style={{ borderColor: BORDER_SOFT }}
+                onPress={() => {
+                  setShowMoreMenu(false);
+                  handleResetList();
+                }}
+              >
+                <Text style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 16, color: DEEP_FOREST }}>
+                  Reset All Items
+                </Text>
+              </Pressable>
+              <Pressable
+                className="py-4 border-t items-center"
+                style={{ borderColor: BORDER_SOFT }}
+                onPress={() => {
+                  setShowMoreMenu(false);
+                  handleShare();
+                }}
+              >
+                <Text style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 16, color: DEEP_FOREST }}>
+                  Share List
+                </Text>
+              </Pressable>
+              {list.isTemplate && (
+                <Pressable
+                  className="py-4 border-t items-center"
+                  style={{ borderColor: BORDER_SOFT }}
+                  onPress={() => {
+                    setShowMoreMenu(false);
+                    handleUseAsNewList();
+                  }}
+                >
+                  <Text style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 16, color: DEEP_FOREST }}>
+                    Create List from Template
+                  </Text>
+                </Pressable>
+              )}
+              <Pressable
+                className="mt-3 py-3 rounded-xl items-center"
+                style={{ backgroundColor: "#F5F0E6" }}
+                onPress={() => setShowMoreMenu(false)}
+              >
+                <Text style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 16, color: EARTH_GREEN }}>
+                  Cancel
+                </Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Modal>
+
+        <ConfirmationModal
+          visible={showBulkDeleteConfirm}
+          title="Delete Items"
+          message={`Remove ${selectedKeys.size} selected item${selectedKeys.size === 1 ? "" : "s"} from this list?`}
+          primary={{ label: "Delete", iconName: "trash", onPress: confirmDeleteSelected }}
+          secondary={{ label: "Cancel", onPress: () => setShowBulkDeleteConfirm(false) }}
+          onClose={() => setShowBulkDeleteConfirm(false)}
+        />
+
+        <ConfirmationModal
+          visible={!!pendingDeleteSection}
+          title="Delete Section"
+          message={pendingDeleteSection ? `Delete "${pendingDeleteSection.title}" and all its items?` : undefined}
+          primary={{ label: "Delete", iconName: "trash", onPress: confirmDeleteSection }}
+          secondary={{ label: "Cancel", onPress: () => setPendingDeleteSection(null) }}
+          onClose={() => setPendingDeleteSection(null)}
+        />
+
+        <ConfirmationModal
+          visible={showResetConfirm}
+          title="Reset List"
+          message="Mark all items as unpacked?"
+          primary={{ label: "Reset", iconName: "refresh", onPress: confirmResetList }}
+          secondary={{ label: "Cancel", onPress: () => setShowResetConfirm(false) }}
+          onClose={() => setShowResetConfirm(false)}
+        />
+
+        <ConfirmationModal
+          visible={showUseAsNewListConfirm}
+          title="Create New List"
+          message={list ? `Create a new packing list from "${list.name}"?` : undefined}
+          primary={{ label: "Create", iconName: "copy", onPress: confirmUseAsNewList }}
+          secondary={{ label: "Cancel", onPress: () => setShowUseAsNewListConfirm(false) }}
+          onClose={() => setShowUseAsNewListConfirm(false)}
         />
       </View>
     </GestureHandlerRootView>

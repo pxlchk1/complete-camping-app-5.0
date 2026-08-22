@@ -10,13 +10,13 @@ import {
   TextInput,
   Pressable,
   ActivityIndicator,
-  Alert,
   ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { hideContent, unhideContent } from "../services/userService";
 import { ContentModeration } from "../types/user";
+import { useToast } from "./ToastManager";
 import {
   DEEP_FOREST,
   EARTH_GREEN,
@@ -29,6 +29,7 @@ interface ModeratorPanelProps {
 }
 
 export default function ModeratorPanel({ currentUserId }: ModeratorPanelProps) {
+  const { showError, showSuccess } = useToast();
   const [contentType, setContentType] = useState<ContentModeration["contentType"]>("photo");
   const [contentId, setContentId] = useState("");
   const [contentOwnerId, setContentOwnerId] = useState("");
@@ -45,17 +46,17 @@ export default function ModeratorPanel({ currentUserId }: ModeratorPanelProps) {
 
   const handleHideContent = async () => {
     if (!contentId.trim()) {
-      Alert.alert("Error", "Please enter content ID");
+      showError("Please enter content ID");
       return;
     }
 
     if (!contentOwnerId.trim()) {
-      Alert.alert("Error", "Please enter content owner user ID");
+      showError("Please enter content owner user ID");
       return;
     }
 
     if (!reason.trim()) {
-      Alert.alert("Error", "Please provide a reason for hiding");
+      showError("Please provide a reason for hiding");
       return;
     }
 
@@ -69,13 +70,13 @@ export default function ModeratorPanel({ currentUserId }: ModeratorPanelProps) {
         reason.trim()
       );
 
-      Alert.alert("Success", `Hidden ${contentType} content`);
+      showSuccess(`Hidden ${contentType} content`);
       setContentId("");
       setContentOwnerId("");
       setReason("");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error: any) {
-      Alert.alert("Error", error.message || "Failed to hide content");
+      showError(error.message || "Failed to hide content");
     } finally {
       setLoading(false);
     }

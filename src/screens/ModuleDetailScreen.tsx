@@ -14,7 +14,6 @@ import {
   ScrollView,
   Pressable,
   ActivityIndicator,
-  Alert,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Image,
@@ -55,6 +54,7 @@ import {
 import { getLearningTrackBadgeImage } from "../assets/images/merit_badges/learningTrackBadgeImages";
 import { useSubscriptionStore } from "../state/subscriptionStore";
 import UpsellModal from "../components/UpsellModal";
+import { useToast } from "../components/ToastManager";
 import { trackUpsellModalViewed, trackUpsellCtaClicked, trackUpsellModalDismissed } from "../services/analyticsService";
 
 type ModuleDetailRouteProp = RouteProp<RootStackParamList, "ModuleDetail">;
@@ -144,6 +144,7 @@ export default function ModuleDetailScreen() {
   const navigation = useNavigation<ModuleDetailNavigationProp>();
   const route = useRoute<ModuleDetailRouteProp>();
   const { moduleId } = route.params;
+  const { showError } = useToast();
 
   const [module, setModule] = useState<ModuleWithProgress | null>(null);
   const [loading, setLoading] = useState(true);
@@ -228,7 +229,7 @@ export default function ModuleDetailScreen() {
     // Check all questions answered
     const allAnswered = module.quiz.every((q) => quizAnswers[q.id] !== undefined);
     if (!allAnswered) {
-      Alert.alert("Complete the Quiz", "Please answer all questions before submitting.");
+      showError("Please answer all questions before submitting.");
       return;
     }
     
@@ -266,7 +267,7 @@ export default function ModuleDetailScreen() {
       }
     } catch (err) {
       console.error("[ModuleDetail] Error submitting quiz:", err);
-      Alert.alert("Error", "Failed to submit quiz. Please try again.");
+      showError("Failed to submit quiz. Please try again.");
     } finally {
       setSubmittingQuiz(false);
     }

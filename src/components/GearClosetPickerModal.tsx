@@ -14,7 +14,6 @@ import {
   ActivityIndicator,
   TextInput,
   ScrollView,
-  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -26,6 +25,7 @@ import { getUserGear } from "../services/gearClosetService";
 import { savePackingItem } from "../services/packingServiceV2";
 import { useAuthStore } from "../state/authStore";
 import { auth } from "../config/firebase";
+import { useToast } from "./ToastManager";
 import {
   DEEP_FOREST,
   EARTH_GREEN,
@@ -77,6 +77,7 @@ export default function GearClosetPickerModal({
   existingItems,
   onItemsAdded,
 }: GearClosetPickerModalProps) {
+  const { showError, showSuccess, show } = useToast();
   const user = useAuthStore((state) => state.user);
   const firebaseUser = auth.currentUser;
 
@@ -229,13 +230,11 @@ export default function GearClosetPickerModal({
 
       // Show feedback
       if (addedCount > 0 && skippedCount > 0) {
-        Alert.alert(
-          "Added to packing list",
+        showSuccess(
           `${addedCount} item${addedCount > 1 ? "s" : ""} added, ${skippedCount} already in list`
         );
       } else if (skippedCount > 0) {
-        Alert.alert(
-          "Already on your list",
+        show(
           `${skippedCount} item${skippedCount > 1 ? "s" : ""} already in packing list`
         );
       }
@@ -244,7 +243,7 @@ export default function GearClosetPickerModal({
       onClose();
     } catch (error) {
       console.error("[GearClosetPicker] Error adding items:", error);
-      Alert.alert("Error adding items", "Please try again");
+      showError("Error adding items. Please try again");
     } finally {
       setAdding(false);
     }

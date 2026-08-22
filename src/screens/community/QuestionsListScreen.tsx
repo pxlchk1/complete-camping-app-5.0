@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { View, Text, Pressable, FlatList, ActivityIndicator, TextInput, Alert } from "react-native";
+import { View, Text, Pressable, FlatList, ActivityIndicator, TextInput } from "react-native";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -22,6 +22,8 @@ import { shouldShowInFeed } from "../../services/moderationService";
 import { isAdmin, isModerator, canModerateContent } from "../../services/userService";
 import { User } from "../../types/user";
 import { ContentActionsAffordance } from "../../components/contentActions";
+import { useToast } from "../../components/ToastManager";
+import { notifyError } from "../../ui/notify";
 import { RootStackNavigationProp } from "../../navigation/types";
 import CommunitySectionHeader from "../../components/CommunitySectionHeader";
 import {
@@ -44,6 +46,7 @@ type FilterOption = "all" | "unanswered" | "answered" | "popular";
 export default function QuestionsListScreen() {
   const navigation = useNavigation<RootStackNavigationProp>();
   const currentUser = useCurrentUser();
+  const toast = useToast();
   const [showLoginModal, setShowLoginModal] = useState(false);
 
   // Onboarding modal
@@ -201,7 +204,7 @@ export default function QuestionsListScreen() {
             if (result.success) {
               setQuestions(prev => prev.filter(q => q.id !== item.id));
             } else {
-              Alert.alert("Error", result.error?.message || "Failed to delete question");
+              notifyError(toast, result.error?.message || "Failed to delete question");
             }
           }}
           onRequestRemove={async () => {
@@ -209,7 +212,7 @@ export default function QuestionsListScreen() {
             if (result.success) {
               setQuestions(prev => prev.filter(q => q.id !== item.id));
             } else {
-              Alert.alert("Error", result.error?.message || "Failed to remove question");
+              notifyError(toast, result.error?.message || "Failed to remove question");
             }
           }}
           layout="cardHeader"

@@ -10,7 +10,6 @@ import {
   ScrollView,
   Pressable,
   ActivityIndicator,
-  Alert,
   Image,
 } from "react-native";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
@@ -22,6 +21,8 @@ import { GearItem, GEAR_CATEGORIES } from "../types/gear";
 import { RootStackNavigationProp, RootStackParamList } from "../navigation/types";
 import ModalHeader from "../components/ModalHeader";
 import TripPickerModal from "../components/TripPickerModal";
+import ConfirmationModal from "../components/ConfirmationModal";
+import { useToast } from "../components/ToastManager";
 import {
   DEEP_FOREST,
   EARTH_GREEN,
@@ -47,6 +48,8 @@ export default function GearDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [updatingFavorite, setUpdatingFavorite] = useState(false);
   const [showTripPicker, setShowTripPicker] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const { showError } = useToast();
 
   useEffect(() => {
     loadGear();
@@ -89,7 +92,7 @@ export default function GearDetailScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch (error: any) {
       console.error("Error updating favorite:", error);
-      Alert.alert("Error", "Failed to update favorite status");
+      showError("Failed to update favorite status");
     } finally {
       setUpdatingFavorite(false);
     }
@@ -102,36 +105,27 @@ export default function GearDetailScreen() {
 
   const handleDelete = () => {
     if (!gear) return;
+    setShowDeleteConfirm(true);
+  };
 
-    Alert.alert(
-      "Delete Gear",
-      `Are you sure you want to delete ${gear.name}? This action cannot be undone.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              const user = auth.currentUser;
-              if (!user) return;
+  const confirmDelete = async () => {
+    setShowDeleteConfirm(false);
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
 
-              // Delete images from storage
-              await deleteGearImages(user.uid, gearId);
+      // Delete images from storage
+      await deleteGearImages(user.uid, gearId);
 
-              // Delete the gear document
-              await deleteGearItem(gearId);
+      // Delete the gear document
+      await deleteGearItem(gearId);
 
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              navigation.goBack();
-            } catch (error: any) {
-              console.error("Error deleting gear:", error);
-              Alert.alert("Error", error.message || "Failed to delete gear");
-            }
-          },
-        },
-      ]
-    );
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      navigation.goBack();
+    } catch (error: any) {
+      console.error("Error deleting gear:", error);
+      showError(error.message || "Failed to delete gear");
+    }
   };
 
   const getCategoryLabel = (category: string): string => {
@@ -353,6 +347,15 @@ export default function GearDetailScreen() {
         visible={showTripPicker}
         onClose={() => setShowTripPicker(false)}
         gearItem={gear}
+      />
+
+      <ConfirmationModal
+        visible={showDeleteConfirm}
+        title="Delete Gear"
+        message={gear ? `Are you sure you want to delete ${gear.name}? This action cannot be undone.` : undefined}
+        primary={{ label: "Delete", iconName: "trash", onPress: confirmDelete }}
+        secondary={{ label: "Cancel", onPress: () => setShowDeleteConfirm(false) }}
+        onClose={() => setShowDeleteConfirm(false)}
       />
     </View>
   );

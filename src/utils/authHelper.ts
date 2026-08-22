@@ -9,7 +9,12 @@ import { NavigationProp } from "@react-navigation/native";
 import { RootStackParamList } from "../navigation/types";
 import { auth } from "../config/firebase";
 import { sendEmailVerification } from "firebase/auth";
-import { Alert } from "react-native";
+
+interface VerificationNotifier {
+  show: (message: string, type?: "success" | "error" | "info") => void;
+  showError: (message: string) => void;
+  showSuccess: (message: string) => void;
+}
 
 /**
  * Get current authenticated user ID
@@ -79,63 +84,53 @@ export const isEmailVerified = (): boolean => {
 
 /**
  * Require email verification for an action
- * Shows an alert if not verified and offers to resend verification email
+ * Not a component - cannot use hooks like useToast directly. Callers that
+ * can show UI (i.e. React components/screens) should pass their `useToast()`
+ * functions as `notify` so the user sees why they were blocked and whether
+ * the resend succeeded. Callers that omit `notify` just get a silent false
+ * (matching the existing behavior for the "no user logged in" case below) -
+ * this is a deliberate, non-blocking trade-off since resending a
+ * verification email is a low-stakes action, not a destructive one, so it
+ * doesn't need a confirm step; it's just sent automatically and the result
+ * is reported via `notify` when available.
  * Returns true if verified, false if not
  */
 export const requireEmailVerification = async (
-  action?: string
+  action?: string,
+  notify?: VerificationNotifier
 ): Promise<boolean> => {
   const user = auth.currentUser;
-  
+
   if (!user) {
     console.log("[EmailVerification] No user logged in");
     return false;
   }
-  
+
   // Apple users are considered verified
   const isAppleUser = user.providerData?.some(
     (provider) => provider.providerId === "apple.com"
   );
-  
+
   if (user.emailVerified || isAppleUser) {
     return true;
   }
-  
-  // User not verified - show alert with option to resend
+
+  // User not verified - notify and automatically resend the verification email
   console.log(`[EmailVerification] Email not verified for: ${action || 'action'}`);
-  
-  return new Promise((resolve) => {
-    Alert.alert(
-      "Email Verification Required",
-      `Please verify your email address to ${action || "use this feature"}. Check your inbox for the verification link.`,
-      [
-        {
-          text: "Resend Email",
-          onPress: async () => {
-            try {
-              await sendEmailVerification(user);
-              Alert.alert(
-                "Verification Email Sent",
-                "Please check your inbox and click the verification link."
-              );
-            } catch (error) {
-              console.error("[EmailVerification] Failed to resend:", error);
-              Alert.alert(
-                "Error",
-                "Failed to send verification email. Please try again later."
-              );
-            }
-            resolve(false);
-          },
-        },
-        {
-          text: "Cancel",
-          style: "cancel",
-          onPress: () => resolve(false),
-        },
-      ]
-    );
-  });
+
+  notify?.show(
+    `Please verify your email address to ${action || "use this feature"}. Check your inbox for the verification link.`
+  );
+
+  try {
+    await sendEmailVerification(user);
+    notify?.showSuccess("Verification email sent. Please check your inbox.");
+  } catch (error) {
+    console.error("[EmailVerification] Failed to resend:", error);
+    notify?.showError("Failed to send verification email. Please try again later.");
+  }
+
+  return false;
 };
 
 /**

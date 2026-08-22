@@ -13,8 +13,8 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
-  Alert,
   Image,
+  Modal,
 } from "react-native";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
@@ -25,6 +25,8 @@ import { getGearItemById, updateGearItem, uploadGearImage } from "../services/ge
 import { GearCategory, GEAR_CATEGORIES, GearItem } from "../types/gear";
 import { RootStackNavigationProp, RootStackParamList } from "../navigation/types";
 import ModalHeader from "../components/ModalHeader";
+import ConfirmationModal from "../components/ConfirmationModal";
+import { useToast } from "../components/ToastManager";
 import {
   DEEP_FOREST,
   EARTH_GREEN,
@@ -54,11 +56,14 @@ export default function EditGearScreen() {
   const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [showPhotoOptions, setShowPhotoOptions] = useState(false);
+  const [showRemovePhotoConfirm, setShowRemovePhotoConfirm] = useState(false);
+  const { showError } = useToast();
 
   const loadGear = useCallback(async () => {
     const user = auth.currentUser;
     if (!user) {
-      Alert.alert("Error", "You must be signed in to edit gear");
+      showError("You must be signed in to edit gear");
       navigation.goBack();
       return;
     }
@@ -74,12 +79,12 @@ export default function EditGearScreen() {
         setNotes(gearData.notes || "");
         setExistingImageUrl(gearData.imageUrl || null);
       } else {
-        Alert.alert("Error", "Gear item not found");
+        showError("Gear item not found");
         navigation.goBack();
       }
     } catch (error: any) {
       console.error("Error loading gear:", error);
-      Alert.alert("Error", error.message || "Failed to load gear");
+      showError(error.message || "Failed to load gear");
       navigation.goBack();
     } finally {
       setLoading(false);
@@ -95,7 +100,7 @@ export default function EditGearScreen() {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
       if (!permissionResult.granted) {
-        Alert.alert("Permission Required", "Please allow access to your photos to add gear images.");
+        showError("Please allow access to your photos to add gear images.");
         return;
       }
 
@@ -112,7 +117,7 @@ export default function EditGearScreen() {
       }
     } catch (error) {
       console.error("Error picking image:", error);
-      Alert.alert("Error", "Failed to pick image");
+      showError("Failed to pick image");
     }
   };
 
@@ -121,7 +126,7 @@ export default function EditGearScreen() {
       const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
 
       if (!permissionResult.granted) {
-        Alert.alert("Permission Required", "Please allow camera access to take photos.");
+        showError("Please allow camera access to take photos.");
         return;
       }
 
@@ -137,38 +142,30 @@ export default function EditGearScreen() {
       }
     } catch (error) {
       console.error("Error taking photo:", error);
-      Alert.alert("Error", "Failed to take photo");
+      showError("Failed to take photo");
     }
   };
 
   const handleRemoveImage = () => {
-    Alert.alert(
-      "Remove Photo",
-      "Are you sure you want to remove this photo?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: () => {
-            setImageUri(null);
-            setExistingImageUrl(null);
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          },
-        },
-      ]
-    );
+    setShowRemovePhotoConfirm(true);
+  };
+
+  const confirmRemoveImage = () => {
+    setShowRemovePhotoConfirm(false);
+    setImageUri(null);
+    setExistingImageUrl(null);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
   const handleSubmit = async () => {
     const user = auth.currentUser;
     if (!user) {
-      Alert.alert("Error", "You must be signed in to edit gear");
+      showError("You must be signed in to edit gear");
       return;
     }
 
     if (!name.trim()) {
-      Alert.alert("Name Required", "Please enter a name for this gear");
+      showError("Please enter a name for this gear");
       return;
     }
 
@@ -193,7 +190,7 @@ export default function EditGearScreen() {
           updateData.imageUrl = imageUrl;
         } catch (imageError) {
           console.error("Error uploading image:", imageError);
-          Alert.alert("Warning", "Failed to upload image, but other changes will be saved.");
+          showError("Failed to upload image, but other changes will be saved.");
         }
       } else if (!existingImageUrl) {
         // User removed the image
@@ -208,7 +205,7 @@ export default function EditGearScreen() {
       navigation.goBack();
     } catch (error: any) {
       console.error("Error updating gear:", error);
-      Alert.alert("Error", error.message || "Failed to update gear");
+      showError(error.message || "Failed to update gear");
     } finally {
       setSubmitting(false);
     }
@@ -249,34 +246,7 @@ export default function EditGearScreen() {
           {/* Photo Picker */}
           <View className="mb-4 items-center">
             <Pressable
-              onPress={() => {
-                // Previously a photo tapped an alert whose "Change Photo"
-                // option opened a second alert nested inside the first —
-                // now it's one alert with all the choices, same as the
-                // no-photo-yet case below.
-                if (displayImageUri) {
-                  Alert.alert(
-                    "Photo Options",
-                    "How would you like to update your gear photo?",
-                    [
-                      { text: "Cancel", style: "cancel" },
-                      { text: "Take Photo", onPress: handleTakePhoto },
-                      { text: "Choose from Library", onPress: handlePickImage },
-                      { text: "Remove Photo", style: "destructive", onPress: handleRemoveImage },
-                    ]
-                  );
-                } else {
-                  Alert.alert(
-                    "Add Photo",
-                    "Choose a photo for your gear",
-                    [
-                      { text: "Cancel", style: "cancel" },
-                      { text: "Take Photo", onPress: handleTakePhoto },
-                      { text: "Choose from Library", onPress: handlePickImage },
-                    ]
-                  );
-                }
-              }}
+              onPress={() => setShowPhotoOptions(true)}
               className="w-32 h-32 rounded-xl items-center justify-center active:opacity-70"
               style={{ backgroundColor: CARD_BACKGROUND_LIGHT, borderColor: BORDER_SOFT, borderWidth: 1 }}
             >
@@ -494,6 +464,85 @@ export default function EditGearScreen() {
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Photo Options Action Sheet */}
+      <Modal
+        visible={showPhotoOptions}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPhotoOptions(false)}
+      >
+        <Pressable
+          className="flex-1 justify-end"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+          onPress={() => setShowPhotoOptions(false)}
+        >
+          <View className="rounded-t-3xl px-4 pt-4 pb-8" style={{ backgroundColor: PARCHMENT }}>
+            <Text
+              className="text-center mb-3"
+              style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 13, color: TEXT_MUTED }}
+            >
+              {displayImageUri ? "How would you like to update your gear photo?" : "Choose a photo for your gear"}
+            </Text>
+            <Pressable
+              className="py-4 border-t items-center"
+              style={{ borderColor: BORDER_SOFT }}
+              onPress={() => {
+                setShowPhotoOptions(false);
+                handleTakePhoto();
+              }}
+            >
+              <Text style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 16, color: TEXT_PRIMARY_STRONG }}>
+                Take Photo
+              </Text>
+            </Pressable>
+            <Pressable
+              className="py-4 border-t items-center"
+              style={{ borderColor: BORDER_SOFT }}
+              onPress={() => {
+                setShowPhotoOptions(false);
+                handlePickImage();
+              }}
+            >
+              <Text style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 16, color: TEXT_PRIMARY_STRONG }}>
+                Choose from Library
+              </Text>
+            </Pressable>
+            {displayImageUri && (
+              <Pressable
+                className="py-4 border-t items-center"
+                style={{ borderColor: BORDER_SOFT }}
+                onPress={() => {
+                  setShowPhotoOptions(false);
+                  handleRemoveImage();
+                }}
+              >
+                <Text style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 16, color: "#dc2626" }}>
+                  Remove Photo
+                </Text>
+              </Pressable>
+            )}
+            <Pressable
+              className="mt-3 py-3 rounded-xl items-center"
+              style={{ backgroundColor: CARD_BACKGROUND_LIGHT }}
+              onPress={() => setShowPhotoOptions(false)}
+            >
+              <Text style={{ fontFamily: "SourceSans3_600SemiBold", fontSize: 16, color: TEXT_SECONDARY }}>
+                Cancel
+              </Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
+
+      <ConfirmationModal
+        visible={showRemovePhotoConfirm}
+        title="Remove Photo"
+        message="Are you sure you want to remove this photo?"
+        primary={{ label: "Remove", iconName: "trash", onPress: confirmRemoveImage }}
+        secondary={{ label: "Cancel", onPress: () => setShowRemovePhotoConfirm(false) }}
+        onClose={() => setShowRemovePhotoConfirm(false)}
+      />
     </View>
   );
 }

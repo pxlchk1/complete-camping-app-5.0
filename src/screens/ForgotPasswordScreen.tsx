@@ -9,15 +9,16 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "../config/firebase";
 import { Ionicons } from "@expo/vector-icons";
+import { useToast } from "../components/ToastManager";
 
 export default function ForgotPasswordScreen({ navigation }: { navigation: any }) {
+  const { showSuccess } = useToast();
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -43,32 +44,16 @@ export default function ForgotPasswordScreen({ navigation }: { navigation: any }
       await sendPasswordResetEmail(auth, email.trim());
       
       setSuccess(true);
-      Alert.alert(
-        "Check Your Email",
-        "We've sent a password reset link to your email address. Please check your inbox and follow the instructions to reset your password.",
-        [
-          {
-            text: "OK",
-            onPress: () => navigation.goBack(),
-          },
-        ]
-      );
+      showSuccess("We\u2019ve sent a password reset link to your email address. Please check your inbox and follow the instructions to reset your password.");
+      navigation.goBack();
     } catch (error: any) {
       console.error("Password Reset Error:", error);
       
       if (error.code === "auth/user-not-found") {
         // Don't reveal if user exists for security
         setSuccess(true);
-        Alert.alert(
-          "Check Your Email",
-          "If an account exists with this email, we've sent a password reset link.",
-          [
-            {
-              text: "OK",
-              onPress: () => navigation.goBack(),
-            },
-          ]
-        );
+        showSuccess("If an account exists with this email, we\u2019ve sent a password reset link.");
+        navigation.goBack();
       } else if (error.code === "auth/invalid-email") {
         setError("Please enter a valid email address.");
       } else if (error.code === "auth/too-many-requests") {

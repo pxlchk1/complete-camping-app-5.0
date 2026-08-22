@@ -15,6 +15,7 @@ import { useCurrentUser } from "../../state/userStore";
 import AccountRequiredModal from "../../components/AccountRequiredModal";
 import { requireAccount } from "../../utils/gating";
 import { requireEmailVerification } from "../../utils/authHelper";
+import { useToast } from "../../components/ToastManager";
 import { RootStackNavigationProp } from "../../navigation/types";
 import {
   DEEP_FOREST,
@@ -34,6 +35,7 @@ const SUGGESTED_TAGS = [
 export default function CreateQuestionScreen() {
   const navigation = useNavigation<RootStackNavigationProp>();
   const currentUser = useCurrentUser();
+  const { show, showError, showSuccess } = useToast();
   const [showLoginModal, setShowLoginModal] = useState(false);
 
   const [title, setTitle] = useState("");
@@ -70,7 +72,7 @@ export default function CreateQuestionScreen() {
     }
 
     // Require email verification for posting content
-    const isVerified = await requireEmailVerification("ask questions");
+    const isVerified = await requireEmailVerification("ask questions", { show, showError, showSuccess });
     if (!isVerified) return;
     
     if (!currentUser || !title.trim() || !body.trim() || submitting) return;

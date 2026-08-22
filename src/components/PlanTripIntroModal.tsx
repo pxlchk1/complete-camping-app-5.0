@@ -9,6 +9,7 @@ import React, { useState, useEffect } from "react";
 import { View, Text, Modal, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { usePlanTabStore } from "../state/planTabStore";
 import {
   DEEP_FOREST,
   PARCHMENT,
@@ -53,6 +54,7 @@ export default function PlanTripIntroModal({ forceShow, onDismiss }: PlanTripInt
   const [visible, setVisible] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [hasCheckedStorage, setHasCheckedStorage] = useState(false);
+  const setRequestCreateTrip = usePlanTabStore((s) => s.setRequestCreateTrip);
 
   // Check if user has seen the intro before
   useEffect(() => {
@@ -100,6 +102,11 @@ export default function PlanTripIntroModal({ forceShow, onDismiss }: PlanTripInt
     } else {
       handleClose();
     }
+  };
+
+  const handlePlanFirstTrip = async () => {
+    await handleClose();
+    setRequestCreateTrip(true);
   };
 
   const handleBack = () => {
@@ -224,10 +231,10 @@ export default function PlanTripIntroModal({ forceShow, onDismiss }: PlanTripInt
 
           {/* Buttons */}
           <View style={{ width: "100%", gap: 12 }}>
-            {/* Done button - only on last slide */}
+            {/* Plan Your First Trip CTA - only on last slide */}
             {isLastSlide ? (
               <Pressable
-                onPress={handleNext}
+                onPress={handlePlanFirstTrip}
                 style={({ pressed }) => ({
                   backgroundColor: DEEP_FOREST,
                   paddingVertical: 14,
@@ -243,7 +250,7 @@ export default function PlanTripIntroModal({ forceShow, onDismiss }: PlanTripInt
                     textAlign: "center",
                   }}
                 >
-                  Done
+                  Plan Your First Trip
                 </Text>
               </Pressable>
             ) : isFirstSlide ? (

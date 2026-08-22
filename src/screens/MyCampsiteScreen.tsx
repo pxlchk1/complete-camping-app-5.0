@@ -12,7 +12,6 @@ import {
   ImageBackground,
   Image,
   ActivityIndicator,
-  Alert,
   Modal,
   Linking,
   Platform,
@@ -47,6 +46,7 @@ import { useUserStatus } from "../utils/authHelper";
 import { useIsModerator, useIsAdministrator } from "../state/userStore";
 import { HERO_IMAGES } from "../constants/images";
 import AccountRequiredModal from "../components/AccountRequiredModal";
+import ConfirmationModal from "../components/ConfirmationModal";
 import OnboardingModal from "../components/OnboardingModal";
 import MeritBadgesInfoModal from "../components/MeritBadgesInfoModal";
 import { useScreenOnboarding } from "../hooks/useScreenOnboarding";
@@ -171,6 +171,8 @@ export default function MyCampsiteScreen({ navigation }: any) {
   // "nothing exists."
   const [sharedGearItems, setSharedGearItems] = useState<GearItem[]>([]);
   const [tripStories, setTripStories] = useState<PhotoPost[]>([]);
+  const [pendingRemoveFavorite, setPendingRemoveFavorite] = useState<FavoritePark | null>(null);
+  const [pendingRemoveSavedPlace, setPendingRemoveSavedPlace] = useState<SavedPlace | null>(null);
   const insets = useSafeAreaInsets();
   const toast = useToast();
 
@@ -578,22 +580,13 @@ export default function MyCampsiteScreen({ navigation }: any) {
       if (restored) {
         await syncSubscriptionToFirestore();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert(
-          "Purchases Restored",
-          "Your subscription has been restored successfully."
-        );
+        notifySuccess(toast, "Your subscription has been restored successfully.");
       } else {
-        Alert.alert(
-          "No Purchases Found",
-          "No active subscriptions were found for your account."
-        );
+        notifyError(toast, "No active subscriptions were found for your account.");
       }
     } catch (error: any) {
       console.error("[MyCampsite] Restore error:", error);
-      Alert.alert(
-        "Restore Failed",
-        "Unable to restore purchases. Please try again or contact support."
-      );
+      notifyError(toast, "Unable to restore purchases. Please try again or contact support.");
     } finally {
       setRestoring(false);
     }
@@ -672,7 +665,7 @@ export default function MyCampsiteScreen({ navigation }: any) {
     const url = Platform.OS === "ios" ? `maps:0,0?q=${encoded}` : `geo:0,0?q=${encoded}`;
     Linking.openURL(url).catch(() => {
       Linking.openURL(`https://maps.google.com/?q=${encoded}`).catch(() => {
-        Alert.alert("Couldn't Open Maps", "Unable to open a maps app on this device.");
+        notifyError(toast, "Unable to open a maps app on this device.");
       });
     });
   };
@@ -1892,23 +1885,7 @@ export default function MyCampsiteScreen({ navigation }: any) {
                       <Pressable
                         onPress={(e) => {
                           e.stopPropagation();
-                          Alert.alert(
-                            "Remove from Favorites?",
-                            `Remove ${fav.name} from your favorites?`,
-                            [
-                              { text: "Cancel", style: "cancel" },
-                              {
-                                text: "Remove",
-                                style: "destructive",
-                                onPress: async () => {
-                                  const userId = auth.currentUser?.uid;
-                                  if (!userId) return;
-                                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                                  await removeFavoritePark(userId, fav.parkId);
-                                },
-                              },
-                            ]
-                          );
+                          setPendingRemoveFavorite(fav);
                         }}
                         className="w-9 h-9 rounded-full items-center justify-center active:opacity-70"
                         style={{ backgroundColor: "#fff5f5" }}
@@ -2044,23 +2021,7 @@ export default function MyCampsiteScreen({ navigation }: any) {
                       <Pressable
                         onPress={(e) => {
                           e.stopPropagation();
-                          Alert.alert(
-                            "Remove Park?",
-                            `Remove ${place.name} from your saved parks?`,
-                            [
-                              { text: "Cancel", style: "cancel" },
-                              {
-                                text: "Remove",
-                                style: "destructive",
-                                onPress: async () => {
-                                  const userId = auth.currentUser?.uid;
-                                  if (!userId) return;
-                                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                                  await removeSavedPlace(userId, place.placeId);
-                                },
-                              },
-                            ]
-                          );
+                          setPendingRemoveSavedPlace(place);
                         }}
                         className="w-9 h-9 rounded-full items-center justify-center active:opacity-70"
                         style={{ backgroundColor: "#f0f9f4" }}
@@ -2386,23 +2347,7 @@ export default function MyCampsiteScreen({ navigation }: any) {
                 onPress={() => {
                   const place = selectedSavedPlace;
                   setSelectedSavedPlace(null);
-                  Alert.alert(
-                    "Remove Park?",
-                    `Remove ${place.name} from your saved parks?`,
-                    [
-                      { text: "Cancel", style: "cancel" },
-                      {
-                        text: "Remove",
-                        style: "destructive",
-                        onPress: async () => {
-                          const userId = auth.currentUser?.uid;
-                          if (!userId) return;
-                          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                          await removeSavedPlace(userId, place.placeId);
-                        },
-                      },
-                    ]
-                  );
+                  setPendingRemoveSavedPlace(place);
                 }}
                 className="items-center py-2"
               >
@@ -2429,6 +2374,46 @@ export default function MyCampsiteScreen({ navigation }: any) {
         visible={showModal}
         tooltip={currentTooltip}
         onDismiss={dismissModal}
+      />
+
+      <ConfirmationModal
+        visible={!!pendingRemoveFavorite}
+        title="Remove from Favorites?"
+        message={pendingRemoveFavorite ? `Remove ${pendingRemoveFavorite.name} from your favorites?` : undefined}
+        primary={{
+          label: "Remove",
+          iconName: "heart-dislike-outline",
+          onPress: async () => {
+            const fav = pendingRemoveFavorite;
+            setPendingRemoveFavorite(null);
+            const userId = auth.currentUser?.uid;
+            if (!fav || !userId) return;
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            await removeFavoritePark(userId, fav.parkId);
+          },
+        }}
+        secondary={{ label: "Cancel", onPress: () => setPendingRemoveFavorite(null) }}
+        onClose={() => setPendingRemoveFavorite(null)}
+      />
+
+      <ConfirmationModal
+        visible={!!pendingRemoveSavedPlace}
+        title="Remove Park?"
+        message={pendingRemoveSavedPlace ? `Remove ${pendingRemoveSavedPlace.name} from your saved parks?` : undefined}
+        primary={{
+          label: "Remove",
+          iconName: "trash-outline",
+          onPress: async () => {
+            const place = pendingRemoveSavedPlace;
+            setPendingRemoveSavedPlace(null);
+            const userId = auth.currentUser?.uid;
+            if (!place || !userId) return;
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            await removeSavedPlace(userId, place.placeId);
+          },
+        }}
+        secondary={{ label: "Cancel", onPress: () => setPendingRemoveSavedPlace(null) }}
+        onClose={() => setPendingRemoveSavedPlace(null)}
       />
     </View>
   );

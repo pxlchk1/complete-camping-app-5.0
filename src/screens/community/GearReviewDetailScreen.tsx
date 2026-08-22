@@ -14,7 +14,6 @@ import {
   Text,
   ScrollView,
   Pressable,
-  Alert,
   ActivityIndicator,
   Image,
   Linking,
@@ -35,6 +34,8 @@ import { useCurrentUser } from "../../state/userStore";
 import { auth, db } from "../../config/firebase";
 import { getConnectDisplayHandle } from "../../services/handleService";
 import HiddenReviewBanner from "../../components/HiddenReviewBanner";
+import ConfirmationModal from "../../components/ConfirmationModal";
+import { useToast } from "../../components/ToastManager";
 
 /** Fallback theme values (safe if your constants are not available here). */
 const DEEP_FOREST = "#1F3B2C";
@@ -82,6 +83,9 @@ export default function GearReviewDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [review, setReview] = useState<GearReview | null>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [pendingReviewAction, setPendingReviewAction] = useState<"delete" | "remove" | null>(null);
+  const [showReportConfirm, setShowReportConfirm] = useState(false);
+  const { showError, showSuccess } = useToast();
 
   const currentUser = useCurrentUser();
 
@@ -103,58 +107,27 @@ export default function GearReviewDetailScreen() {
 
   const handleDeleteReview = async () => {
     if (!reviewId) return;
-    Alert.alert(
-      "Delete Review",
-      "Are you sure you want to delete this review? This action cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            const result = await deleteGearReview(reviewId);
-            if (result.success) {
-              Alert.alert("Success", "Review deleted successfully");
-              navigation.goBack();
-            } else {
-              console.error("[GearReviewDetail] Delete failed:", result.error);
-              Alert.alert(
-                "Error",
-                result.error?.message || "Failed to delete review"
-              );
-            }
-          },
-        },
-      ]
-    );
+    setPendingReviewAction("delete");
   };
 
   const handleRemoveReview = async () => {
     if (!reviewId) return;
-    Alert.alert(
-      "Remove Review",
-      "Are you sure you want to remove this review? This moderation action cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: async () => {
-            const result = await deleteGearReview(reviewId);
-            if (result.success) {
-              Alert.alert("Success", "Review removed successfully");
-              navigation.goBack();
-            } else {
-              console.error("[GearReviewDetail] Remove failed:", result.error);
-              Alert.alert(
-                "Error",
-                result.error?.message || "Failed to remove review"
-              );
-            }
-          },
-        },
-      ]
-    );
+    setPendingReviewAction("remove");
+  };
+
+  const confirmPendingReviewAction = async () => {
+    const mode = pendingReviewAction;
+    setPendingReviewAction(null);
+    if (!mode || !reviewId) return;
+
+    const result = await deleteGearReview(reviewId);
+    if (result.success) {
+      showSuccess(mode === "delete" ? "Review deleted successfully" : "Review removed successfully");
+      navigation.goBack();
+    } else {
+      console.error(`[GearReviewDetail] ${mode} failed:`, result.error);
+      showError(result.error?.message || `Failed to ${mode} review`);
+    }
   };
 
   const loadReview = useCallback(async () => {
@@ -195,12 +168,12 @@ export default function GearReviewDetailScreen() {
       };
       setReview(normalized);
     } catch {
-      Alert.alert("Error", "Failed to load review");
+      showError("Failed to load review");
       navigation.goBack();
     } finally {
       setLoading(false);
     }
-  }, [navigation, reviewId]);
+  }, [navigation, reviewId, showError]);
 
   // Reload when screen comes into focus (e.g., returning from edit)
   useFocusEffect(
@@ -221,34 +194,30 @@ export default function GearReviewDetailScreen() {
   const handleReport = () => {
     if (!requireAuthOrShowModal()) return;
     if (!reviewId) return;
+    setShowReportConfirm(true);
+  };
 
-    Alert.alert("Report review", "Why are you reporting this review?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Report",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            const uid = auth?.currentUser?.uid;
-            if (!uid) return;
+  const confirmReport = async () => {
+    setShowReportConfirm(false);
+    if (!reviewId) return;
+    try {
+      const uid = auth?.currentUser?.uid;
+      if (!uid) return;
 
-            const reportRef = doc(db, "reports", `${String(reviewId)}_${Date.now()}`);
-            await setDoc(reportRef, {
-              targetType: "gearReview",
-              targetId: String(reviewId),
-              reason: "User reported inappropriate content",
-              reporterId: uid,
-              createdAt: serverTimestamp(),
-            });
+      const reportRef = doc(db, "reports", `${String(reviewId)}_${Date.now()}`);
+      await setDoc(reportRef, {
+        targetType: "gearReview",
+        targetId: String(reviewId),
+        reason: "User reported inappropriate content",
+        reporterId: uid,
+        createdAt: serverTimestamp(),
+      });
 
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-            Alert.alert("Success", "Thank you for your report");
-          } catch {
-            Alert.alert("Error", "Failed to submit report");
-          }
-        },
-      },
-    ]);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      showSuccess("Thank you for your report");
+    } catch {
+      showError("Failed to submit report");
+    }
   };
 
   const renderStars = (rating: number) => {
@@ -443,7 +412,7 @@ export default function GearReviewDetailScreen() {
                 }
                 Linking.openURL(urlToOpen).catch((err) => {
                   console.error("[GearReviewDetail] Failed to open URL:", urlToOpen, err);
-                  Alert.alert("Error", "Could not open link. Please check the URL is valid.");
+                  showError("Could not open link. Please check the URL is valid.");
                 });
               }
             }}
@@ -607,6 +576,32 @@ export default function GearReviewDetailScreen() {
           navigation.navigate("Auth");
         }}
         onMaybeLater={() => setShowLoginModal(false)}
+      />
+
+      <ConfirmationModal
+        visible={!!pendingReviewAction}
+        title={pendingReviewAction === "remove" ? "Remove Review" : "Delete Review"}
+        message={
+          pendingReviewAction === "remove"
+            ? "Are you sure you want to remove this review? This moderation action cannot be undone."
+            : "Are you sure you want to delete this review? This action cannot be undone."
+        }
+        primary={{
+          label: pendingReviewAction === "remove" ? "Remove" : "Delete",
+          iconName: "trash",
+          onPress: confirmPendingReviewAction,
+        }}
+        secondary={{ label: "Cancel", onPress: () => setPendingReviewAction(null) }}
+        onClose={() => setPendingReviewAction(null)}
+      />
+
+      <ConfirmationModal
+        visible={showReportConfirm}
+        title="Report review"
+        message="Why are you reporting this review?"
+        primary={{ label: "Report", iconName: "flag", onPress: confirmReport }}
+        secondary={{ label: "Cancel", onPress: () => setShowReportConfirm(false) }}
+        onClose={() => setShowReportConfirm(false)}
       />
     </View>
   );

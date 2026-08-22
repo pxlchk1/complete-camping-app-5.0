@@ -243,7 +243,7 @@
 - Offline mode gate (future)
 - Export packing list gate (future)
 - Duplicate trip gate (future)
-- Community commenting gate (future)
+- Community commenting Pro-gate (future) — note: commenting already requires a free account/login today (see AUTH_FLOW_GUIDE.md); this item is about restricting it to Pro subscribers, not about the login requirement
 
 ### Future Enhancements
 - Add "Pro" badge/indicator in UI

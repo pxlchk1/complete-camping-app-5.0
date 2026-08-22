@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { View, Text, ScrollView, Pressable, TextInput, KeyboardAvoidingView, Platform, Alert, Modal, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, Pressable, TextInput, KeyboardAvoidingView, Platform, Modal, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
@@ -16,6 +16,8 @@ import { getFunctions, httpsCallable } from "firebase/functions";
 import { auth, db } from "../config/firebase";
 import ModalHeader from "../components/ModalHeader";
 import Button from "../components/Button";
+import { useToast } from "../components/ToastManager";
+import ConfirmationModal from "../components/ConfirmationModal";
 import {
   requestPushPermission,
   getPushPermissionStatus,
@@ -66,6 +68,7 @@ const EMPTY_DRAFT: DraftState = {
 export default function AdminCommunicationsScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const { show, showError, showSuccess } = useToast();
   
   const [activeTab, setActiveTab] = useState<ChannelTab>("push");
   const [isSending, setIsSending] = useState(false);
@@ -197,7 +200,7 @@ export default function AdminCommunicationsScreen() {
   const saveDrafts = async () => {
     const user = auth.currentUser;
     if (!user) {
-      Alert.alert("Error", "You must be signed in to save drafts");
+      showError("You must be signed in to save drafts");
       return;
     }
     
@@ -243,7 +246,7 @@ export default function AdminCommunicationsScreen() {
     }
     
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    Alert.alert("Copied", `Content copied to ${targetChannel.charAt(0).toUpperCase() + targetChannel.slice(1)} tab`);
+    showSuccess(`Content copied to ${targetChannel.charAt(0).toUpperCase() + targetChannel.slice(1)} tab`);
   };
 
   // Load communications log
@@ -311,7 +314,7 @@ export default function AdminCommunicationsScreen() {
       setLogEntries(entries);
     } catch (error) {
       console.error("[AdminComms] Error loading log:", error);
-      Alert.alert("Error", "Failed to load communications log");
+      showError("Failed to load communications log");
     } finally {
       setLoadingLog(false);
     }
@@ -435,10 +438,8 @@ export default function AdminCommunicationsScreen() {
   // Placeholder handlers for action buttons
   const onPreview = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    Alert.alert(
-      "Preview",
-      `Previewing ${activeTab === "push" ? "Push Notification" : activeTab === "modal" ? "Home Screen Modal" : "Email"}\n\nCampaign: ${draft.campaignName || "(untitled)"}\nHeading: ${draft.mainHeading || placeholders.heading}`,
-      [{ text: "OK" }]
+    show(
+      `Previewing ${activeTab === "push" ? "Push Notification" : activeTab === "modal" ? "Home Screen Modal" : "Email"} \u2014 Campaign: ${draft.campaignName || "(untitled)"}, Heading: ${draft.mainHeading || placeholders.heading}`
     );
   };
 
@@ -446,7 +447,7 @@ export default function AdminCommunicationsScreen() {
   const sendTestPush = async () => {
     const user = auth.currentUser;
     if (!user) {
-      Alert.alert("Error", "You must be signed in to send test notifications");
+      showError("You must be signed in to send test notifications");
       return;
     }
 
@@ -464,18 +465,12 @@ export default function AdminCommunicationsScreen() {
       });
 
       console.log("[Communications] Test push sent:", result.data);
-      Alert.alert(
-        "Test Push Sent! 🔔",
-        `Your test push notification has been sent to your device.\n\nTitle: ${draft.mainHeading || placeholders.heading}`,
-        [{ text: "OK" }]
+      showSuccess(
+        `Test push notification sent to your device. Title: ${draft.mainHeading || placeholders.heading}`
       );
     } catch (error: any) {
       console.error("[Communications] Failed to send test push:", error);
-      Alert.alert(
-        "Error",
-        `Failed to send test push: ${error.message || "Unknown error"}`,
-        [{ text: "OK" }]
-      );
+      showError(`Failed to send test push: ${error.message || "Unknown error"}`);
     } finally {
       setIsSending(false);
     }
@@ -485,7 +480,7 @@ export default function AdminCommunicationsScreen() {
   const sendTestModal = async () => {
     const user = auth.currentUser;
     if (!user) {
-      Alert.alert("Error", "You must be signed in to send test modals");
+      showError("You must be signed in to send test modals");
       return;
     }
 
@@ -508,18 +503,12 @@ export default function AdminCommunicationsScreen() {
       await setDoc(doc(db, "adminTestModals", user.uid), testModalData);
       
       console.log("[Communications] Test modal created for:", user.uid);
-      Alert.alert(
-        "Test Modal Created",
-        "Your test modal has been created. Close and reopen the app to see it on the home screen. Dismiss it to remove.",
-        [{ text: "OK" }]
+      showSuccess(
+        "Your test modal has been created. Close and reopen the app to see it on the home screen. Dismiss it to remove."
       );
     } catch (error: any) {
       console.error("[Communications] Failed to create test modal:", error);
-      Alert.alert(
-        "Error",
-        `Failed to create test modal: ${error.code || error.message || "Unknown error"}`,
-        [{ text: "OK" }]
-      );
+      showError(`Failed to create test modal: ${error.code || error.message || "Unknown error"}`);
     } finally {
       setIsSending(false);
     }
@@ -529,7 +518,7 @@ export default function AdminCommunicationsScreen() {
   const sendTestEmail = async () => {
     const user = auth.currentUser;
     if (!user) {
-      Alert.alert("Error", "You must be signed in to send test emails");
+      showError("You must be signed in to send test emails");
       return;
     }
 
@@ -555,18 +544,12 @@ export default function AdminCommunicationsScreen() {
 
       console.log("[Communications] Test email sent:", result.data);
 
-      Alert.alert(
-        "Test Email Sent! 📧",
-        `Your test email has been sent.\n\nTo: ${TEST_EMAIL_RECIPIENT}\nSubject: ${draft.subjectLine || `🏕️ ${draft.mainHeading || placeholders.heading}`}\n\nCheck your inbox!`,
-        [{ text: "OK" }]
+      showSuccess(
+        `Test email sent to ${TEST_EMAIL_RECIPIENT}. Subject: ${draft.subjectLine || `🏕️ ${draft.mainHeading || placeholders.heading}`}`
       );
     } catch (error: any) {
       console.error("[Communications] Failed to send test email:", error);
-      Alert.alert(
-        "Error",
-        `Failed to send test email: ${error.code || error.message || "Unknown error"}`,
-        [{ text: "OK" }]
-      );
+      showError(`Failed to send test email: ${error.code || error.message || "Unknown error"}`);
     } finally {
       setIsSending(false);
     }
@@ -574,34 +557,26 @@ export default function AdminCommunicationsScreen() {
 
   const onTest = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    
-    const destination = getTestDestination();
-    const channelName = activeTab === "push" ? "push notification" : activeTab === "modal" ? "home screen modal" : "email";
-    
-    Alert.alert(
-      "Send Test",
-      `This will send a test ${channelName} to:\n\n${destination}\n\nCampaign: ${draft.campaignName}`,
-      [
-        { text: "Cancel", style: "cancel" },
-        { 
-          text: "Send Test", 
-          onPress: async () => {
-            switch (activeTab) {
-              case "push":
-                await sendTestPush();
-                break;
-              case "modal":
-                await sendTestModal();
-                break;
-              case "email":
-                await sendTestEmail();
-                break;
-            }
-          }
-        },
-      ]
-    );
+    setShowTestConfirm(true);
   };
+
+  const confirmTest = async () => {
+    setShowTestConfirm(false);
+    switch (activeTab) {
+      case "push":
+        await sendTestPush();
+        break;
+      case "modal":
+        await sendTestModal();
+        break;
+      case "email":
+        await sendTestEmail();
+        break;
+    }
+  };
+
+  const testDestination = getTestDestination();
+  const testChannelName = activeTab === "push" ? "push notification" : activeTab === "modal" ? "home screen modal" : "email";
 
   const handlePublishEmail = async () => {
     setIsSending(true);
@@ -634,19 +609,15 @@ export default function AdminCommunicationsScreen() {
       };
 
       if (data.status === "already_sent") {
-        Alert.alert("Already Sent", data.message);
+        show(data.message);
       } else if (data.success) {
-        Alert.alert(
-          "Campaign Published",
-          `${data.message}\n\nRecipients: ${data.recipientsAttemptedCount}`,
-          [{ text: "OK" }]
-        );
+        showSuccess(`${data.message} Recipients: ${data.recipientsAttemptedCount}`);
       } else {
-        Alert.alert("Error", data.message || "Failed to publish campaign");
+        showError(data.message || "Failed to publish campaign");
       }
     } catch (error) {
       console.error("[Communications] Publish email error:", error);
-      Alert.alert("Error", error instanceof Error ? error.message : "Failed to publish campaign");
+      showError(error instanceof Error ? error.message : "Failed to publish campaign");
     } finally {
       setIsSending(false);
     }
@@ -678,19 +649,15 @@ export default function AdminCommunicationsScreen() {
       };
 
       if (data.status === "already_sent") {
-        Alert.alert("Already Sent", data.message);
+        show(data.message);
       } else if (data.success) {
-        Alert.alert(
-          "Push Published",
-          `${data.message}\n\nDevices: ${data.attemptedCount}`,
-          [{ text: "OK" }]
-        );
+        showSuccess(`${data.message} Devices: ${data.attemptedCount}`);
       } else {
-        Alert.alert("Error", data.message || "Failed to publish push");
+        showError(data.message || "Failed to publish push");
       }
     } catch (error) {
       console.error("[Communications] Publish push error:", error);
-      Alert.alert("Error", error instanceof Error ? error.message : "Failed to publish push");
+      showError(error instanceof Error ? error.message : "Failed to publish push");
     } finally {
       setIsSending(false);
     }
@@ -721,17 +688,13 @@ export default function AdminCommunicationsScreen() {
       };
 
       if (data.success) {
-        Alert.alert(
-          "Modal Published",
-          `${data.message}`,
-          [{ text: "OK" }]
-        );
+        showSuccess(`${data.message}`);
       } else {
-        Alert.alert("Error", data.message || "Failed to publish modal");
+        showError(data.message || "Failed to publish modal");
       }
     } catch (error) {
       console.error("[Communications] Publish modal error:", error);
-      Alert.alert("Error", error instanceof Error ? error.message : "Failed to publish modal");
+      showError(error instanceof Error ? error.message : "Failed to publish modal");
     } finally {
       setIsSending(false);
     }
@@ -745,6 +708,7 @@ export default function AdminCommunicationsScreen() {
   // deletion (EditProfileScreen).
   const [showPublishConfirm, setShowPublishConfirm] = useState(false);
   const [publishConfirmText, setPublishConfirmText] = useState("");
+  const [showTestConfirm, setShowTestConfirm] = useState(false);
 
   const onPublish = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -1774,6 +1738,15 @@ export default function AdminCommunicationsScreen() {
           </Pressable>
         </KeyboardAvoidingView>
       </Modal>
+
+      <ConfirmationModal
+        visible={showTestConfirm}
+        title="Send Test"
+        message={`This will send a test ${testChannelName} to ${testDestination}. Campaign: ${draft.campaignName}`}
+        primary={{ label: "Send Test", iconName: "send", onPress: confirmTest }}
+        secondary={{ label: "Cancel", onPress: () => setShowTestConfirm(false) }}
+        onClose={() => setShowTestConfirm(false)}
+      />
     </View>
   );
 }

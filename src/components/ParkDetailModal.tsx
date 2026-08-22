@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from "react";
-import { Modal, View, Text, Pressable, ScrollView, Linking, Platform, ActivityIndicator, Animated, Alert } from "react-native";
+import { Modal, View, Text, Pressable, ScrollView, Linking, Platform, ActivityIndicator, Animated } from "react-native";
 import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
@@ -18,6 +18,7 @@ import {
   FREE_FAVORITES_LIMIT,
 } from "../services/favoriteParksService";
 import { getPaywallVariantAndTrack, type PaywallVariant } from "../services/proAttemptService";
+import { useToast } from "./ToastManager";
 import { DEEP_FOREST, PARCHMENT, BORDER_SOFT, RUST, GRANITE_GOLD, EARTH_GREEN } from "../constants/colors";
 
 // Success green color for confirmation
@@ -52,6 +53,7 @@ export default function ParkDetailModal({
 }: ParkDetailModalProps) {
   const mapRef = useRef<MapView>(null);
   const navigation = useNavigation();
+  const { showError } = useToast();
   const { isGuest } = useUserStatus();
   const isPro = useSubscriptionStore((s) => s.isPro);
   const trips = useTripsStore((s) => s.trips);
@@ -268,11 +270,7 @@ export default function ParkDetailModal({
     } catch (error) {
       console.error("[ParkDetail] Error toggling favorite:", error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert(
-        "Couldn't Update Favorite",
-        "Please check your connection and try again.",
-        [{ text: "OK" }]
-      );
+      showError("Could not update favorite. Please check your connection and try again.");
     } finally {
       setFavoriteLoading(false);
     }
@@ -333,11 +331,7 @@ export default function ParkDetailModal({
         parkName: park?.name,
         url: reservationUrl,
       });
-      Alert.alert(
-        "Invalid Link",
-        "This park's reservation link appears to be invalid. Please try searching for the park directly on recreation.gov or the park's official website.",
-        [{ text: "OK" }]
-      );
+      showError("This park\u2019s reservation link appears to be invalid. Please try searching for the park directly on recreation.gov or the park\u2019s official website.");
       return;
     }
 
@@ -349,11 +343,7 @@ export default function ParkDetailModal({
         parkName: park?.name,
         url,
       });
-      Alert.alert(
-        "Cannot Open Link",
-        "Unable to open this reservation link. Please try searching for the park directly on recreation.gov or the park's official website.",
-        [{ text: "OK" }]
-      );
+      showError("Unable to open this reservation link. Please try searching for the park directly on recreation.gov or the park\u2019s official website.");
       return;
     }
 
@@ -372,11 +362,7 @@ export default function ParkDetailModal({
         url,
         error: error.message,
       });
-      Alert.alert(
-        "Error Opening Link",
-        "There was a problem opening this reservation link. Please try again or search for the park directly on recreation.gov.",
-        [{ text: "OK" }]
-      );
+      showError("There was a problem opening this reservation link. Please try again or search for the park directly on recreation.gov.");
     }
   };
 

@@ -12,7 +12,6 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Alert,
   ActivityIndicator,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
@@ -22,6 +21,7 @@ import { tipsService } from "../../services/firestore/tipsService";
 import AccountRequiredModal from "../../components/AccountRequiredModal";
 import { requireAccount } from "../../utils/gating";
 import { requireEmailVerification } from "../../utils/authHelper";
+import { useToast } from "../../components/ToastManager";
 import { RootStackNavigationProp } from "../../navigation/types";
 import {
   DEEP_FOREST,
@@ -45,6 +45,7 @@ const CATEGORIES = [
 
 export default function CreateTipScreen() {
   const navigation = useNavigation<RootStackNavigationProp>();
+  const { show, showError, showSuccess } = useToast();
   const [showLoginModal, setShowLoginModal] = useState(false);
 
   const [title, setTitle] = useState("");
@@ -61,15 +62,15 @@ export default function CreateTipScreen() {
     }
 
     // Require email verification for posting content
-    const isVerified = await requireEmailVerification("share tips");
+    const isVerified = await requireEmailVerification("share tips", { show, showError, showSuccess });
     if (!isVerified) return;
 
     if (!title.trim()) {
-      Alert.alert("Missing Title", "Please enter a title for your tip");
+      showError("Please enter a title for your tip");
       return;
     }
     if (!content.trim()) {
-      Alert.alert("Missing Content", "Please enter the tip content");
+      showError("Please enter the tip content");
       return;
     }
     try {
@@ -82,7 +83,7 @@ export default function CreateTipScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       navigation.goBack();
     } catch (error: any) {
-      Alert.alert("Error", error.message || "Failed to create tip");
+      showError(error.message || "Failed to create tip");
       setSubmitting(false);
     }
   };

@@ -17,10 +17,10 @@ import {
   Modal,
   TextInput,
   TouchableOpacity,
-  Alert,
   Keyboard,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import * as Location from "expo-location";
@@ -28,6 +28,7 @@ import * as Haptics from "expo-haptics";
 import {
   collection,
   doc,
+  getDoc,
   getDocs,
   limit as firestoreLimit,
   serverTimestamp,
@@ -50,6 +51,7 @@ import ParkDetailModal from "../components/ParkDetailModal";
 import FireflyLoader from "../components/common/FireflyLoader";
 import AccountRequiredModal from "../components/AccountRequiredModal";
 import { requireAccount, requirePro } from "../utils/gating";
+import { useToast } from "../components/ToastManager";
 
 // Types
 import { Park, TripDestination } from "../types/camping";
@@ -77,6 +79,57 @@ interface ParksBrowseScreenProps {
 }
 
 type LatLng = { latitude: number; longitude: number };
+
+// Normalize park type filter values to canonical format
+function normalizeParkType(rawFilter: string | undefined | null): Park["filter"] {
+  if (!rawFilter) return "private"; // default fallback for missing data
+
+  const normalized = rawFilter.toLowerCase().trim().replace(/\s+/g, "_");
+
+  // Map various formats to canonical values
+  if (normalized.includes("state") && normalized.includes("park")) return "state_park";
+  if (normalized === "state_park" || normalized === "statepark") return "state_park";
+
+  if (normalized.includes("national") && normalized.includes("park")) return "national_park";
+  if (normalized === "national_park" || normalized === "nationalpark") return "national_park";
+
+  if (normalized.includes("national") && normalized.includes("forest")) return "national_forest";
+  if (normalized === "national_forest" || normalized === "nationalforest") return "national_forest";
+
+  // Army Corps of Engineers ("army_corps_of_engineers", "army corps", "usace", "corps of engineers")
+  if (normalized.includes("corps") || normalized.includes("usace") || normalized.includes("army")) return "army_corps";
+
+  // BLM / Bureau of Land Management
+  if (normalized === "blm" || normalized.includes("blm") || normalized.includes("bureau_of_land")) return "blm";
+
+  // Dispersed / boondocking / primitive roadside camping
+  if (normalized.includes("dispersed") || normalized.includes("boondock")) return "dispersed";
+
+  // Municipal / county / city / civic parks
+  if (normalized.includes("municipal") || normalized.includes("county") || normalized.includes("city_park") || normalized.includes("civic")) return "county_park";
+
+  // Private campgrounds (KOAs, private RV parks/resorts, etc.)
+  if (normalized.includes("private")) return "private";
+
+  // Log unexpected values in dev
+  if (__DEV__) {
+    console.warn(`[FILTER_DEBUG] ⚠️ Unknown filter value: "${rawFilter}" -> defaulting to private`);
+  }
+  return "private";
+}
+
+function mapDocToPark(id: string, data: any): Park {
+  return {
+    id,
+    name: data.name || "",
+    filter: normalizeParkType(data.filter),
+    address: data.address || "",
+    state: data.state || "",
+    latitude: data.latitude || 0,
+    longitude: data.longitude || 0,
+    url: data.url || "",
+  };
+}
 
 export default function ParksBrowseScreen({ onTabChange, selectedParkId: selectedParkIdProp, onParkDetailClosed }: ParksBrowseScreenProps) {
   console.log("[PLAN_TRACE] Enter ParksBrowseScreen");
@@ -109,14 +162,20 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
   }, [selectedParkIdToOpen]);
 
   const fetchParkById = async (parkId: string) => {
+    // Direct doc lookup by ID rather than loading the (capped, unordered)
+    // bulk parks list and searching client-side - a specific park can fall
+    // outside that cap and silently fail to be found there.
     try {
-      const raw = await loadRawParks();
-      const park = raw.find((p) => p.id === parkId);
-      if (park) {
-        setSelectedPark(park);
+      const snap = await getDoc(doc(db, "parks", parkId));
+      if (snap.exists()) {
+        setSelectedPark(mapDocToPark(snap.id, snap.data()));
+      } else {
+        console.error("[ParksBrowse] Park not found:", parkId);
+        showError("This campsite couldn't be found. It may have been removed.");
       }
     } catch (error) {
       console.error("[ParksBrowse] Error fetching park by ID:", error);
+      showError("Couldn't load this campsite. Please try again.");
     }
   };
 
@@ -184,6 +243,7 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
   const updateTrip = useTripsStore((s) => s.updateTrip);
   const setTripDestination = useTripsStore((s) => s.setTripDestination);
   const currentUser = useUserStore((s) => s.currentUser);
+  const { showError, showSuccess } = useToast();
 
   /**
    * Convert Park filter field to display park type for TripDestination
@@ -262,44 +322,6 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
     const filterValueCounts: Record<string, number> = {};
     const samplesByType: Record<string, string[]> = {};
 
-    // Normalize park type filter values to canonical format
-    const normalizeParkType = (rawFilter: string | undefined | null): Park["filter"] => {
-      if (!rawFilter) return "private"; // default fallback for missing data
-
-      const normalized = rawFilter.toLowerCase().trim().replace(/\s+/g, "_");
-
-      // Map various formats to canonical values
-      if (normalized.includes("state") && normalized.includes("park")) return "state_park";
-      if (normalized === "state_park" || normalized === "statepark") return "state_park";
-
-      if (normalized.includes("national") && normalized.includes("park")) return "national_park";
-      if (normalized === "national_park" || normalized === "nationalpark") return "national_park";
-
-      if (normalized.includes("national") && normalized.includes("forest")) return "national_forest";
-      if (normalized === "national_forest" || normalized === "nationalforest") return "national_forest";
-
-      // Army Corps of Engineers ("army_corps_of_engineers", "army corps", "usace", "corps of engineers")
-      if (normalized.includes("corps") || normalized.includes("usace") || normalized.includes("army")) return "army_corps";
-
-      // BLM / Bureau of Land Management
-      if (normalized === "blm" || normalized.includes("blm") || normalized.includes("bureau_of_land")) return "blm";
-
-      // Dispersed / boondocking / primitive roadside camping
-      if (normalized.includes("dispersed") || normalized.includes("boondock")) return "dispersed";
-
-      // Municipal / county / city / civic parks
-      if (normalized.includes("municipal") || normalized.includes("county") || normalized.includes("city_park") || normalized.includes("civic")) return "county_park";
-
-      // Private campgrounds (KOAs, private RV parks/resorts, etc.)
-      if (normalized.includes("private")) return "private";
-
-      // Log unexpected values in dev
-      if (__DEV__) {
-        console.warn(`[FILTER_DEBUG] ⚠️ Unknown filter value: "${rawFilter}" -> defaulting to private`);
-      }
-      return "private";
-    };
-
     querySnapshot.forEach((d) => {
       const data: any = d.data();
       const rawFilter = data.filter;
@@ -314,19 +336,7 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
         samplesByType[filterKey].push(data.name || "(no name)");
       }
 
-      // Normalize the filter value
-      const normalizedFilter = normalizeParkType(rawFilter);
-
-      fetched.push({
-        id: d.id,
-        name: data.name || "",
-        filter: normalizedFilter,
-        address: data.address || "",
-        state: data.state || "",
-        latitude: data.latitude || 0,
-        longitude: data.longitude || 0,
-        url: data.url || "",
-      });
+      fetched.push(mapDocToPark(d.id, data));
     });
 
     // === DEV DEBUG: Park Type Analysis ===
@@ -496,6 +506,7 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
       setMode(newMode);
       setSelectedState("");
       setSearchQuery("");
+      setParkType("all" as ParkType);
       setError(null);
       setParks([]);
       setHasSearched(false);
@@ -569,15 +580,15 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
 
   const handleSaveCampground = async () => {
     if (!currentUser) {
-      Alert.alert("Sign in required", "You must be logged in to save a campground.");
+      showError("You must be logged in to save a campground.");
       return;
     }
     if (!newCampgroundName.trim()) {
-      Alert.alert("Missing name", "Campground name is required.");
+      showError("Campground name is required.");
       return;
     }
     if (!newCampgroundAddress.trim()) {
-      Alert.alert("Missing address", "Full address is required for weather and navigation.");
+      showError("Full address is required for weather and navigation.");
       return;
     }
 
@@ -630,16 +641,13 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
       // NOTE: Don't clear inputs yet - we need them for handleConfirmAddToTrip
       
       if (!geocodedLat || !geocodedLng) {
-        Alert.alert(
-          "Saved with warning", 
-          "Campground saved, but we couldn't find coordinates for this address. Weather features may not work. You can add it to a trip now."
-        );
+        showError("Campground saved, but we couldn\u2019t find coordinates for this address. Weather features may not work. You can add it to a trip now.");
       } else {
-        Alert.alert("Saved", "Campground saved! Now select a trip to add it to.");
+        showSuccess("Campground saved! Now select a trip to add it to.");
       }
     } catch (err) {
       console.error("Error saving campground:", err);
-      Alert.alert("Save failed", "Failed to save campground. Please try again.");
+      showError("Failed to save campground. Please try again.");
     } finally {
       setIsSavingCampground(false);
     }
@@ -695,10 +703,10 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
       setShowAddToTrip(false);
       setSelectedTripId(null);
 
-      Alert.alert("Added!", `"${tripDestination.name}" is now the destination for "${trip.name}"`);
+      showSuccess(`"${tripDestination.name}" is now the destination for "${trip.name}"`);
     } catch (err) {
       console.error("Error adding campground to trip:", err);
-      Alert.alert("Add failed", "Failed to add campground to trip. Please try again.");
+      showError("Failed to add campground to trip. Please try again.");
     }
   };
 
@@ -707,7 +715,7 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
   const showInitialState = !hasSearched && !isLoading && parks.length === 0;
 
   return (
-    <View style={styles.root}>
+    <SafeAreaView style={styles.root} edges={["top"]}>
       {/* Add to Trip Modal */}
       <Modal
         visible={showAddToTrip}
@@ -1204,7 +1212,7 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
             
             const userId = auth.currentUser?.uid;
             if (!userId) {
-              Alert.alert("Error", "You must be logged in to set a destination.");
+              showError("You must be logged in to set a destination.");
               return;
             }
             
@@ -1238,10 +1246,7 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
               }
             } catch (error: any) {
               console.error("[ParksBrowse] Failed to set destination:", error);
-              Alert.alert(
-                "Error Setting Destination",
-                `Failed to save destination: ${error.code || "Unknown error"}\n${error.message || ""}`
-              );
+              showError(`Failed to save destination: ${error.code || "Unknown error"} ${error.message || ""}`);
             }
           }}
           onAddToTrip={async (park, tripId) => {
@@ -1259,7 +1264,7 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
                 onParkDetailClosed?.();
               } catch (error: any) {
                 console.error("[ParksBrowse] Failed to add park to trip:", error);
-                Alert.alert("Error", error?.message || "Failed to add this park to the trip. Please try again.");
+                showError(error?.message || "Failed to add this park to the trip. Please try again.");
               }
             } else {
               // Create new trip flow - user will set destination after trip creation
@@ -1367,7 +1372,7 @@ export default function ParksBrowseScreen({ onTabChange, selectedParkId: selecte
           </Pressable>
         </Pressable>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 

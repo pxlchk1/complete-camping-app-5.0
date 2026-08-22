@@ -14,7 +14,6 @@ import {
   ScrollView,
   Pressable,
   ActivityIndicator,
-  Alert,
   Image,
   Linking,
 } from "react-native";
@@ -55,6 +54,7 @@ import { trackGateImpression, trackGateConversion } from "../services/gateAnalyt
 import { markFullScreenPaywallShown, getCurrentSessionNumber } from "../services/sessionService";
 import { PaywallPlacement, PAYWALL_PLACEMENT_CONTENT } from "../config/paywallPlacements";
 import { RootStackParamList } from "../navigation/types";
+import { useToast } from "../components/ToastManager";
 
 // Constants
 import {
@@ -158,6 +158,7 @@ export default function PaywallScreen() {
   const route = useRoute<PaywallScreenRouteProp>();
   const subscriptionLoading = useSubscriptionStore((s) => s.subscriptionLoading);
   const { isLoggedIn, isGuest } = useUserStatus();
+  const { show, showError, showSuccess } = useToast();
   
   // Get triggerKey and variant from route params. New call sites should pass
   // a PaywallPlacement value; older ones pass their own ad-hoc string, which
@@ -369,11 +370,8 @@ export default function PaywallScreen() {
         }
 
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert(
-          "Welcome to Pro!",
-          "You now have access to all premium features.",
-          [{ text: "Get Started", onPress: () => navigation.goBack() }]
-        );
+        showSuccess("Welcome to Pro! You now have access to all premium features.");
+        navigation.goBack();
       }
     } catch (error: any) {
       console.error("[Paywall] Purchase error:", error);
@@ -384,7 +382,7 @@ export default function PaywallScreen() {
           plan_type: planType,
           purchase_error: error?.code || error?.message || "unknown_error",
         });
-        Alert.alert("Purchase Failed", "Please try again or contact support.");
+        showError("Purchase Failed. Please try again or contact support.");
       }
     } finally {
       setPurchasing(false);
@@ -404,17 +402,14 @@ export default function PaywallScreen() {
         trackSubscriptionRestored({ placement: triggerKey });
 
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert(
-          "Purchases Restored",
-          "Your subscription has been restored.",
-          [{ text: "Continue", onPress: () => navigation.goBack() }]
-        );
+        showSuccess("Your subscription has been restored.");
+        navigation.goBack();
       } else {
-        Alert.alert("No Purchases Found", "No active subscriptions were found for your account.");
+        show("No active subscriptions were found for your account.");
       }
     } catch (error) {
       console.error("[Paywall] Restore error:", error);
-      Alert.alert("Restore Failed", "Please try again or contact support.");
+      showError("Restore Failed. Please try again or contact support.");
     } finally {
       setRestoring(false);
     }

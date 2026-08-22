@@ -16,7 +16,6 @@ import {
   KeyboardAvoidingView,
   Keyboard,
   Platform,
-  Alert,
 } from "react-native";
 import { useRoute, useNavigation, RouteProp } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
@@ -31,6 +30,8 @@ import { RootStackParamList, RootStackNavigationProp } from "../../navigation/ty
 import ModalHeader from "../../components/ModalHeader";
 import VotePill from "../../components/VotePill";
 import AccountRequiredModal from "../../components/AccountRequiredModal";
+import ConfirmationModal from "../../components/ConfirmationModal";
+import { useToast } from "../../components/ToastManager";
 import { ContentActionsAffordance } from "../../components/contentActions";
 import HiddenReviewBanner from "../../components/HiddenReviewBanner";
 import { isAdmin, isModerator, canModerateContent, getUser } from "../../services/userService";
@@ -61,6 +62,9 @@ export default function TipDetailScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [showAccountRequired, setShowAccountRequired] = useState(false);
   const [authorName, setAuthorName] = useState<string>("");
+  const [pendingTipAction, setPendingTipAction] = useState<"delete" | "remove" | null>(null);
+  const [showReportConfirm, setShowReportConfirm] = useState(false);
+  const { show, showError, showSuccess } = useToast();
 
   // Permission checks for content actions
   const canModerate = currentUser ? canModerateContent(currentUser as User) : false;
@@ -74,57 +78,26 @@ export default function TipDetailScreen() {
 
   // Content action handlers
   const handleDeleteTip = async () => {
-    Alert.alert(
-      "Delete Tip",
-      "Are you sure you want to delete this tip? This action cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            const result = await deleteTip(tipId);
-            if (result.success) {
-              Alert.alert("Success", "Tip deleted successfully");
-              navigation.goBack();
-            } else {
-              console.error("[TipDetail] Delete failed:", result.error);
-              Alert.alert(
-                "Error",
-                result.error?.message || "Failed to delete tip"
-              );
-            }
-          },
-        },
-      ]
-    );
+    setPendingTipAction("delete");
   };
 
   const handleRemoveTip = async () => {
-    Alert.alert(
-      "Remove Tip",
-      "Are you sure you want to remove this tip? This moderation action cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: async () => {
-            const result = await deleteTip(tipId);
-            if (result.success) {
-              Alert.alert("Success", "Tip removed successfully");
-              navigation.goBack();
-            } else {
-              console.error("[TipDetail] Remove failed:", result.error);
-              Alert.alert(
-                "Error",
-                result.error?.message || "Failed to remove tip"
-              );
-            }
-          },
-        },
-      ]
-    );
+    setPendingTipAction("remove");
+  };
+
+  const confirmPendingTipAction = async () => {
+    const mode = pendingTipAction;
+    setPendingTipAction(null);
+    if (!mode) return;
+
+    const result = await deleteTip(tipId);
+    if (result.success) {
+      showSuccess(mode === "delete" ? "Tip deleted successfully" : "Tip removed successfully");
+      navigation.goBack();
+    } else {
+      console.error(`[TipDetail] ${mode} failed:`, result.error);
+      showError(result.error?.message || `Failed to ${mode} tip`);
+    }
   };
 
   const loadTip = async () => {
@@ -170,22 +143,12 @@ export default function TipDetailScreen() {
 
   const handleAddComment = async () => {
     if (!currentUser) {
-      Alert.alert(
-        "You need to be logged in to do that",
-        "",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Log in / Sign up",
-            onPress: () => navigation.navigate("Auth"),
-          },
-        ]
-      );
+      setShowAccountRequired(true);
       return;
     }
 
     // Require email verification for posting comments
-    const isVerified = await requireEmailVerification("comment on tips");
+    const isVerified = await requireEmailVerification("comment on tips", { show, showError, showSuccess });
     if (!isVerified) return;
 
     if (!commentText.trim()) return;
@@ -202,7 +165,7 @@ export default function TipDetailScreen() {
       await loadTip(); // Reload to get new comment
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
-      Alert.alert("Error", "Failed to add comment");
+      showError("Failed to add comment");
     } finally {
       setSubmitting(false);
     }
@@ -210,44 +173,27 @@ export default function TipDetailScreen() {
 
   const handleReport = () => {
     if (!currentUser) {
-      Alert.alert(
-        "You need to be logged in to do that",
-        "",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Log in / Sign up",
-            onPress: () => navigation.navigate("Auth"),
-          },
-        ]
-      );
+      setShowAccountRequired(true);
       return;
     }
 
-    Alert.alert(
-      "Report tip",
-      "Why are you reporting this tip?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Report",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await reportContent({
-                targetType: "tip",
-                targetId: tipId,
-                reason: "User reported inappropriate content",
-                reporterId: currentUser.id,
-              });
-              Alert.alert("Success", "Thank you for your report");
-            } catch (error) {
-              Alert.alert("Error", "Failed to submit report");
-            }
-          },
-        },
-      ]
-    );
+    setShowReportConfirm(true);
+  };
+
+  const confirmReport = async () => {
+    setShowReportConfirm(false);
+    if (!currentUser) return;
+    try {
+      await reportContent({
+        targetType: "tip",
+        targetId: tipId,
+        reason: "User reported inappropriate content",
+        reporterId: currentUser.id,
+      });
+      showSuccess("Thank you for your report");
+    } catch (error) {
+      showError("Failed to submit report");
+    }
   };
 
   const formatTimeAgo = (dateString: string | any) => {
@@ -418,7 +364,7 @@ export default function TipDetailScreen() {
                           setComments(prev => prev.filter(c => c.id !== comment.id));
                         } else {
                           console.error("[TipDetail] Delete comment failed:", result.error);
-                          Alert.alert("Error", result.error?.message || "Failed to delete comment");
+                          showError(result.error?.message || "Failed to delete comment");
                         }
                       }}
                       onRequestRemove={async () => {
@@ -427,7 +373,7 @@ export default function TipDetailScreen() {
                           setComments(prev => prev.filter(c => c.id !== comment.id));
                         } else {
                           console.error("[TipDetail] Remove comment failed:", result.error);
-                          Alert.alert("Error", result.error?.message || "Failed to remove comment");
+                          showError(result.error?.message || "Failed to remove comment");
                         }
                       }}
                       layout="commentRow"
@@ -491,6 +437,32 @@ export default function TipDetailScreen() {
           navigation.navigate("Auth");
         }}
         onMaybeLater={() => setShowAccountRequired(false)}
+      />
+
+      <ConfirmationModal
+        visible={!!pendingTipAction}
+        title={pendingTipAction === "remove" ? "Remove Tip" : "Delete Tip"}
+        message={
+          pendingTipAction === "remove"
+            ? "Are you sure you want to remove this tip? This moderation action cannot be undone."
+            : "Are you sure you want to delete this tip? This action cannot be undone."
+        }
+        primary={{
+          label: pendingTipAction === "remove" ? "Remove" : "Delete",
+          iconName: "trash",
+          onPress: confirmPendingTipAction,
+        }}
+        secondary={{ label: "Cancel", onPress: () => setPendingTipAction(null) }}
+        onClose={() => setPendingTipAction(null)}
+      />
+
+      <ConfirmationModal
+        visible={showReportConfirm}
+        title="Report tip"
+        message="Why are you reporting this tip?"
+        primary={{ label: "Report", iconName: "flag", onPress: confirmReport }}
+        secondary={{ label: "Cancel", onPress: () => setShowReportConfirm(false) }}
+        onClose={() => setShowReportConfirm(false)}
       />
     </View>
   );

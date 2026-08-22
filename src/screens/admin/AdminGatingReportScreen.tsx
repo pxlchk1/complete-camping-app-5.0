@@ -12,7 +12,6 @@ import {
   Text,
   ScrollView,
   Pressable,
-  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -27,6 +26,7 @@ import {
   getGatingSummary,
   exportRegistryAsJSON,
 } from "../../gating/gatingRegistry";
+import { useToast } from "../../components/ToastManager";
 import {
   DEEP_FOREST,
   EARTH_GREEN,
@@ -48,6 +48,7 @@ const LEVEL_COLORS: Record<GateLevel, { bg: string; text: string; label: string 
 
 export default function AdminGatingReportScreen() {
   const navigation = useNavigation();
+  const { showSuccess, showError } = useToast();
   const [filter, setFilter] = useState<FilterOption>("all");
   const [expandedGate, setExpandedGate] = useState<string | null>(null);
 
@@ -84,10 +85,10 @@ export default function AdminGatingReportScreen() {
       console.log(json);
       console.log("=== END EXPORT ===");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert("Exported!", "Gating registry copied to clipboard and printed to console.");
+      showSuccess("Gating registry copied to clipboard and printed to console.");
     } catch (error) {
       console.error("Export failed:", error);
-      Alert.alert("Error", "Failed to export gating registry.");
+      showError("Failed to export gating registry.");
     }
   };
 

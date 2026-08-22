@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { View, Text, Pressable, FlatList, ActivityIndicator, TextInput, Alert } from "react-native";
+import { View, Text, Pressable, FlatList, ActivityIndicator, TextInput } from "react-native";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -251,7 +251,7 @@ export default function TipsListScreen() {
             if (result.success) {
               setTips(prev => prev.filter(t => t.id !== item.id));
             } else {
-              Alert.alert("Error", result.error?.message || "Failed to delete tip");
+              notifyError(toast, result.error?.message || "Failed to delete tip");
             }
           }}
           onRequestRemove={async () => {
@@ -259,7 +259,7 @@ export default function TipsListScreen() {
             if (result.success) {
               setTips(prev => prev.filter(t => t.id !== item.id));
             } else {
-              Alert.alert("Error", result.error?.message || "Failed to remove tip");
+              notifyError(toast, result.error?.message || "Failed to remove tip");
             }
           }}
           layout="cardHeader"

@@ -13,6 +13,7 @@ import * as Haptics from "expo-haptics";
 import { createFeedbackPost } from "../../services/feedbackService";
 import { useCurrentUser } from "../../state/userStore";
 import { requireEmailVerification } from "../../utils/authHelper";
+import { useToast } from "../../components/ToastManager";
 import { RootStackNavigationProp } from "../../navigation/types";
 import { FeedbackCategory } from "../../types/community";
 import {
@@ -58,6 +59,7 @@ const CATEGORIES: { id: FeedbackCategory; label: string; description: string; ic
 export default function CreateFeedbackScreen() {
   const navigation = useNavigation<RootStackNavigationProp>();
   const currentUser = useCurrentUser();
+  const { show, showError, showSuccess } = useToast();
 
   const [category, setCategory] = useState<FeedbackCategory>("feature");
   const [title, setTitle] = useState("");
@@ -69,7 +71,7 @@ export default function CreateFeedbackScreen() {
     if (!currentUser || !title.trim() || !body.trim() || submitting) return;
 
     // Require email verification for posting content
-    const isVerified = await requireEmailVerification("submit feedback");
+    const isVerified = await requireEmailVerification("submit feedback", { show, showError, showSuccess });
     if (!isVerified) return;
 
     if (title.length < 10) {

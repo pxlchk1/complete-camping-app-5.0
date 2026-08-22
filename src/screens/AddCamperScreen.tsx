@@ -15,7 +15,6 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
-  Alert,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
@@ -26,6 +25,7 @@ import { CampgroundContact } from "../types/campground";
 import { RootStackNavigationProp } from "../navigation/types";
 import ModalHeader from "../components/ModalHeader";
 import InviteOptionsSheet from "../components/InviteOptionsSheet";
+import { useToast } from "../components/ToastManager";
 import {
   DEEP_FOREST,
   EARTH_GREEN,
@@ -39,6 +39,7 @@ import {
 
 export default function AddCamperScreen() {
   const navigation = useNavigation<RootStackNavigationProp>();
+  const { showError } = useToast();
 
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
@@ -53,17 +54,17 @@ export default function AddCamperScreen() {
   const handleSubmit = async () => {
     const user = auth.currentUser;
     if (!user) {
-      Alert.alert("Error", "You must be signed in to add a contact");
+      showError("You must be signed in to add a contact");
       return;
     }
 
     if (!displayName.trim()) {
-      Alert.alert("Name Required", "Please enter a name for this contact");
+      showError("Please enter a name for this contact");
       return;
     }
 
     if (email.trim() && !isValidEmail(email.trim())) {
-      Alert.alert("Invalid Email", "Please enter a valid email address, or leave it blank.");
+      showError("Please enter a valid email address, or leave it blank.");
       return;
     }
 
@@ -97,7 +98,7 @@ export default function AddCamperScreen() {
       setShowInviteSheet(true);
     } catch (error: any) {
       console.error("Error adding contact:", error);
-      Alert.alert("Error", error.message || "Failed to add contact");
+      showError(error.message || "Failed to add contact");
     } finally {
       setSubmitting(false);
     }

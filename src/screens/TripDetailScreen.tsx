@@ -5,7 +5,6 @@ import {
   ScrollView,
   Pressable,
   ActivityIndicator,
-  Alert,
   Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -55,6 +54,8 @@ import { format } from "date-fns";
 import { requirePro } from "../utils/gating";
 import { isPremiumUser, ensureFreePremiumTripId } from "../utils/entitlements";
 import AccountRequiredModal from "../components/AccountRequiredModal";
+import ConfirmationModal from "../components/ConfirmationModal";
+import { useToast } from "../components/ToastManager";
 import UpsellModal from "../components/UpsellModal";
 import { useUpsellStore, UPSELL_COPY } from "../state/upsellStore";
 import { useUserStore } from "../state/userStore";
@@ -131,6 +132,8 @@ export default function TripDetailScreen() {
   const [loadingParticipants, setLoadingParticipants] = useState(false);
   const [removingParticipantId, setRemovingParticipantId] = useState<string | null>(null);
   const [showEditTripModal, setShowEditTripModal] = useState(false);
+  const [pendingRemoveParticipant, setPendingRemoveParticipant] = useState<{ id: string; name: string; contactUserId: string | null; hasAccess: boolean } | null>(null);
+  const { showError } = useToast();
 
   // Details state
   const [showEditNotes, setShowEditNotes] = useState(false);
@@ -483,40 +486,36 @@ export default function TripDetailScreen() {
 
   const handleRemoveParticipant = useCallback(
     (participant: { id: string; name: string; contactUserId: string | null; hasAccess: boolean }) => {
-      Alert.alert(
-        "Remove from trip?",
-        `Remove ${participant.name} from this trip${
-          participant.hasAccess ? " and revoke their access to it" : ""
-        }?`,
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Remove",
-            style: "destructive",
-            onPress: async () => {
-              setRemovingParticipantId(participant.id);
-              try {
-                await removeTripParticipant(tripId, participant.id);
-                if (participant.hasAccess && trip) {
-                  const newMemberIds = (trip.memberIds || []).filter(
-                    (uid) => uid !== participant.contactUserId
-                  );
-                  await updateTrip(tripId, { memberIds: newMemberIds });
-                }
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                await loadParticipants();
-              } catch (error) {
-                console.error("Error removing participant:", error);
-                Alert.alert("Error", "Could not remove that person. Please try again.");
-              } finally {
-                setRemovingParticipantId(null);
-              }
-            },
-          },
-        ]
-      );
+      setPendingRemoveParticipant(participant);
     },
-    [tripId, trip, updateTrip, loadParticipants]
+    []
+  );
+
+  const confirmRemoveParticipant = useCallback(
+    async () => {
+      const participant = pendingRemoveParticipant;
+      setPendingRemoveParticipant(null);
+      if (!participant) return;
+
+      setRemovingParticipantId(participant.id);
+      try {
+        await removeTripParticipant(tripId, participant.id);
+        if (participant.hasAccess && trip) {
+          const newMemberIds = (trip.memberIds || []).filter(
+            (uid) => uid !== participant.contactUserId
+          );
+          await updateTrip(tripId, { memberIds: newMemberIds });
+        }
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        await loadParticipants();
+      } catch (error) {
+        console.error("Error removing participant:", error);
+        showError("Could not remove that person. Please try again.");
+      } finally {
+        setRemovingParticipantId(null);
+      }
+    },
+    [tripId, trip, updateTrip, loadParticipants, pendingRemoveParticipant, showError]
   );
 
   const handleAddPeople = useCallback(async () => {
@@ -565,7 +564,7 @@ export default function TripDetailScreen() {
         // showing as "saved" and silently disappears next time the trip
         // reloads from Firestore.
         setDetailsNotes(previousNotes);
-        Alert.alert("Error", "Could not save notes. Please try again.");
+        showError("Could not save notes. Please try again.");
       }
     },
     [trip, detailsNotes]
@@ -593,7 +592,7 @@ export default function TripDetailScreen() {
       else if (url.includes("google.com/maps") || url.includes("maps.google.")) source = "google_maps";
 
       if (detailsLinks.some((l) => l.url === url)) {
-        Alert.alert("Duplicate Link", "This link already exists.");
+        showError("This link already exists.");
         return;
       }
 
@@ -618,7 +617,7 @@ export default function TripDetailScreen() {
       } catch (err) {
         console.error("Failed to save link:", err);
         setDetailsLinks(previousLinks);
-        Alert.alert("Error", "Could not save link. Please try again.");
+        showError("Could not save link. Please try again.");
       }
     },
     [detailsLinks, trip]
@@ -648,7 +647,7 @@ export default function TripDetailScreen() {
       } catch (err) {
         console.error("Failed to delete link:", err);
         setDetailsLinks(previousLinks);
-        Alert.alert("Error", "Could not delete link. Please try again.");
+        showError("Could not delete link. Please try again.");
       }
     },
     [detailsLinks, trip]
@@ -658,7 +657,7 @@ export default function TripDetailScreen() {
     try {
       await WebBrowser.openBrowserAsync(url);
     } catch {
-      Alert.alert("Could not open link");
+      showError("Could not open link");
     }
   }, []);
 
@@ -1255,6 +1254,21 @@ export default function TripDetailScreen() {
         onAddToTrip={() => {
           // Not used in view mode, but required by props
         }}
+      />
+
+      <ConfirmationModal
+        visible={!!pendingRemoveParticipant}
+        title="Remove from trip?"
+        message={
+          pendingRemoveParticipant
+            ? `Remove ${pendingRemoveParticipant.name} from this trip${
+                pendingRemoveParticipant.hasAccess ? " and revoke their access to it" : ""
+              }?`
+            : undefined
+        }
+        primary={{ label: "Remove", iconName: "person-remove", onPress: confirmRemoveParticipant }}
+        secondary={{ label: "Cancel", onPress: () => setPendingRemoveParticipant(null) }}
+        onClose={() => setPendingRemoveParticipant(null)}
       />
     </SafeAreaView>
   );

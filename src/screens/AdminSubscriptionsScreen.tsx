@@ -4,13 +4,14 @@
  */
 
 import React, { useState } from "react";
-import { View, Text, ScrollView, Pressable, TextInput, Alert, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, Pressable, TextInput, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { auth, db } from "../config/firebase";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import ModalHeader from "../components/ModalHeader";
 import ConfirmationModal from "../components/ConfirmationModal";
+import { useToast } from "../components/ToastManager";
 import { grantMembership } from "../services/userService";
 import { MembershipDuration } from "../types/user";
 import {
@@ -33,6 +34,7 @@ const SUBSCRIPTION_DURATIONS = [
 ];
 
 export default function AdminSubscriptionsScreen() {
+  const { showError, showSuccess } = useToast();
   const [email, setEmail] = useState("");
   const [selectedDuration, setSelectedDuration] = useState("");
   const [loading, setLoading] = useState(false);
@@ -44,7 +46,7 @@ export default function AdminSubscriptionsScreen() {
 
   const handleAwardSubscription = async () => {
     if (!email.trim() || !selectedDuration) {
-      Alert.alert("Missing Information", "Please enter an email and select a duration");
+      showError("Please enter an email and select a duration");
       return;
     }
 
@@ -60,7 +62,7 @@ export default function AdminSubscriptionsScreen() {
       const querySnapshot = await getDocs(q);
 
       if (querySnapshot.empty) {
-        Alert.alert("User Not Found", "No user found with that email address");
+        showError("No user found with that email address");
         return;
       }
 
@@ -68,7 +70,7 @@ export default function AdminSubscriptionsScreen() {
       setPendingGrant({ userId: userDoc.id, email: email.trim(), duration });
     } catch (error: any) {
       console.error("Error looking up user:", error);
-      Alert.alert("Error", error.message || "Failed to look up user");
+      showError(error.message || "Failed to look up user");
     } finally {
       setLoading(false);
     }
@@ -81,7 +83,7 @@ export default function AdminSubscriptionsScreen() {
 
     const adminId = auth.currentUser?.uid;
     if (!adminId) {
-      Alert.alert("Error", "You must be signed in as an admin to do this.");
+      showError("You must be signed in as an admin to do this.");
       return;
     }
 
@@ -98,22 +100,12 @@ export default function AdminSubscriptionsScreen() {
       await grantMembership(adminId, userId, duration.id as MembershipDuration);
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert(
-        "Success",
-        `${duration.label} premium subscription awarded to ${grantedEmail}`,
-        [
-          {
-            text: "OK",
-            onPress: () => {
-              setEmail("");
-              setSelectedDuration("");
-            },
-          },
-        ]
-      );
+      showSuccess(`${duration.label} premium subscription awarded to ${grantedEmail}`);
+      setEmail("");
+      setSelectedDuration("");
     } catch (error: any) {
       console.error("Error awarding subscription:", error);
-      Alert.alert("Error", error.message || "Failed to award subscription");
+      showError(error.message || "Failed to award subscription");
     } finally {
       setLoading(false);
     }

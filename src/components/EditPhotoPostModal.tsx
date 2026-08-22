@@ -6,11 +6,12 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { Modal, View, Text, TextInput, Pressable, StyleSheet, Alert, ActivityIndicator } from "react-native";
+import { Modal, View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { DEEP_FOREST, PARCHMENT, TEXT_PRIMARY_STRONG, TEXT_SECONDARY, BORDER_SOFT } from "../constants/colors";
 import { updatePhotoPost } from "../services/photoPostsService";
 import { PhotoPost } from "../types/photoPost";
+import { useToast } from "./ToastManager";
 
 interface EditPhotoPostModalProps {
   visible: boolean;
@@ -20,6 +21,7 @@ interface EditPhotoPostModalProps {
 }
 
 export default function EditPhotoPostModal({ visible, photoPost, onSave, onClose }: EditPhotoPostModalProps) {
+  const { showError } = useToast();
   const [caption, setCaption] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -49,11 +51,7 @@ export default function EditPhotoPostModal({ visible, photoPost, onSave, onClose
       onClose();
     } catch (error) {
       console.error("[EditPhotoPostModal] Save failed:", error);
-      Alert.alert(
-        "Update Failed",
-        "Could not save your changes. Please try again.",
-        [{ text: "OK" }]
-      );
+      showError("Could not save your changes. Please try again.");
     } finally {
       setSaving(false);
     }

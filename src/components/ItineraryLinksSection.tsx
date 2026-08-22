@@ -9,7 +9,7 @@ import {
   Text,
   Pressable,
   StyleSheet,
-  Alert,
+  Modal,
   Linking,
   ActivityIndicator,
 } from 'react-native';
@@ -31,6 +31,8 @@ import {
 } from '../services/itineraryLinksService';
 import { getProviderIcon } from '../utils/providerSniffer';
 import AddItineraryLinkModal from './AddItineraryLinkModal';
+import ConfirmationModal from './ConfirmationModal';
+import { useToast } from './ToastManager';
 import {
   DEEP_FOREST,
   EARTH_GREEN,
@@ -60,10 +62,13 @@ export default function ItineraryLinksSection({
   tripEndDate,
   canEditTrip = true,
 }: ItineraryLinksSectionProps) {
+  const { show, showError } = useToast();
   const [links, setLinks] = useState<ItineraryLink[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingLink, setEditingLink] = useState<ItineraryLink | null>(null);
+  const [actionsFor, setActionsFor] = useState<ItineraryLink | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ItineraryLink | null>(null);
 
   const loadLinks = useCallback(async () => {
     try {
@@ -98,10 +103,10 @@ export default function ItineraryLinksSection({
       if (canOpen) {
         await Linking.openURL(link.url);
       } else {
-        Alert.alert('Cannot open link', 'Unable to open this URL.');
+        showError('Unable to open this URL.');
       }
     } catch {
-      Alert.alert('Error', 'Failed to open link.');
+      showError('Failed to open link.');
     }
   };
 
@@ -110,55 +115,32 @@ export default function ItineraryLinksSection({
     setShowAddModal(true);
   };
 
-  const handleDeleteLink = (link: ItineraryLink) => {
-    Alert.alert(
-      'Delete link',
-      `Are you sure you want to delete "${link.title}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteItineraryLink(tripId, link.id);
-              await loadLinks();
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            } catch {
-              Alert.alert('Error', 'Failed to delete link.');
-            }
-          },
-        },
-      ]
-    );
+  const confirmDeleteLink = async () => {
+    if (!deleteTarget) return;
+    const link = deleteTarget;
+    try {
+      await deleteItineraryLink(tripId, link.id);
+      await loadLinks();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      showError('Failed to delete link.');
+    } finally {
+      setDeleteTarget(null);
+    }
   };
 
   const handleCopyLink = async (link: ItineraryLink) => {
     try {
       await Clipboard.setStringAsync(link.url);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert('Copied', 'Link copied to clipboard.');
+      show('Link copied to clipboard.');
     } catch {
-      Alert.alert('Error', 'Failed to copy link.');
+      showError('Failed to copy link.');
     }
   };
 
   const handleLinkActions = (link: ItineraryLink) => {
-    Alert.alert(
-      link.title,
-      undefined,
-      [
-        { text: 'Open', onPress: () => handleOpenLink(link) },
-        { text: 'Copy link', onPress: () => handleCopyLink(link) },
-        ...(canEditTrip
-          ? [
-              { text: 'Edit', onPress: () => handleEditLink(link) },
-              { text: 'Delete' as const, style: 'destructive' as const, onPress: () => handleDeleteLink(link) },
-            ]
-          : []),
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
+    setActionsFor(link);
   };
 
   const getDayLabel = (dayIndex: number): string => {
@@ -289,6 +271,79 @@ export default function ItineraryLinksSection({
         tripStartDate={tripStartDate}
         tripEndDate={tripEndDate}
         editingLink={editingLink}
+      />
+
+      {/* Link Actions Sheet */}
+      <Modal
+        visible={!!actionsFor}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setActionsFor(null)}
+      >
+        <Pressable style={styles.actionsOverlay} onPress={() => setActionsFor(null)}>
+          <View style={styles.actionsSheet}>
+            <Text style={styles.actionsTitle} numberOfLines={1}>
+              {actionsFor?.title}
+            </Text>
+            <Pressable
+              style={styles.actionsRow}
+              onPress={() => {
+                const link = actionsFor;
+                setActionsFor(null);
+                if (link) handleOpenLink(link);
+              }}
+            >
+              <Text style={styles.actionsRowText}>Open</Text>
+            </Pressable>
+            <Pressable
+              style={styles.actionsRow}
+              onPress={() => {
+                const link = actionsFor;
+                setActionsFor(null);
+                if (link) handleCopyLink(link);
+              }}
+            >
+              <Text style={styles.actionsRowText}>Copy link</Text>
+            </Pressable>
+            {canEditTrip && (
+              <>
+                <Pressable
+                  style={styles.actionsRow}
+                  onPress={() => {
+                    const link = actionsFor;
+                    setActionsFor(null);
+                    if (link) handleEditLink(link);
+                  }}
+                >
+                  <Text style={styles.actionsRowText}>Edit</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.actionsRow}
+                  onPress={() => {
+                    const link = actionsFor;
+                    setActionsFor(null);
+                    if (link) setDeleteTarget(link);
+                  }}
+                >
+                  <Text style={[styles.actionsRowText, styles.actionsRowDestructive]}>Delete</Text>
+                </Pressable>
+              </>
+            )}
+            <Pressable style={styles.actionsCancelRow} onPress={() => setActionsFor(null)}>
+              <Text style={styles.actionsCancelText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Delete Confirmation */}
+      <ConfirmationModal
+        visible={!!deleteTarget}
+        title="Delete link"
+        message={deleteTarget ? `Are you sure you want to delete "${deleteTarget.title}"?` : undefined}
+        primary={{ label: 'Delete', iconName: 'trash', onPress: confirmDeleteLink }}
+        secondary={{ label: 'Cancel', onPress: () => setDeleteTarget(null) }}
+        onClose={() => setDeleteTarget(null)}
       />
     </View>
   );
@@ -435,5 +490,51 @@ const styles = StyleSheet.create({
   },
   moreButton: {
     padding: 4,
+  },
+  actionsOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  actionsSheet: {
+    backgroundColor: PARCHMENT,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 32,
+  },
+  actionsTitle: {
+    fontSize: 13,
+    fontFamily: 'SourceSans3_600SemiBold',
+    color: TEXT_MUTED,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  actionsRow: {
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderTopColor: BORDER_SOFT,
+    alignItems: 'center',
+  },
+  actionsRowText: {
+    fontSize: 16,
+    fontFamily: 'SourceSans3_600SemiBold',
+    color: TEXT_PRIMARY_STRONG,
+  },
+  actionsRowDestructive: {
+    color: '#dc2626',
+  },
+  actionsCancelRow: {
+    paddingVertical: 14,
+    marginTop: 8,
+    borderRadius: 12,
+    backgroundColor: CARD_BACKGROUND_LIGHT,
+    alignItems: 'center',
+  },
+  actionsCancelText: {
+    fontSize: 16,
+    fontFamily: 'SourceSans3_600SemiBold',
+    color: TEXT_SECONDARY,
   },
 });

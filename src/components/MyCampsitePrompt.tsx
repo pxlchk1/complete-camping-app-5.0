@@ -172,14 +172,14 @@ export default function MyCampsitePrompt() {
       {/* CTA button */}
       <Pressable
         onPress={handleGoToCampsite}
-        style={({ pressed }) => ({
+        className="active:opacity-80"
+        style={{
           backgroundColor: DEEP_FOREST,
           borderRadius: 10,
           paddingVertical: 12,
           marginTop: 14,
           alignItems: "center",
-          opacity: pressed ? 0.85 : 1,
-        })}
+        }}
         accessibilityLabel="Go to My Campsite"
         accessibilityRole="button"
       >

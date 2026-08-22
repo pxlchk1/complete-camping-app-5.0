@@ -22,7 +22,6 @@ import {
   RefreshControl,
   Modal,
   Image,
-  Alert,
 } from "react-native";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
@@ -132,6 +131,8 @@ export default function MyCampgroundScreen() {
   // Confirmations
   const [pendingRemoveFriend, setPendingRemoveFriend] = useState<Friend | null>(null);
   const [pendingDeleteGuest, setPendingDeleteGuest] = useState<CampgroundContact | null>(null);
+  const [pendingDeclineRequest, setPendingDeclineRequest] = useState<FriendRequest | null>(null);
+  const [pendingCancelRequest, setPendingCancelRequest] = useState<FriendRequest | null>(null);
 
   const [showWhatIsThis, setShowWhatIsThis] = useState(false);
 
@@ -263,51 +264,39 @@ export default function MyCampgroundScreen() {
   };
 
   const handleDecline = (request: FriendRequest) => {
-    Alert.alert(
-      "Decline request?",
-      `Decline the friend request from ${request.fromDisplayName}?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Decline",
-          style: "destructive",
-          onPress: async () => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            try {
-              await declineFriendRequest(request.id);
-              setIncoming((prev) => prev.filter((r) => r.id !== request.id));
-              notifySuccess(toast, `Declined ${request.fromDisplayName}'s request`);
-            } catch (err: any) {
-              notifyError(toast, err?.message || "Couldn't decline that request. Please try again.");
-            }
-          },
-        },
-      ]
-    );
+    setPendingDeclineRequest(request);
+  };
+
+  const confirmDeclineRequest = async () => {
+    const request = pendingDeclineRequest;
+    setPendingDeclineRequest(null);
+    if (!request) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      await declineFriendRequest(request.id);
+      setIncoming((prev) => prev.filter((r) => r.id !== request.id));
+      notifySuccess(toast, `Declined ${request.fromDisplayName}\u2019s request`);
+    } catch (err: any) {
+      notifyError(toast, err?.message || "Couldn\u2019t decline that request. Please try again.");
+    }
   };
 
   const handleCancelRequest = (request: FriendRequest) => {
-    Alert.alert(
-      "Cancel request?",
-      `Cancel your friend request to ${request.toDisplayName}?`,
-      [
-        { text: "Keep it", style: "cancel" },
-        {
-          text: "Cancel Request",
-          style: "destructive",
-          onPress: async () => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            try {
-              await cancelFriendRequest(request.id);
-              setOutgoing((prev) => prev.filter((r) => r.id !== request.id));
-              notifySuccess(toast, "Request cancelled");
-            } catch (err: any) {
-              notifyError(toast, err?.message || "Couldn't cancel that request. Please try again.");
-            }
-          },
-        },
-      ]
-    );
+    setPendingCancelRequest(request);
+  };
+
+  const confirmCancelRequest = async () => {
+    const request = pendingCancelRequest;
+    setPendingCancelRequest(null);
+    if (!request) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      await cancelFriendRequest(request.id);
+      setOutgoing((prev) => prev.filter((r) => r.id !== request.id));
+      notifySuccess(toast, "Request cancelled");
+    } catch (err: any) {
+      notifyError(toast, err?.message || "Couldn\u2019t cancel that request. Please try again.");
+    }
   };
 
   // ---- My Campground tagging ----
@@ -850,6 +839,24 @@ export default function MyCampgroundScreen() {
         primary={{ label: "Remove", iconName: "trash-outline", onPress: confirmDeleteGuest }}
         secondary={{ label: "Cancel", onPress: () => setPendingDeleteGuest(null) }}
         onClose={() => setPendingDeleteGuest(null)}
+      />
+
+      <ConfirmationModal
+        visible={!!pendingDeclineRequest}
+        title="Decline request?"
+        message={`Decline the friend request from ${pendingDeclineRequest?.fromDisplayName}?`}
+        primary={{ label: "Decline", iconName: "close-circle-outline", onPress: confirmDeclineRequest }}
+        secondary={{ label: "Cancel", onPress: () => setPendingDeclineRequest(null) }}
+        onClose={() => setPendingDeclineRequest(null)}
+      />
+
+      <ConfirmationModal
+        visible={!!pendingCancelRequest}
+        title="Cancel request?"
+        message={`Cancel your friend request to ${pendingCancelRequest?.toDisplayName}?`}
+        primary={{ label: "Cancel Request", iconName: "close-circle-outline", onPress: confirmCancelRequest }}
+        secondary={{ label: "Keep it", onPress: () => setPendingCancelRequest(null) }}
+        onClose={() => setPendingCancelRequest(null)}
       />
     </View>
   );

@@ -13,7 +13,6 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
-  Alert,
 } from "react-native";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
@@ -26,6 +25,7 @@ import { CampgroundContact } from "../types/campground";
 import { RootStackParamList, RootStackNavigationProp } from "../navigation/types";
 import ModalHeader from "../components/ModalHeader";
 import ConfirmationModal from "../components/ConfirmationModal";
+import { useToast } from "../components/ToastManager";
 import {
   DEEP_FOREST,
   PARCHMENT,
@@ -40,6 +40,7 @@ export default function EditCamperScreen() {
   const navigation = useNavigation<RootStackNavigationProp>();
   const route = useRoute<RouteProp<RootStackParamList, "EditCamper">>();
   const { contactId } = route.params;
+  const { showError } = useToast();
 
   const [contact, setContact] = useState<CampgroundContact | null>(null);
   const [displayName, setDisplayName] = useState("");
@@ -57,7 +58,7 @@ export default function EditCamperScreen() {
     try {
       const contactData = await getCampgroundContactById(contactId);
       if (!contactData) {
-        Alert.alert("Error", "Contact not found");
+        showError("Contact not found");
         navigation.goBack();
         return;
       }
@@ -69,7 +70,7 @@ export default function EditCamperScreen() {
       setNotes(contactData.contactNote || "");
     } catch (error: any) {
       console.error("Error loading contact:", error);
-      Alert.alert("Error", "Failed to load contact");
+      showError("Failed to load contact");
       navigation.goBack();
     } finally {
       setLoading(false);
@@ -78,7 +79,7 @@ export default function EditCamperScreen() {
 
   const handleSubmit = async () => {
     if (!displayName.trim()) {
-      Alert.alert("Name Required", "Please enter a name for this contact");
+      showError("Please enter a name for this contact");
       return;
     }
 
@@ -95,7 +96,7 @@ export default function EditCamperScreen() {
       navigation.goBack();
     } catch (error: any) {
       console.error("Error updating contact:", error);
-      Alert.alert("Error", error.message || "Failed to update contact");
+      showError(error.message || "Failed to update contact");
     } finally {
       setSubmitting(false);
     }
@@ -114,7 +115,7 @@ export default function EditCamperScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       navigation.goBack();
     } catch (error) {
-      Alert.alert("Error", "Failed to delete contact");
+      showError("Failed to delete contact");
     }
   };
 

@@ -10,7 +10,6 @@ import {
   Modal,
   Pressable,
   ActivityIndicator,
-  Alert,
   Linking,
   Platform,
 } from "react-native";
@@ -31,6 +30,7 @@ import { getCopyableInviteText } from "../constants/appLinks";
 import { CampgroundContact, CreateInviteResult } from "../types/campground";
 import { trackBuddyInviteSent } from "../services/analyticsService";
 import { trackCoreAction } from "../services/userActionTrackerService";
+import { useToast } from "./ToastManager";
 import {
   DEEP_FOREST,
   PARCHMENT,
@@ -57,6 +57,7 @@ export default function InviteOptionsSheet({
   contact,
   onSuccess,
 }: InviteOptionsSheetProps) {
+  const { showError, showSuccess } = useToast();
   const [loading, setLoading] = useState<InviteAction>(null);
   const [inviteResult, setInviteResult] = useState<CreateInviteResult | null>(null);
 
@@ -71,7 +72,7 @@ export default function InviteOptionsSheet({
 
     const user = auth.currentUser;
     if (!user) {
-      Alert.alert("Error", "You must be signed in to send invites");
+      showError("You must be signed in to send invites");
       return null;
     }
 
@@ -112,7 +113,7 @@ export default function InviteOptionsSheet({
       return result;
     } catch (error: any) {
       console.error("Error creating invite:", error);
-      Alert.alert("Error", error.message || "Failed to create invite");
+      showError(error.message || "Failed to create invite");
       return null;
     }
   };
@@ -122,7 +123,7 @@ export default function InviteOptionsSheet({
    */
   const handleEmailInvite = async () => {
     if (!contact.contactEmail) {
-      Alert.alert("Email Required", "This contact doesn't have an email address");
+      showError("This contact does not have an email address");
       return;
     }
 
@@ -169,7 +170,7 @@ export default function InviteOptionsSheet({
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert("Invite Sent!", `An invitation email was sent to ${contact.contactEmail}`);
+      showSuccess(`An invitation email was sent to ${contact.contactEmail}`);
       
       onSuccess?.();
       onClose();
@@ -181,7 +182,7 @@ export default function InviteOptionsSheet({
         errorStack: error.stack,
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert("Error", error.message || "Failed to send invite email");
+      showError(error.message || "Failed to send invite email");
     } finally {
       setLoading(null);
     }
@@ -193,11 +194,7 @@ export default function InviteOptionsSheet({
   const handleTextInvite = async () => {
     // Validate phone number exists
     if (!contact.contactPhone) {
-      Alert.alert(
-        "Phone Number Required",
-        "This contact does not have a phone number. Please add a phone number first, or use Copy Invite Link.",
-        [{ text: "OK" }]
-      );
+      showError("This contact does not have a phone number. Please add a phone number first, or use Copy Invite Link.");
       return;
     }
 
@@ -233,11 +230,7 @@ export default function InviteOptionsSheet({
       const canOpen = await Linking.canOpenURL(smsUrl);
       if (!canOpen) {
         console.error("[InviteOptionsSheet] Cannot open SMS URL:", smsUrl);
-        Alert.alert(
-          "SMS Unavailable",
-          "Unable to open the Messages app. Try using Copy Invite Link instead.",
-          [{ text: "OK" }]
-        );
+        showError("Unable to open the Messages app. Try using Copy Invite Link instead.");
         setLoading(null);
         return;
       }
@@ -260,11 +253,7 @@ export default function InviteOptionsSheet({
         error: error.message,
         phone: contact.contactPhone,
       });
-      Alert.alert(
-        "SMS Failed",
-        "Could not open Messages. Please try Copy Invite Link instead.",
-        [{ text: "OK" }]
-      );
+      showError("Could not open Messages. Please try Copy Invite Link instead.");
     } finally {
       setLoading(null);
     }
@@ -309,13 +298,13 @@ export default function InviteOptionsSheet({
       }
       
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert("Link Copied!", "Invite link copied to clipboard");
+      showSuccess("Invite link copied to clipboard");
       
       onSuccess?.();
       onClose();
     } catch (error: any) {
       console.error("Error copying link:", error);
-      Alert.alert("Error", "Failed to copy link");
+      showError("Failed to copy link");
     } finally {
       setLoading(null);
     }
